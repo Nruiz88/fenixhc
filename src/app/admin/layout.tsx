@@ -10,6 +10,7 @@ import { Menu, LogOut, LayoutDashboard, Users, UserCheck, FileText, Link2, Dolla
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
+  { label: 'Usuarios', href: '/admin/usuarios', icon: Users },
   { label: 'Partidos', href: '/admin/partidos', icon: Calendar },
   { label: 'Socios', href: '/admin/socios', icon: Users },
   { label: 'Jugadores', href: '/admin/jugadores', icon: UserCheck },
