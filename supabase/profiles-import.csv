@@ -1,0 +1,5 @@
+id,email,rol,nombre,apellido,dni,cuil,telefono,direccion,foto_url,created_at,updated_at
+PASTE_AUTH_ID_HERE,marcelo@mail.com,padre,Marcelo,Cabrera,25123456,20-25123456-3,+541155512345,"Av. Libertador 1234, CABA",,NOW(),NOW()
+PASTE_AUTH_ID_HERE,juan@mail.com,padre,Juan,Perez,28765432,20-28765432-5,+541155598765,"Calle Falsa 567, CABA",,NOW(),NOW()
+PASTE_AUTH_ID_HERE,lautaro@mail.com,deportista,Lautaro,Cabrera,44123456,20-44123456-7,+541155534567,"Av. Libertador 1234, CABA",,NOW(),NOW()
+PASTE_AUTH_ID_HERE,tomas@mail.com,deportista,Tomas,Perez,45678901,20-45678901-9,+541155523456,"Calle Falsa 567, CABA",,NOW(),NOW()
