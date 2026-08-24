@@ -109,6 +109,7 @@ function LoginForm() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
+                  autoComplete="email"
                   className="pl-10 bg-gray-900 border-gray-800 text-white placeholder:text-gray-600 focus:border-[#DC2626] focus:ring-[#DC2626]/20 h-12"
                 />
               </div>
@@ -123,6 +124,7 @@ function LoginForm() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                   className="pl-10 bg-gray-900 border-gray-800 text-white placeholder:text-gray-600 focus:border-[#DC2626] focus:ring-[#DC2626]/20 h-12"
                 />
               </div>
