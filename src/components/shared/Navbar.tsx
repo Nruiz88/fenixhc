@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { createClient } from '@supabase/supabase-js';
+import { NotificationsBell } from './NotificationsBell';
 
 const PUBLIC_LINKS = [
   { label: 'Inicio', href: '/' },
@@ -153,7 +154,8 @@ export function Navbar() {
             </div>
           ) : user ? (
             /* Logged in */
-            <div className="hidden sm:flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2">
+              <NotificationsBell userId={user.id} />
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
