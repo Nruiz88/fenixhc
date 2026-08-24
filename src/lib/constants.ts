@@ -1,90 +1,68 @@
-// ============================================================
-// Constantes del Club Deportivo
-// ============================================================
-
-export const CLUB_INFO = {
-  nombre: 'Club Deportivo Hockey',
-  nombreCorto: 'CDH',
-  descripcion: 'Club de hockey sobre hierba dedicado a la formación deportiva y personal de nuestros jugadores.',
-  direccion: 'Tu dirección aquí',
-  telefono: '+54 9 XX XXXX-XXXX',
-  correo: 'info@clubdeportivo.com',
-  whatsapp: 'https://wa.me/549XXXXXXXXXX',
-  redes: {
-    instagram: 'https://instagram.com/tuclub',
-    facebook: 'https://facebook.com/tuclub',
-  },
+// User roles
+export const ROLES = {
+  ADMIN: 'admin',
+  PADRE: 'padre',
+  DEPORTISTA: 'deportista',
 } as const;
 
+export type UserRole = typeof ROLES[keyof typeof ROLES];
+
+// Allowed tables per role
+export const TABLES_BY_ROLE: Record<UserRole, string[]> = {
+  admin: [
+    'perfiles', 'deportistas', 'familias', 'cuotas', 'finanzas',
+    'notificaciones', 'notificaciones_usuarios', 'mensajes_chat',
+    'fotos_galeria', 'canchas', 'reservas', 'push_subscriptions',
+    'contacto_publico', 'partidos', 'comunicados', 'horarios_entrenamiento', 'sponsors',
+  ],
+  padre: [
+    'perfiles', 'deportistas', 'familias', 'cuotas', 'notificaciones',
+    'notificaciones_usuarios', 'fotos_galeria', 'reservas', 'contacto_publico',
+  ],
+  deportista: [
+    'perfiles', 'notificaciones', 'notificaciones_usuarios',
+    'mensajes_chat', 'fotos_galeria', 'reservas',
+  ],
+};
+
+// Allowed operations
+export const ALLOWED_OPERATIONS = ['select', 'insert', 'upsert', 'update', 'delete'] as const;
+
+// Validation rules
+export const VALIDATION = {
+  MIN_PASSWORD_LENGTH: 6,
+  MAX_QUERY_LIMIT: 1000,
+  MAX_FILE_SIZE_MB: 10,
+  ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/webp'],
+  ALLOWED_VIDEO_TYPES: ['video/mp4', 'video/webm'],
+  ALLOWED_PDF_TYPES: ['application/pdf'],
+} as const;
+
+// Route protection
+export const PROTECTED_ROUTES = ['/admin', '/padre', '/deportista'];
+
+export function isProtectedRoute(pathname: string): boolean {
+  return PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+}
+
+export function getRoleFromPath(pathname: string): UserRole | null {
+  if (pathname.startsWith('/admin')) return 'admin';
+  if (pathname.startsWith('/padre')) return 'padre';
+  if (pathname.startsWith('/deportista')) return 'deportista';
+  return null;
+}
+
+// Month names
 export const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-] as const;
+];
 
-export const MESES_CORTO = [
-  'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-  'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic',
-] as const;
-
-export const CUOTAS_CONFIG = {
-  cadete: { label: 'Cadete (Jugador)', montoBase: 50000 },
-  activo: { label: 'Activo (Jugador + Comisión)', montoBase: 35000 },
-  benefactor: { label: 'Benefactor (Padre/Tutor)', montoBase: 25000 },
-} as const;
-
-export const TIPO_SOCIO_LABELS = {
-  cadete: 'Cadete',
-  activo: 'Activo',
-  benefactor: 'Benefactor',
-} as const;
-
-export const ESTADO_CUOTA_COLORS = {
-  pagada: 'bg-green-100 text-green-800',
-  pendiente: 'bg-yellow-100 text-yellow-800',
-  vencida: 'bg-red-100 text-red-800',
-} as const;
-
-export const TIPO_NOTIFICACION_LABELS = {
-  pago: '💰 Pago',
-  deportivo: '🏆 Deportivo',
-  general: '📢 General',
-  urgente: '🚨 Urgente',
-} as const;
-
-export const NAV_LINKS = {
-  public: [
-    { label: 'Inicio', href: '/' },
-    { label: 'El Club', href: '/club' },
-    { label: 'Entrenamientos', href: '/entrenamientos' },
-    { label: 'Contacto', href: '/contacto' },
-  ],
-  padre: [
-    { label: 'Dashboard', href: '/padre/dashboard' },
-    { label: 'Mi Perfil', href: '/padre/perfil' },
-    { label: 'Mis Hijos', href: '/padre/hijos' },
-    { label: 'Pagos', href: '/padre/pagos' },
-    { label: 'Fotos', href: '/padre/fotos' },
-    { label: 'Reservas', href: '/padre/reservas' },
-    { label: 'Notificaciones', href: '/padre/notificaciones' },
-  ],
-  deportista: [
-    { label: 'Dashboard', href: '/deportista/dashboard' },
-    { label: 'Mi Perfil', href: '/deportista/perfil' },
-    { label: 'Chat', href: '/deportista/chat' },
-    { label: 'Galería', href: '/deportista/galeria' },
-    { label: 'Reservas', href: '/deportista/reservas' },
-    { label: 'Notificaciones', href: '/deportista/notificaciones' },
-  ],
-  admin: [
-    { label: 'Dashboard', href: '/admin/dashboard' },
-    { label: 'Socios', href: '/admin/socios' },
-    { label: 'Jugadores', href: '/admin/jugadores' },
-    { label: 'Legajos', href: '/admin/legajos' },
-    { label: 'Finanzas', href: '/admin/finanzas' },
-    { label: 'Pagos', href: '/admin/pagos' },
-    { label: 'Reservas', href: '/admin/reservas' },
-    { label: 'Familias', href: '/admin/links-familia' },
-    { label: 'Notificaciones', href: '/admin/notificaciones' },
-    { label: 'Reportes', href: '/admin/reportes' },
-  ],
-} as const;
+// Club info
+export const CLUB_INFO = {
+  name: 'Fenix Roller Hockey',
+  whatsapp: 'https://wa.me/+541155512345',
+  email: 'info@clubhockey.com.ar',
+  address: 'Av. Libertador 1234, CABA',
+  phone: '+54 11 5551 2345',
+};

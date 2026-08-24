@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { PROTECTED_ROUTES, getRoleFromPath } from '@/lib/constants';
 
 export async function middleware(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -7,7 +8,7 @@ export async function middleware(request: NextRequest) {
 
   if (!supabaseUrl || !supabaseKey) {
     const pathname = request.nextUrl.pathname;
-    const isProtected = pathname.startsWith('/padre') || pathname.startsWith('/deportista') || pathname.startsWith('/admin');
+    const isProtected = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
     if (isProtected) return NextResponse.redirect(new URL('/login', request.url));
     return NextResponse.next();
   }
@@ -16,9 +17,7 @@ export async function middleware(request: NextRequest) {
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
+      getAll() { return request.cookies.getAll(); },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         supabaseResponse = NextResponse.next({ request });
@@ -30,9 +29,10 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const isProtected = pathname.startsWith('/padre') || pathname.startsWith('/deportista') || pathname.startsWith('/admin');
+  const isProtected = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+  const routeRole = getRoleFromPath(pathname);
 
-  // No user → redirect to login
+  // No user → login
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Logged in + visit login → redirect to dashboard
+  // Logged in → login page redirect
   if (pathname === '/login' && user) {
     const rol = user.user_metadata?.rol;
     const url = request.nextUrl.clone();
@@ -51,12 +51,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Role check
-  if (user && isProtected) {
-    const role = user.user_metadata?.rol;
-    if (pathname.startsWith('/admin') && role !== 'admin') return NextResponse.redirect(new URL('/', request.url));
-    if (pathname.startsWith('/padre') && role !== 'padre' && role !== 'admin') return NextResponse.redirect(new URL('/', request.url));
-    if (pathname.startsWith('/deportista') && role !== 'deportista' && role !== 'admin') return NextResponse.redirect(new URL('/', request.url));
+  // Role-based access
+  if (user && isProtected && routeRole) {
+    const userRole = user.user_metadata?.rol;
+    if (routeRole === 'admin' && userRole !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+    if (routeRole === 'padre' && userRole !== 'padre' && userRole !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+    if (routeRole === 'deportista' && userRole !== 'deportista' && userRole !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
   }
 
   return supabaseResponse;
