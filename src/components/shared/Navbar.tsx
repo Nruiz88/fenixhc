@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState } from 'react';
-import { Menu, X, User, LogIn } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { Menu, X, User, LogIn, LogOut, LayoutDashboard, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { createClient } from '@/lib/supabase/client';
 
 const PUBLIC_LINKS = [
   { label: 'Inicio', href: '/' },
@@ -20,9 +22,49 @@ const MORE_LINKS = [
   { label: 'Sobre Nosotros', href: '/sobre-nosotros' },
 ];
 
+const ROLE_DASHBOARD: Record<string, { href: string; label: string }> = {
+  admin: { href: '/admin/dashboard', label: 'Panel Admin' },
+  padre: { href: '/padre/dashboard', label: 'Mi Cuenta' },
+  deportista: { href: '/deportista/dashboard', label: 'Mi Cuenta' },
+};
+
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const client = createClient();
+    (async () => {
+      const { data: { user: authUser } } = await client.auth.getUser();
+      if (authUser) {
+        const { data: perfil } = await client
+          .from('perfiles')
+          .select('nombre, apellido, rol')
+          .eq('id', authUser.id)
+          .single();
+        if (perfil) {
+          setUser({ ...authUser, perfil });
+        }
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const handleLogout = async () => {
+    const client = createClient();
+    await client.auth.signOut();
+    setUser(null);
+    setUserMenuOpen(false);
+    setOpen(false);
+    window.location.href = '/';
+  };
+
+  const dashboardInfo = user?.perfil?.rol ? ROLE_DASHBOARD[user.perfil.rol] : null;
+  const initials = user?.perfil ? `${user.perfil.nombre?.[0] || ''}${user.perfil.apellido?.[0] || ''}` : '';
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0A0A0A]/90 backdrop-blur-xl">
@@ -51,7 +93,7 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
-          {/* More dropdown for overflow links */}
+          {/* More dropdown */}
           <div className="relative group">
             <button className="px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all">
               Más ▾
@@ -76,20 +118,84 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Auth Buttons */}
+        {/* Auth / User Section */}
         <div className="flex items-center gap-2 shrink-0">
-          <Link href="/login">
-            <Button variant="ghost" className="hidden sm:flex text-gray-300 hover:text-white hover:bg-white/10 text-sm gap-2">
-              <LogIn className="h-4 w-4" />
-              Iniciar Sesión
-            </Button>
-          </Link>
-          <Link href="/registro">
-            <Button className="hidden sm:flex bg-[#DC2626] hover:bg-[#B91C1C] text-white text-sm gap-2">
-              <User className="h-4 w-4" />
-              Registrarse
-            </Button>
-          </Link>
+          {loading ? (
+            /* Loading skeleton */
+            <div className="hidden sm:flex items-center gap-2">
+              <div className="h-8 w-20 rounded-lg bg-gray-800 animate-pulse" />
+              <div className="h-8 w-24 rounded-lg bg-gray-800 animate-pulse" />
+            </div>
+          ) : user ? (
+            /* Logged in: show user menu */
+            <div className="hidden sm:flex items-center gap-3">
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl hover:bg-white/5 transition-all"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-[#DC2626] text-white text-xs font-bold">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-white leading-tight">
+                      {user.perfil.nombre} {user.perfil.apellido}
+                    </p>
+                    <p className="text-[10px] text-gray-500 capitalize">{user.perfil.rol}</p>
+                  </div>
+                  <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown */}
+                {userMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+                    <div className="absolute right-0 top-full mt-2 z-50 w-52 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-2">
+                      <div className="px-3 py-2 mb-1 border-b border-gray-800">
+                        <p className="text-sm font-medium text-white">{user.perfil.nombre} {user.perfil.apellido}</p>
+                        <p className="text-xs text-gray-500">{user.email}</p>
+                      </div>
+                      {dashboardInfo && (
+                        <Link
+                          href={dashboardInfo.href}
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                        >
+                          <LayoutDashboard className="h-4 w-4" />
+                          {dashboardInfo.label}
+                        </Link>
+                      )}
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Cerrar Sesión
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Not logged in: show login/register */
+            <div className="hidden sm:flex items-center gap-2">
+              <Link href="/login">
+                <Button variant="ghost" className="text-gray-300 hover:text-white hover:bg-white/10 text-sm gap-2">
+                  <LogIn className="h-4 w-4" />
+                  Iniciar Sesión
+                </Button>
+              </Link>
+              <Link href="/registro">
+                <Button className="bg-[#DC2626] hover:bg-[#B91C1C] text-white text-sm gap-2">
+                  <User className="h-4 w-4" />
+                  Registrarse
+                </Button>
+              </Link>
+            </div>
+          )}
 
           {/* Mobile Menu */}
           <Sheet open={open} onOpenChange={setOpen}>
@@ -109,6 +215,22 @@ export function Navbar() {
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
+
+                {/* User info in mobile */}
+                {user && (
+                  <div className="p-4 border-b border-gray-800 flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback className="bg-[#DC2626] text-white text-sm font-bold">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-medium text-white">{user.perfil.nombre} {user.perfil.apellido}</p>
+                      <p className="text-xs text-gray-500 capitalize">{user.perfil.rol}</p>
+                    </div>
+                  </div>
+                )}
+
                 <nav className="flex-1 p-4 space-y-1">
                   {[...PUBLIC_LINKS, ...MORE_LINKS].map((link) => (
                     <Link
@@ -123,17 +245,39 @@ export function Navbar() {
                     </Link>
                   ))}
                 </nav>
+
                 <div className="p-4 space-y-2 border-t border-gray-800">
-                  <Link href="/login" onClick={() => setOpen(false)}>
-                    <Button variant="outline" className="w-full border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 gap-2">
-                      <LogIn className="h-4 w-4" /> Iniciar Sesión
-                    </Button>
-                  </Link>
-                  <Link href="/registro" onClick={() => setOpen(false)}>
-                    <Button className="w-full bg-[#DC2626] hover:bg-[#B91C1C] gap-2">
-                      <User className="h-4 w-4" /> Registrarse
-                    </Button>
-                  </Link>
+                  {user ? (
+                    <>
+                      {dashboardInfo && (
+                        <Link href={dashboardInfo.href} onClick={() => setOpen(false)}>
+                          <Button className="w-full bg-[#DC2626] hover:bg-[#B91C1C] gap-2">
+                            <LayoutDashboard className="h-4 w-4" /> {dashboardInfo.label}
+                          </Button>
+                        </Link>
+                      )}
+                      <Button
+                        variant="outline"
+                        onClick={handleLogout}
+                        className="w-full border-gray-700 text-gray-300 hover:text-red-400 hover:border-red-500/30 gap-2"
+                      >
+                        <LogOut className="h-4 w-4" /> Cerrar Sesión
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Link href="/login" onClick={() => setOpen(false)}>
+                        <Button variant="outline" className="w-full border-gray-700 text-gray-300 hover:text-white hover:border-gray-600 gap-2">
+                          <LogIn className="h-4 w-4" /> Iniciar Sesión
+                        </Button>
+                      </Link>
+                      <Link href="/registro" onClick={() => setOpen(false)}>
+                        <Button className="w-full bg-[#DC2626] hover:bg-[#B91C1C] gap-2">
+                          <User className="h-4 w-4" /> Registrarse
+                        </Button>
+                      </Link>
+                    </>
+                  )}
                 </div>
               </div>
             </SheetContent>
