@@ -12,7 +12,6 @@ import { ArrowRight, User, ChevronDown } from 'lucide-react';
 
 export default function RegistroPage() {
   const router = useRouter();
-  const supabase = createClient();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     email: '',
@@ -36,6 +35,7 @@ export default function RegistroPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const supabase = createClient();
 
     // 1. Crear cuenta del padre/deportista
     const { data: authData, error } = await supabase.auth.signUp({
