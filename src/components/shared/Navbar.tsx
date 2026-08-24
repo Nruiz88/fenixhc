@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Menu, X, User, LogIn, LogOut, LayoutDashboard, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from '@supabase/supabase-js';
 
 const PUBLIC_LINKS = [
   { label: 'Inicio', href: '/' },
@@ -30,33 +30,58 @@ const ROLE_DASHBOARD: Record<string, { href: string; label: string }> = {
 
 export function Navbar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
-    const client = createClient();
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) { setLoading(false); return; }
+
+    const supabase = createClient(url, key);
+
     (async () => {
-      const { data: { user: authUser } } = await client.auth.getUser();
-      if (authUser) {
-        const { data: perfil } = await client
-          .from('perfiles')
-          .select('nombre, apellido, rol')
-          .eq('id', authUser.id)
-          .single();
-        if (perfil) {
-          setUser({ ...authUser, perfil });
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          const authUser = session.user;
+          // Try to get profile, fallback to auth metadata
+          let perfil = null;
+          try {
+            const { data } = await supabase
+              .from('perfiles')
+              .select('nombre, apellido, rol')
+              .eq('id', authUser.id)
+              .single();
+            perfil = data;
+          } catch {}
+
+          setUser({
+            id: authUser.id,
+            email: authUser.email,
+            perfil: perfil || {
+              nombre: authUser.user_metadata?.nombre || authUser.email?.split('@')[0] || 'Usuario',
+              apellido: authUser.user_metadata?.apellido || '',
+              rol: authUser.user_metadata?.rol || 'padre',
+            },
+          });
         }
-      }
+      } catch {}
       setLoading(false);
     })();
   }, []);
 
   const handleLogout = async () => {
-    const client = createClient();
-    await client.auth.signOut();
+    try {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (url && key) {
+        const supabase = createClient(url, key);
+        await supabase.auth.signOut();
+      }
+    } catch {}
     setUser(null);
     setUserMenuOpen(false);
     setOpen(false);
@@ -64,7 +89,9 @@ export function Navbar() {
   };
 
   const dashboardInfo = user?.perfil?.rol ? ROLE_DASHBOARD[user.perfil.rol] : null;
-  const initials = user?.perfil ? `${user.perfil.nombre?.[0] || ''}${user.perfil.apellido?.[0] || ''}` : '';
+  const initials = user?.perfil
+    ? `${user.perfil.nombre?.[0] || ''}${user.perfil.apellido?.[0] || ''}`
+    : user?.email?.[0]?.toUpperCase() || '?';
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0A0A0A]/90 backdrop-blur-xl">
@@ -121,13 +148,11 @@ export function Navbar() {
         {/* Auth / User Section */}
         <div className="flex items-center gap-2 shrink-0">
           {loading ? (
-            /* Loading skeleton */
             <div className="hidden sm:flex items-center gap-2">
-              <div className="h-8 w-20 rounded-lg bg-gray-800 animate-pulse" />
-              <div className="h-8 w-24 rounded-lg bg-gray-800 animate-pulse" />
+              <div className="h-8 w-8 rounded-full bg-gray-800 animate-pulse" />
             </div>
           ) : user ? (
-            /* Logged in: show user menu */
+            /* Logged in */
             <div className="hidden sm:flex items-center gap-3">
               <div className="relative">
                 <button
@@ -148,7 +173,6 @@ export function Navbar() {
                   <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
-                {/* Dropdown */}
                 {userMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
@@ -180,7 +204,7 @@ export function Navbar() {
               </div>
             </div>
           ) : (
-            /* Not logged in: show login/register */
+            /* Not logged in */
             <div className="hidden sm:flex items-center gap-2">
               <Link href="/login">
                 <Button variant="ghost" className="text-gray-300 hover:text-white hover:bg-white/10 text-sm gap-2">
@@ -216,7 +240,6 @@ export function Navbar() {
                   </Button>
                 </div>
 
-                {/* User info in mobile */}
                 {user && (
                   <div className="p-4 border-b border-gray-800 flex items-center gap-3">
                     <Avatar className="h-10 w-10">
