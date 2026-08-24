@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Mail, Lock, ArrowRight } from 'lucide-react';
@@ -15,34 +14,62 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { toast.error('Error', { description: error.message }); setLoading(false); return; }
-    const { data: { user } } = await supabase.auth.getUser();
-    const rol = user?.user_metadata?.rol;
-    if (rol === 'admin') router.push('/admin/dashboard');
-    else if (rol === 'padre') router.push('/padre/dashboard');
-    else if (rol === 'deportista') router.push('/deportista/dashboard');
-    else router.push('/');
-    router.refresh();
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        toast.error('Error al ingresar', { description: error.message });
+        setLoading(false);
+        return;
+      }
+
+      toast.success('¡Bienvenido!', { description: `Hola, ${data.user.user_metadata?.nombre || data.user.email}` });
+
+      // Determine redirect based on role
+      const rol = data.user.user_metadata?.rol;
+      let destination = '/';
+
+      if (redirectTo) {
+        destination = redirectTo;
+      } else if (rol === 'admin') {
+        destination = '/admin/dashboard';
+      } else if (rol === 'padre') {
+        destination = '/padre/dashboard';
+      } else if (rol === 'deportista') {
+        destination = '/deportista/dashboard';
+      }
+
+      // Force a full page navigation to ensure cookies are set
+      window.location.href = destination;
+    } catch (err: any) {
+      toast.error('Error', { description: err.message });
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex">
       {/* Left - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-[#DC2626] via-emerald-700 to-[#2a0a0a] items-center justify-center p-12 overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-[#DC2626] via-[#7f1d1d] to-[#0A0A0A] items-center justify-center p-12 overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-20 w-72 h-72 bg-white rounded-full blur-3xl" />
           <div className="absolute bottom-20 right-20 w-96 h-96 bg-white rounded-full blur-3xl" />
         </div>
         <div className="relative z-10 text-center text-white max-w-md">
-          <div className="text-8xl mb-8">🏑</div>
-          <h1 className="text-5xl font-extrabold mb-4 leading-tight">Club Deportivo<br/>Hockey</h1>
-          <p className="text-xl text-emerald-100 mb-8">Formando campeones dentro y fuera de la cancha desde 1995</p>
+          <img src="/logo.png" alt="Fenix" className="h-20 w-20 object-contain mx-auto mb-6" />
+          <h1 className="text-4xl font-extrabold mb-4 leading-tight">Fenix Roller<br/>Hockey</h1>
+          <p className="text-xl text-gray-300 mb-8">Formando campeones dentro y fuera de la cancha desde 1995</p>
           <div className="grid grid-cols-3 gap-6 text-center">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
               <p className="text-3xl font-bold">15+</p>
@@ -64,7 +91,7 @@ function LoginForm() {
       <div className="flex-1 flex items-center justify-center p-6 bg-gray-950">
         <div className="w-full max-w-md">
           <div className="lg:hidden text-center mb-8">
-            <img src="/logo.png" alt="Fenix" className="h-14 w-14 object-contain" />
+            <img src="/logo.png" alt="Fenix" className="h-14 w-14 object-contain mx-auto" />
             <h1 className="text-2xl font-bold text-white mt-2">Fenix Roller Hockey</h1>
           </div>
           <div className="mb-8">
@@ -116,7 +143,7 @@ function LoginForm() {
           </form>
           <div className="mt-6 text-center">
             <p className="text-gray-500 text-sm">¿No tenés cuenta?{' '}
-              <Link href="/registro" className="text-[#DC2626] hover:text-[#DC2626] font-medium transition-colors">Registrate acá</Link>
+              <Link href="/registro" className="text-[#DC2626] hover:text-[#B91C1C] font-medium transition-colors">Registrate acá</Link>
             </p>
           </div>
           <div className="mt-8 pt-6 border-t border-gray-800/50 text-center">
@@ -129,5 +156,13 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
-  return <Suspense fallback={<div className="min-h-screen bg-gray-950 flex items-center justify-center"><div className="h-8 w-8 border-2 border-[#DC2626]/30 border-t-emerald-500 rounded-full animate-spin" /></div>}><LoginForm /></Suspense>;
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="h-8 w-8 border-2 border-[#DC2626]/30 border-t-[#DC2626] rounded-full animate-spin" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
+  );
 }

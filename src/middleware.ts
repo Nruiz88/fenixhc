@@ -1,35 +1,14 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-// Rutas que requieren autenticación
-const protectedRoutes = ['/padre', '/deportista', '/admin'];
-
-// Rutas solo para admin
-const adminRoutes = ['/admin'];
-
-// Rutas solo para padre
-const padreRoutes = ['/padre'];
-
-// Rutas solo para deportista
-const deportistaRoutes = ['/deportista'];
-
 export async function middleware(request: NextRequest) {
-  const url = request.nextUrl.pathname;
-  const isPublic = ['/login', '/registro', '/club', '/entrenamientos', '/contacto', '/'].some(r => url === r) || (!url.startsWith('/padre') && !url.startsWith('/deportista') && !url.startsWith('/admin') && !url.startsWith('/api'));
-
-  // If no Supabase configured, allow public routes only
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    if (isPublic) return NextResponse.next();
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
   let supabaseResponse = NextResponse.next({
     request,
   });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
@@ -50,18 +29,27 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session if expired
+  // Do not run code between createServerClient and
+  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
+  // issues with users being randomly logged out.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
 
-  // Si la ruta requiere autenticación y no hay usuario
-  const isProtected = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  // Public routes - no auth needed
+  const isPublicRoute = !pathname.startsWith('/padre') &&
+    !pathname.startsWith('/deportista') &&
+    !pathname.startsWith('/admin') &&
+    !pathname.startsWith('/api');
 
+  // Protected routes
+  const isProtected = pathname.startsWith('/padre') ||
+    pathname.startsWith('/deportista') ||
+    pathname.startsWith('/admin');
+
+  // If trying to access protected route without user
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
@@ -69,36 +57,34 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Obtener el rol del usuario desde los metadatos
-  const userRole = user?.user_metadata?.rol || user?.app_metadata?.rol;
+  // If logged in and trying to visit login, redirect to appropriate dashboard
+  if (pathname === '/login' && user) {
+    const rol = user.user_metadata?.rol;
+    const url = request.nextUrl.clone();
+    if (rol === 'admin') url.pathname = '/admin/dashboard';
+    else if (rol === 'padre') url.pathname = '/padre/dashboard';
+    else if (rol === 'deportista') url.pathname = '/deportista/dashboard';
+    else url.pathname = '/';
+    return NextResponse.redirect(url);
+  }
 
-  // Verificar permisos por rol
+  // Role-based access control
   if (user && isProtected) {
-    // Admin puede acceder a todo
-    if (adminRoutes.some((route) => pathname.startsWith(route))) {
-      if (userRole !== 'admin') {
-        const url = request.nextUrl.clone();
-        url.pathname = '/';
-        return NextResponse.redirect(url);
-      }
+    const userRole = user.user_metadata?.rol;
+
+    // Admin routes - only admin
+    if (pathname.startsWith('/admin') && userRole !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Padre solo puede acceder a rutas de padre
-    if (padreRoutes.some((route) => pathname.startsWith(route))) {
-      if (userRole !== 'padre' && userRole !== 'admin') {
-        const url = request.nextUrl.clone();
-        url.pathname = '/';
-        return NextResponse.redirect(url);
-      }
+    // Padre routes - padre or admin
+    if (pathname.startsWith('/padre') && userRole !== 'padre' && userRole !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Deportista solo puede acceder a rutas de deportista
-    if (deportistaRoutes.some((route) => pathname.startsWith(route))) {
-      if (userRole !== 'deportista' && userRole !== 'admin') {
-        const url = request.nextUrl.clone();
-        url.pathname = '/';
-        return NextResponse.redirect(url);
-      }
+    // Deportista routes - deportista or admin
+    if (pathname.startsWith('/deportista') && userRole !== 'deportista' && userRole !== 'admin') {
+      return NextResponse.redirect(new URL('/', request.url));
     }
   }
 
@@ -107,6 +93,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
