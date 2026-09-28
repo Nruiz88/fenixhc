@@ -41,4 +41,6 @@ export const udb = {
     userMutate<T>('insert', table, data),
   update: <T = any>(table: string, data: any, filters: Record<string, any>) =>
     userMutate<T>('update', table, data, filters),
+  delete: (table: string, filters: Record<string, any>) =>
+    userMutate('delete', table, undefined, filters),
 };

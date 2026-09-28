@@ -34,6 +34,7 @@ En la raíz del repo:
 
 ```bash
 export ROOT_PASS="PEGAR_AQUI_EL_ROOT_PASSWORD"
+export DB_PASS="CLAVE_FUERTE_PARA_EL_USUARIO_FENIX"
 
 cat mariadb/00_create_db.sql mariadb/01_schema.sql mariadb/02_seed.sql | \
   ssh -i ~/.ssh/TU_KEY root@TU_IP \
@@ -70,7 +71,7 @@ cat mariadb/00_create_db.sql mariadb/01_schema.sql mariadb/02_seed.sql | \
 ```bash
 ssh -i ~/.ssh/TU_KEY root@TU_IP \
   "docker exec \$(docker ps --format '{{.Names}}' | grep -iE 'maria|mysql' | head -1) \
-   mariadb -ufenix -p'Fenix2026!DB' -e 'USE club_fenix; SHOW TABLES;'"
+   mariadb -ufenix -p"$DB_PASS" -e 'USE club_fenix; SHOW TABLES;'"
 ```
 
 Debería listar las 18 tablas.
@@ -82,7 +83,7 @@ Debería listar las 18 tablas.
 | `DB_HOST` | nombre del servicio MariaDB (ej. `mariadb-fenix`); si la DB está en otra máquina, su IP |
 | `DB_PORT` | `3306` |
 | `DB_USER` | `fenix` |
-| `DB_PASSWORD` | `Fenix2026!DB` |
+| `DB_PASSWORD` | la clave que definiste en `DB_PASS` (no la subas al repo) |
 | `DB_NAME` | `club_fenix` |
 | `JWT_SECRET` | generá uno largo y distinto |
 | `UPLOAD_DIR` | `/var/fenix-uploads` (montar un volume ahí para no perder fotos) |

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute, insert, uuid } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireAuth, type AuthUser } from '@/lib/auth';
 import { TABLES_BY_ROLE } from '@/lib/constants';
 
 const ALLOWED_OPERATIONS = ['select', 'insert', 'update', 'delete'] as const;
@@ -27,37 +27,116 @@ const TABLE_COLUMNS: Record<string, string[]> = {
 
 const IDENT_RE = /^[A-Za-z0-9_]+$/;
 
-function buildWhere(table: string, filters?: Record<string, any>): { clause: string; params: any[] } {
-  if (!filters) return { clause: '', params: [] };
+// ---------------------------------------------------------------------------
+// Autorización por fila (reemplaza la RLS de Supabase)
+// ---------------------------------------------------------------------------
+
+// Tablas que un usuario sin rol admin solo puede leer/escribir sobre SUS filas
+// (o sobre las de sus hijos, en el caso del padre).
+function ownerCondition(table: string, user: AuthUser): { cond: string; params: any[] } | null {
+  if (user.rol === 'admin') return null;
+  switch (table) {
+    case 'perfiles':
+      return { cond: 'id = ?', params: [user.id] };
+    case 'deportistas':
+      return user.rol === 'deportista'
+        ? { cond: 'perfil_id = ?', params: [user.id] }
+        : { cond: 'perfil_id IN (SELECT deportista_perfil_id FROM familias WHERE padre_perfil_id = ?)', params: [user.id] };
+    case 'familias':
+      return { cond: 'padre_perfil_id = ?', params: [user.id] };
+    case 'cuotas':
+      return { cond: 'familia_id IN (SELECT id FROM familias WHERE padre_perfil_id = ?)', params: [user.id] };
+    case 'reservas':
+      return { cond: 'usuario_id = ?', params: [user.id] };
+    case 'notificaciones':
+      return { cond: "(destinatario_rol = 'todos' OR destinatario_rol = ?)", params: [user.rol] };
+    case 'notificaciones_usuarios':
+      return { cond: 'usuario_id = ?', params: [user.id] };
+    case 'push_subscriptions':
+      return { cond: 'usuario_id = ?', params: [user.id] };
+    case 'mensajes_chat':
+      return { cond: 'emisor_id = ?', params: [user.id] };
+    case 'fotos_galeria':
+      return { cond: 'subido_por = ?', params: [user.id] };
+    default:
+      return null;
+  }
+}
+
+// Lectura compartida: galería, chat, canchas y horarios se ven entre todos.
+const SHARED_READ = new Set(['fotos_galeria', 'mensajes_chat', 'canchas', 'horarios_entrenamiento', 'partidos', 'comunicados', 'sponsors']);
+
+// Operaciones de escritura que un no-admin NO puede hacer en absoluto
+const WRITE_BLOCKED_FOR_NON_ADMIN: Record<string, string[]> = {
+  perfiles: ['insert', 'delete'],
+  deportistas: ['insert', 'delete'], // el propio deportista sube sus DNI (ver UPDATABLE_COLUMNS)
+  cuotas: ['insert', 'delete'],
+  notificaciones: ['insert', 'update', 'delete'],
+  canchas: ['insert', 'update', 'delete'],
+  finanzas: ['insert', 'update', 'delete'],
+  contacto_publico: ['select', 'update', 'delete'], // el listado es solo del admin
+};
+
+// Columnas que un no-admin puede modificar en tablas sensibles
+const UPDATABLE_COLUMNS_FOR_NON_ADMIN: Record<string, string[]> = {
+  cuotas: ['comprobante_url', 'metodo_pago'], // el padre solo sube comprobante
+  perfiles: ['nombre', 'apellido', 'telefono', 'direccion', 'foto_url'],
+  reservas: ['estado', 'notas'],
+  familias: ['tipo_vinculo'],
+  deportistas: ['dni_frente_url', 'dni_fondo_url', 'observaciones'],
+  notificaciones_usuarios: ['leida'],
+  mensajes_chat: ['contenido'],
+  fotos_galeria: ['descripcion'],
+};
+
+// Columnas que se rellenan automáticamente en inserts de usuarios no-admin
+function forcedInsertValues(table: string, user: AuthUser): Record<string, any> | null {
+  if (user.rol === 'admin') return {};
+  switch (table) {
+    case 'familias': return { padre_perfil_id: user.id };
+    case 'reservas': return { usuario_id: user.id };
+    case 'mensajes_chat': return { emisor_id: user.id };
+    case 'fotos_galeria': return { subido_por: user.id };
+    case 'notificaciones_usuarios': return { usuario_id: user.id };
+    default: return {};
+  }
+}
+
+// ---------------------------------------------------------------------------
+
+function buildConditions(table: string, filters?: Record<string, any>): { conds: string[]; params: any[] } {
   const allowedCols = new Set(TABLE_COLUMNS[table] || []);
-  const conditions: string[] = [];
+  const conds: string[] = [];
   const params: any[] = [];
+  if (!filters) return { conds, params };
+
   for (const [key, value] of Object.entries(filters)) {
     if (value === null || value === undefined) continue;
     if (!allowedCols.has(key) || !IDENT_RE.test(key)) continue;
     if (Array.isArray(value)) {
-      if (value.length === 0) { conditions.push('1 = 0'); continue; }
-      conditions.push(`${key} IN (${value.map(() => '?').join(',')})`);
+      if (value.length === 0) { conds.push('1 = 0'); continue; }
+      conds.push(`${key} IN (${value.map(() => '?').join(',')})`);
       params.push(...value);
       continue;
     }
     if (typeof value === 'object' && 'op' in value) {
       const { op, val } = value;
       switch (op) {
-        case 'in': conditions.push(`${key} IN (${val.map(() => '?').join(',')})`); params.push(...val); break;
-        case 'like': conditions.push(`${key} LIKE ?`); params.push(`%${val}%`); break;
-        case 'gt': conditions.push(`${key} > ?`); params.push(val); break;
-        case 'gte': conditions.push(`${key} >= ?`); params.push(val); break;
-        case 'lt': conditions.push(`${key} < ?`); params.push(val); break;
-        case 'lte': conditions.push(`${key} <= ?`); params.push(val); break;
-        case 'neq': conditions.push(`${key} != ?`); params.push(val); break;
-        default: conditions.push(`${key} = ?`); params.push(value);
+        case 'in': conds.push(`${key} IN (${(val || []).map(() => '?').join(',')})`); params.push(...(val || [])); break;
+        case 'like': conds.push(`${key} LIKE ?`); params.push(`%${val}%`); break;
+        case 'gt': conds.push(`${key} > ?`); params.push(val); break;
+        case 'gte': conds.push(`${key} >= ?`); params.push(val); break;
+        case 'lt': conds.push(`${key} < ?`); params.push(val); break;
+        case 'lte': conds.push(`${key} <= ?`); params.push(val); break;
+        case 'neq': conds.push(`${key} != ?`); params.push(val); break;
+        default: conds.push(`${key} = ?`); params.push(val);
       }
     } else {
-      conditions.push(`${key} = ?`); params.push(value);
+      conds.push(`${key} = ?`);
+      params.push(value);
     }
   }
-  return { clause: conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '', params };
+  return { conds, params };
 }
 
 function buildOrderBy(table: string, order?: { column: string; ascending?: boolean }): string {
@@ -87,48 +166,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Operación no válida' }, { status: 400 });
     }
 
+    const isAdmin = user.rol === 'admin';
+    const blocked = WRITE_BLOCKED_FOR_NON_ADMIN[table] || [];
+    if (!isAdmin && blocked.includes(operation)) {
+      return NextResponse.json({ error: 'No tenés permisos para esta operación' }, { status: 403 });
+    }
+
     const allowedCols = TABLE_COLUMNS[table] || [];
-    const selectCols = columns
-      ? columns.split(',').map((c: string) => c.trim()).filter((c: string) => allowedCols.includes(c)).join(', ') || '*'
-      : '*';
+    const owner = isAdmin ? null : ownerCondition(table, user);
+    const needsOwner = !isAdmin && owner !== null && !SHARED_READ.has(table);
+
+    // Condiciones de fila: filtros del cliente + condición de propiedad
+    const { conds, params: filterParams } = buildConditions(table, filters);
+    if (owner && (needsOwner || operation !== 'select')) {
+      conds.push(owner.cond);
+      filterParams.push(...owner.params);
+    }
+    const clause = conds.length ? ` WHERE ${conds.join(' AND ')}` : '';
 
     switch (operation) {
       case 'select': {
-        const { clause, params } = buildWhere(table, filters);
+        const selectCols = columns
+          ? columns.split(',').map((c: string) => c.trim()).filter((c: string) => allowedCols.includes(c)).join(', ') || '*'
+          : '*';
         const orderBy = buildOrderBy(table, order);
-        const limitClause = limit ? ` LIMIT ${Math.min(Number(limit), MAX_LIMIT)}` : ' LIMIT ' + MAX_LIMIT;
-        const rows = await query(`SELECT ${selectCols} FROM ${table}${clause}${orderBy}${limitClause}`, params);
+        const limitClause = ` LIMIT ${Math.min(Number(limit) || MAX_LIMIT, MAX_LIMIT)}`;
+        const rows = await query(`SELECT ${selectCols} FROM ${table}${clause}${orderBy}${limitClause}`, filterParams);
         if (single) return NextResponse.json({ data: rows.length > 0 ? rows[0] : null });
         return NextResponse.json({ data: rows });
       }
 
       case 'insert': {
         if (!data || typeof data !== 'object') return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
+        const forced = forcedInsertValues(table, user);
+        if (forced === null) return NextResponse.json({ error: 'No tenés permisos' }, { status: 403 });
         const filteredData: any = {};
         for (const [k, v] of Object.entries(data)) { if (allowedCols.includes(k)) filteredData[k] = v; }
+        Object.assign(filteredData, forced);
         if (!filteredData.id) filteredData.id = uuid();
         const keys = Object.keys(filteredData);
-        const placeholders = keys.map(() => '?').join(',');
-        await insert(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${placeholders})`, Object.values(filteredData));
+        await insert(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`, Object.values(filteredData));
         return NextResponse.json({ data: filteredData });
       }
 
       case 'update': {
         if (!data || typeof data !== 'object') return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
-        const { clause, params: filterParams } = buildWhere(table, filters);
         if (!clause) return NextResponse.json({ error: 'Filtros requeridos' }, { status: 400 });
+        const cols = isAdmin ? allowedCols : (UPDATABLE_COLUMNS_FOR_NON_ADMIN[table] || []);
         const filteredData: any = {};
-        for (const [k, v] of Object.entries(data)) { if (allowedCols.includes(k)) filteredData[k] = v; }
+        for (const [k, v] of Object.entries(data)) { if (cols.includes(k)) filteredData[k] = v; }
         const keys = Object.keys(filteredData);
+        if (keys.length === 0) return NextResponse.json({ error: 'No podés modificar esas columnas' }, { status: 403 });
         const sets = keys.map(k => `${k} = ?`).join(', ');
         const result = await execute(`UPDATE ${table} SET ${sets}${clause}`, [...Object.values(filteredData), ...filterParams]);
         return NextResponse.json({ data: { affected: result.affectedRows } });
       }
 
       case 'delete': {
-        const { clause, params } = buildWhere(table, filters);
         if (!clause) return NextResponse.json({ error: 'Filtros requeridos' }, { status: 400 });
-        const result = await execute(`DELETE FROM ${table}${clause}`, params);
+        const result = await execute(`DELETE FROM ${table}${clause}`, filterParams);
         return NextResponse.json({ data: { affected: result.affectedRows } });
       }
 

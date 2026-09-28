@@ -33,7 +33,7 @@ export default function PadreFotos() {
             <div key={f.id} className="relative group rounded-xl overflow-hidden bg-gray-800 aspect-square">
               {f.es_video ? <video src={f.url} className="w-full h-full object-cover" /> : <img src={f.url} alt="" className="w-full h-full object-cover" />}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <button onClick={async () => { await udb.update('fotos_galeria', {}, { id: f.id }); setFotos(fotos.filter(x => x.id !== f.id)); }} className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
+              <button onClick={async () => { await udb.delete('fotos_galeria', { id: f.id }); setFotos(fotos.filter(x => x.id !== f.id)); }} className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           ))}
         </div>

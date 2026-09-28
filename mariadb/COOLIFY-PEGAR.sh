@@ -8,12 +8,17 @@ set -euo pipefail
 
 # --- CONFIGURACIÓN: cambiá esto ---
 ROOT_PASS="${ROOT_PASS:-AQUI_ROOT_PASSWORD}"   # root password (o exportar ROOT_PASS)
+DB_PASS="${DB_PASS:-CAMBIAR_ESTA_CLAVE}"       # clave del usuario de la app
 # MARIADB_CONTAINER="mariadb-fenix"  # descomentá si no detecta el contenedor
 # ----------------------------------
 
 DB_NAME="club_fenix"
 DB_USER="fenix"
-DB_PASS="Fenix2026!DB"
+
+if [ "$DB_PASS" = "CAMBIAR_ESTA_CLAVE" ]; then
+  echo "✖ Definí DB_PASS antes de ejecutar:  export DB_PASS='clave-fuerte'"
+  exit 1
+fi
 
 if command -v docker >/dev/null 2>&1; then
   C="${MARIADB_CONTAINER:-$(docker ps --format '{{.Names}}' | grep -iE 'maria|mysql' | head -1 || true)}"
@@ -30,7 +35,9 @@ else
   RUN_SQL() { mariadb -uroot -p"$ROOT_PASS"; }
 fi
 
-RUN_SQL <<'SQL'
+SQL_TMP=$(mktemp)
+trap 'rm -f "$SQL_TMP"' EXIT
+sed "s/CAMBIAR_ESTA_CLAVE/${DB_PASS}/g" > "$SQL_TMP" <<'SQL'
 -- ============================================================
 -- 00: BASE + USUARIO
 -- ============================================================
@@ -38,8 +45,8 @@ CREATE DATABASE IF NOT EXISTS club_fenix
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
-CREATE USER IF NOT EXISTS 'fenix'@'%' IDENTIFIED BY 'Fenix2026!DB';
-CREATE USER IF NOT EXISTS 'fenix'@'localhost' IDENTIFIED BY 'Fenix2026!DB';
+CREATE USER IF NOT EXISTS 'fenix'@'%' IDENTIFIED BY 'CAMBIAR_ESTA_CLAVE';
+CREATE USER IF NOT EXISTS 'fenix'@'localhost' IDENTIFIED BY 'CAMBIAR_ESTA_CLAVE';
 GRANT ALL PRIVILEGES ON club_fenix.* TO 'fenix'@'%';
 GRANT ALL PRIVILEGES ON club_fenix.* TO 'fenix'@'localhost';
 FLUSH PRIVILEGES;
@@ -331,6 +338,8 @@ INSERT IGNORE INTO familias (id, padre_perfil_id, deportista_perfil_id, tipo_vin
 
 SELECT 'OK: club_fenix creada' AS resultado, COUNT(*) AS tablas FROM information_schema.tables WHERE table_schema = 'club_fenix';
 SQL
+
+RUN_SQL < "$SQL_TMP"
 
 echo "✔ Base club_fenix creada con las 18 tablas y el seed."
 echo "  Usuario app: $DB_USER / $DB_PASS  (DB: $DB_NAME)"

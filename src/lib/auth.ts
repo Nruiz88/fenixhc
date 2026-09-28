@@ -3,7 +3,24 @@ import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
 
-const SECRET = process.env.JWT_SECRET || 'fenix-roller-hockey-secret-key-change-in-production';
+// El secreto es obligatorio: con uno fijo o débil cualquiera podría forjar tokens.
+const SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  const isProd = process.env.NODE_ENV === 'production';
+  if (!secret) {
+    if (isProd) {
+      throw new Error('JWT_SECRET no está definido. Configuralo en las variables de entorno.');
+    }
+    return 'dev-only-insecure-secret-cambiar-en-produccion';
+  }
+  if (isProd && secret.length < 32) {
+    throw new Error('JWT_SECRET debe tener al menos 32 caracteres en producción.');
+  }
+  if (isProd && secret === 'dev-only-insecure-secret-cambiar-en-produccion') {
+    throw new Error('JWT_SECRET sigue siendo el valor de desarrollo.');
+  }
+  return secret;
+})();
 const COOKIE_NAME = 'fenix_token';
 const EXPIRES_IN = '7d';
 

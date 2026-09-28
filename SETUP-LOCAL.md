@@ -9,7 +9,7 @@ docker run -d --name fenix-mariadb \
   -e MARIADB_ROOT_PASSWORD=root123 \
   -e MARIADB_DATABASE=club_fenix \
   -e MARIADB_USER=fenix \
-  -e MARIADB_PASSWORD=Fenix2026!DB \
+  -e MARIADB_PASSWORD=TU_CLAVE_LOCAL \
   -p 3306:3306 \
   mariadb:11
 ```
@@ -24,7 +24,7 @@ Copiá `.env.example` a `.env.local` y completá:
 DB_HOST=localhost
 DB_PORT=3306
 DB_USER=fenix
-DB_PASSWORD=Fenix2026!DB
+DB_PASSWORD=TU_CLAVE_LOCAL
 DB_NAME=club_fenix
 JWT_SECRET=un-secreto-largo-para-produccion
 # UPLOAD_DIR=/var/fenix-uploads   (opcional)
@@ -34,8 +34,8 @@ JWT_SECRET=un-secreto-largo-para-produccion
 Ejecutá en orden (con `mariadb` o `mysql` client):
 
 ```bash
-mariadb -h localhost -u fenix -p'Fenix2026!DB' < mariadb/01_schema.sql
-mariadb -h localhost -u fenix -p'Fenix2026!DB' < mariadb/02_seed.sql
+mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/01_schema.sql
+mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/02_seed.sql
 ```
 
 - `mariadb/01_schema.sql` → crea la base `club_fenix` y las 18 tablas.

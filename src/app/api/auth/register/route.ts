@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, insert, uuid } from '@/lib/db';
 import { hashPassword, createToken, setAuthCookie } from '@/lib/auth';
+import { rateLimit, clientIp } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
   try {
+    if (!rateLimit(`register:ip:${clientIp(request)}`, 5, 10 * 60_000)) {
+      return NextResponse.json({ error: 'Demasiados registros desde esta IP. Intentá en unos minutos.' }, { status: 429 });
+    }
+
     const body = await request.json();
     const {
       rol = 'padre',

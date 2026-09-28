@@ -1,14 +1,17 @@
 -- ============================================================
 -- FENIX ROLLER HOCKEY - Creación de base, usuario y privilegios
 -- Se ejecuta como root (consola de Coolify / SSH)
+--
+-- ⚠️ El repo es público: REEMPLAZÁ CAMBIAR_ESTA_CLAVE por una clave
+-- fuerte propia antes de ejecutar, y no la commitees.
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS club_fenix
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 
-CREATE USER IF NOT EXISTS 'fenix'@'%' IDENTIFIED BY 'Fenix2026!DB';
-CREATE USER IF NOT EXISTS 'fenix'@'localhost' IDENTIFIED BY 'Fenix2026!DB';
+CREATE USER IF NOT EXISTS 'fenix'@'%' IDENTIFIED BY 'CAMBIAR_ESTA_CLAVE';
+CREATE USER IF NOT EXISTS 'fenix'@'localhost' IDENTIFIED BY 'CAMBIAR_ESTA_CLAVE';
 
 GRANT ALL PRIVILEGES ON club_fenix.* TO 'fenix'@'%';
 GRANT ALL PRIVILEGES ON club_fenix.* TO 'fenix'@'localhost';
