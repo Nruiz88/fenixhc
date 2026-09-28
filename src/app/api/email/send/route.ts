@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { query, execute } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 
 // Email templates
 const TEMPLATES: Record<string, { getSubject: (data: any) => string; html: (data: any) => string }> = {
@@ -61,24 +62,28 @@ const TEMPLATES: Record<string, { getSubject: (data: any) => string; html: (data
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(['admin']);
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
+
     const { tipo, destinatarios, data } = await request.json();
 
     if (!tipo || !TEMPLATES[tipo]) {
       return NextResponse.json({ error: 'Invalid email type' }, { status: 400 });
     }
 
-    const supabase = createAdminClient();
     const template = TEMPLATES[tipo];
 
     // Buscar emails de destinatarios
     let emails: string[] = [];
 
     if (destinatarios === 'todos') {
-      const { data: perfiles } = await supabase.from('perfiles').select('correo');
-      emails = (perfiles || []).map((p: any) => p.correo).filter(Boolean);
+      const rows = await query<{ correo: string }>('SELECT correo FROM perfiles');
+      emails = rows.map((r) => r.correo).filter(Boolean);
     } else if (destinatarios === 'padres') {
-      const { data: perfiles } = await supabase.from('perfiles').select('correo').eq('rol', 'padre');
-      emails = (perfiles || []).map((p: any) => p.correo).filter(Boolean);
+      const rows = await query<{ correo: string }>("SELECT correo FROM perfiles WHERE rol = 'padre'");
+      emails = rows.map((r) => r.correo).filter(Boolean);
     } else if (Array.isArray(destinatarios)) {
       emails = destinatarios;
     }
@@ -87,22 +92,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, sent: 0, message: 'No emails to send to' });
     }
 
-    // Preparar contenido del email
     const subject = template.getSubject(data);
     const html = template.html(data);
 
     // Aquí iría la integración con Resend, SendGrid, etc.
-    // Por ahora registramos el intento
     console.log(`📧 Email sent to ${emails.length} recipients:`, { subject, tipo, count: emails.length });
 
     // Guardar registro del email enviado
-    await supabase.from('notificaciones').insert({
-      titulo: subject,
-      mensaje: data.resumen || data.contenido || '',
-      tipo: tipo === 'cuota_pendiente' ? 'pago' : 'general',
-      destinatario_rol: destinatarios === 'padres' ? 'padre' : 'todos',
-      created_by: null,
-    });
+    await execute(
+      `INSERT INTO notificaciones (id, titulo, mensaje, tipo, destinatario_rol, enviada_email, created_by) VALUES (UUID(), ?, ?, ?, ?, 1, ?)`,
+      [
+        subject,
+        data?.resumen || data?.contenido || '',
+        tipo === 'cuota_pendiente' ? 'pago' : 'general',
+        destinatarios === 'padres' ? 'padre' : 'todos',
+        auth.user.id,
+      ]
+    );
 
     return NextResponse.json({
       ok: true,

@@ -43,7 +43,7 @@ export default function EntrenamientosPage() {
     setHoy(dias[new Date().getDay()]);
 
     // Fetch from Supabase
-    fetch('/api/admin/query', {
+    fetch('/api/public/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { useSearchParams } from 'next/navigation';
+import { login } from '@/lib/auth-client';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect');
 
@@ -19,24 +18,15 @@ function LoginForm() {
     setError('');
 
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      const result = await login(email, password);
 
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (authError) {
-        setError(authError.message);
+      if (result.error) {
+        setError(result.error);
         setLoading(false);
         return;
       }
 
-      // Success - determine redirect
-      const rol = data.user.user_metadata?.rol;
+      const rol = result.user?.rol;
       let destination = '/';
       if (redirectTo) destination = redirectTo;
       else if (rol === 'admin') destination = '/admin/dashboard';
@@ -54,7 +44,7 @@ function LoginForm() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Fenix" className="h-16 w-16 object-contain mx-auto mb-4" />
+          <img src="/logo.png" alt="Fenix Roller Hockey" className="h-16 w-16 object-contain mx-auto mb-4" />
           <h1 className="text-3xl font-bold text-white">Fenix Roller Hockey</h1>
           <p className="text-gray-400 mt-2">Ingresá a tu cuenta</p>
         </div>
@@ -120,12 +110,11 @@ export default function LoginPage() {
 
   useEffect(() => setMounted(true), []);
 
-  // Simple mount check - if not mounted, show nothing to avoid hydration issues
   if (!mounted) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-center">
-          <img src="/logo.png" alt="Fenix" className="h-16 w-16 object-contain mx-auto mb-4" />
+          <img src="/logo.png" alt="Fenix Roller Hockey" className="h-16 w-16 object-contain mx-auto mb-4" />
           <div className="h-6 w-6 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin mx-auto" />
         </div>
       </div>
@@ -136,7 +125,7 @@ export default function LoginPage() {
     <Suspense fallback={
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="text-center">
-          <img src="/logo.png" alt="Fenix" className="h-16 w-16 object-contain mx-auto mb-4" />
+          <img src="/logo.png" alt="Fenix Roller Hockey" className="h-16 w-16 object-contain mx-auto mb-4" />
           <div className="h-6 w-6 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin mx-auto" />
         </div>
       </div>
@@ -145,5 +134,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-
-

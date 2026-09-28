@@ -123,7 +123,6 @@ export default function EntrenamientosPage() {
 
 w('src/app/contacto/page.tsx', `'use client';
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -136,11 +135,17 @@ import { CLUB_INFO } from '@/lib/constants';
 export default function ContactoPage() {
   const [f, setF] = useState({ nombre: '', correo: '', telefono: '', mensaje: '' });
   const [loading, setLoading] = useState(false);
-  const supabase = createClient();
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true);
-    const { error } = await supabase.from('contacto_publico').insert({ nombre: f.nombre, correo: f.correo, telefono: f.telefono || null, mensaje: f.mensaje });
-    if (error) toast.error('Error al enviar'); else { toast.success('Mensaje enviado!'); setF({ nombre: '', correo: '', telefono: '', mensaje: '' }); }
+    try {
+      const res = await fetch('/api/public/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: 'contacto_publico', operation: 'insert', data: f }),
+      });
+      if (!res.ok) throw new Error('fetch failed');
+      toast.success('Mensaje enviado!'); setF({ nombre: '', correo: '', telefono: '', mensaje: '' });
+    } catch { toast.error('Error al enviar'); }
     setLoading(false);
   };
   return (
@@ -175,7 +180,7 @@ export default function ContactoPage() {
 w('src/app/login/page.tsx', `'use client';
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { login } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -189,13 +194,11 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createClient();
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { toast.error('Error', { description: error.message }); setLoading(false); return; }
-    const { data: { user } } = await supabase.auth.getUser();
-    const rol = user?.user_metadata?.rol;
+    const { user, error } = await login(email, password);
+    if (error) { toast.error('Error', { description: error }); setLoading(false); return; }
+    const rol = user?.rol;
     if (rol === 'admin') router.push('/admin/dashboard');
     else if (rol === 'padre') router.push('/padre/dashboard');
     else if (rol === 'deportista') router.push('/deportista/dashboard');
@@ -217,7 +220,7 @@ export default function LoginPage() { return <Suspense fallback={<div className=
 w('src/app/registro/page.tsx', `'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { register } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -230,18 +233,13 @@ export default function RegistroPage() {
   const [f, setF] = useState({ nombre:'', apellido:'', dni:'', cuil:'', correo:'', telefono:'', direccion:'', password:'', confirmPassword:'', rol:'padre' as 'padre'|'deportista' });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
   const h = (k: string, v: string) => setF(p => ({...p, [k]: v}));
   const handleRegistro = async (e: React.FormEvent) => {
     e.preventDefault();
     if (f.password !== f.confirmPassword) { toast.error('Las contrasenas no coinciden'); return; }
     setLoading(true);
-    const { data: authData, error } = await supabase.auth.signUp({ email: f.correo, password: f.password, options: { data: { rol: f.rol, nombre: f.nombre, apellido: f.apellido } } });
-    if (error) { toast.error('Error', { description: error.message }); setLoading(false); return; }
-    if (authData.user) {
-      await supabase.from('perfiles').insert({ id: authData.user.id, rol: f.rol, nombre: f.nombre, apellido: f.apellido, dni: f.dni, cuil: f.cuil || null, correo: f.correo, telefono: f.telefono || null, direccion: f.direccion || null });
-      if (f.rol === 'deportista') await supabase.from('deportistas').insert({ perfil_id: authData.user.id });
-    }
+    const { error } = await register({ rol: f.rol, nombre: f.nombre, apellido: f.apellido, dni: f.dni, cuil: f.cuil, email: f.correo, password: f.password, telefono: f.telefono, direccion: f.direccion });
+    if (error) { toast.error('Error', { description: error }); setLoading(false); return; }
     toast.success('Registro exitoso!'); router.push('/login');
   };
   return (<Card className="max-w-lg mx-auto"><CardHeader className="text-center"><Link href="/" className="text-2xl font-bold">🏑 CDH</Link><CardTitle className="mt-4">Crear Cuenta</CardTitle></CardHeader>

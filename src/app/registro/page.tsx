@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { register } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,82 +35,42 @@ export default function RegistroPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const supabase = createClient();
 
-    // 1. Crear cuenta del padre/deportista
-    const { data: authData, error } = await supabase.auth.signUp({
+    const payload: Record<string, any> = {
+      rol: form.rol,
+      nombre: form.nombre,
+      apellido: form.apellido,
+      dni: form.dni,
+      cuil: form.cuil,
       email: form.email,
       password: form.password,
-      options: {
-        data: {
-          nombre: form.nombre,
-          apellido: form.apellido,
-          dni: form.dni,
-          cuil: form.cuil,
-          telefono: form.telefono,
-          direccion: form.direccion,
-          rol: form.rol,
-        },
-      },
-    });
+      telefono: form.telefono,
+      direccion: form.direccion,
+    };
 
-    if (error) {
-      toast.error('Error', { description: error.message });
+    // Si es padre y quiso crear hijo, lo enviamos junto con el registro
+    if (form.rol === 'padre' && form.hijo_nombre && form.hijo_apellido && form.hijo_dni) {
+      payload.hijo_nombre = form.hijo_nombre;
+      payload.hijo_apellido = form.hijo_apellido;
+      payload.hijo_dni = form.hijo_dni;
+      payload.hijo_email = form.hijo_email || `${form.hijo_dni}@fenix.local`;
+      payload.hijo_password = form.hijo_password || 'fenix2026';
+    }
+
+    const result = await register(payload);
+
+    if (result.error) {
+      toast.error('Error', { description: result.error });
       setLoading(false);
       return;
     }
 
-    // 2. Si es padre y quiso crear hijo, crear cuenta del deportista
-    if (form.rol === 'padre' && form.hijo_nombre && form.hijo_dni) {
-      const { data: hijoAuth, error: hijoError } = await supabase.auth.signUp({
-        email: form.hijo_email || `${form.hijo_dni}@fenix.local`,
-        password: form.hijo_password || 'fenix2026',
-        options: {
-          data: {
-            nombre: form.hijo_nombre,
-            apellido: form.hijo_apellido,
-            dni: form.hijo_dni,
-            rol: 'deportista',
-          },
-        },
+    if (payload.hijo_nombre) {
+      toast.success('Cuenta creada', {
+        description: `Se creó la cuenta de ${form.hijo_nombre} y se vinculó automáticamente. Cuota unificada: $75.000/mes`,
       });
-
-      if (!hijoError && authData.user) {
-        // Esperar un poco para que el perfil se cree
-        setTimeout(async () => {
-          // Vincular padre con hijo
-          await fetch('/api/admin/query', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              table: 'familias',
-              operation: 'insert',
-              data: {
-                padre_perfil_id: authData.user!.id,
-                deportista_perfil_id: hijoAuth.user!.id,
-                tipo_vinculo: 'padre',
-              },
-            }),
-          });
-
-          // Generar cuotas unificadas
-          const meses = Array.from({ length: 12 }, (_, i) => i + 1);
-          const cuotas = meses.map(mes => ({
-            familia_id: authData.user!.id, // Se actualizará cuando exista el vínculo
-            tipo_socio: 'benefactor',
-            monto: 75000,
-            mes,
-            anio: new Date().getFullYear(),
-            estado: mes < new Date().getMonth() + 1 ? 'pagada' : 'pendiente',
-          }));
-
-          toast.success('Cuenta creada', {
-            description: `Se creó la cuenta de ${form.hijo_nombre} y se vinculó automáticamente. Cuota unificada: $75.000/mes`,
-          });
-        }, 2000);
-      }
     } else {
-      toast.success('Cuenta creada', { description: 'Revisá tu correo para confirmar' });
+      toast.success('Cuenta creada', { description: 'Ya podés iniciar sesión' });
     }
 
     router.push('/login');

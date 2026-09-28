@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { getCurrentUser, logout } from '@/lib/auth-client';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -70,20 +70,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [open, setOpen] = useState(false);
-  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null);
 
   useEffect(() => {
-    const client = createClient();
-    setSupabase(client);
     (async () => {
-      const { data: { user } } = await client.auth.getUser();
-      if (!user) { router.push('/login'); return; }
-      const { data: p } = await client.from('perfiles').select('nombre, apellido, rol').eq('id', user.id).single();
-      setUser(p);
+      const current = await getCurrentUser();
+      if (!current) { router.push('/login'); return; }
+      setUser(current);
     })();
   }, []);
 
-  const handleLogout = async () => { await supabase?.auth.signOut(); router.push('/login'); };
+  const handleLogout = async () => { await logout(); router.push('/login'); };
   const breadcrumbs = pathname.split('/').filter(Boolean).map((s, i, arr) => ({
     label: s.charAt(0).toUpperCase() + s.slice(1),
     href: '/' + arr.slice(0, i + 1).join('/'),

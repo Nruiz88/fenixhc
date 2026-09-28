@@ -1,21 +1,30 @@
-import { createClient } from '@/lib/supabase/client';
+// File upload helpers - uploads through our own API (local disk storage)
 
-export async function uploadFile(
+async function uploadFile(
   bucket: string,
   path: string,
   file: File
 ): Promise<string | null> {
-  const supabase = createClient();
-  const { error } = await supabase.storage.from(bucket).upload(path, file, {
-    cacheControl: '3600',
-    upsert: true,
-  });
-  if (error) {
-    console.error('Upload error:', error);
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('bucket', bucket);
+    formData.append('path', path);
+
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      console.error('Upload error:', json.error);
+      return null;
+    }
+    return json.url;
+  } catch (err) {
+    console.error('Upload error:', err);
     return null;
   }
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  return data.publicUrl;
 }
 
 export async function uploadAvatar(userId: string, file: File): Promise<string | null> {

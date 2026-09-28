@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { userDb } from '@/lib/api';
 import { Bell, Check, AlertTriangle, DollarSign, Megaphone, Info } from 'lucide-react';
 
 const TIPO_ICONS: Record<string, typeof Bell> = {
@@ -33,17 +33,10 @@ export function NotificationsBell({ userId }: NotificationsBellProps) {
 
   async function loadNotifications() {
     try {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!url || !key) return;
-
-      const supabase = createClient(url, key);
-      const { data } = await supabase
-        .from('notificaciones')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
+      const { data } = await userDb.select('notificaciones', '*', undefined, {
+        limit: 10,
+        order: { column: 'created_at', ascending: false },
+      });
       if (data) setNotifications(data);
     } catch {}
     setLoading(false);

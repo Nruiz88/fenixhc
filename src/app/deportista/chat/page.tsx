@@ -1,10 +1,12 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { getCurrentUser } from '@/lib/auth-client';
+import { userDb } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { Send, MessageSquare } from 'lucide-react';
+
+const POLL_MS = 5000;
 
 export default function DeportistaChat() {
   const [msgs, setMsgs] = useState<any[]>([]);
@@ -13,32 +15,41 @@ export default function DeportistaChat() {
   const [userName, setUserName] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const loadMessages = async () => {
+    try {
+      const { data } = await userDb.select('mensajes_chat', '*', undefined, {
+        limit: 100,
+        order: { column: 'created_at', ascending: true },
+      });
+      if (!data) return;
+
+      // Resolve sender names
+      const emisorIds = Array.from(new Set(data.map((m: any) => m.emisor_id).filter(Boolean)));
+      let perfiles: Record<string, any> = {};
+      if (emisorIds.length > 0) {
+        const { data: ps } = await userDb.select('perfiles', 'id, nombre, apellido', { id: emisorIds });
+        (ps || []).forEach((p: any) => { perfiles[p.id] = p; });
+      }
+
+      setMsgs(data.map((m: any) => ({ ...m, perfiles: perfiles[m.emisor_id] || null })));
+    } catch {}
+  };
+
   useEffect(() => {
-    const supabase = createClient();
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
       if (user) {
         setUserId(user.id);
-        const { data } = await supabase.from('perfiles').select('nombre, apellido').eq('id', user.id).single();
-        if (data) setUserName(`${data.nombre} ${data.apellido}`);
+        setUserName(`${user.nombre || ''} ${user.apellido || ''}`.trim());
       }
+      await loadMessages();
+      interval = setInterval(loadMessages, POLL_MS);
     })();
 
-    // Load existing messages
-    (async () => {
-      const { data } = await supabase.from('mensajes_chat').select('*').order('created_at', { ascending: true }).limit(100);
-      if (data) setMsgs(data);
-    })();
-
-    // Subscribe to new messages
-    const channel = supabase.channel('chat-global')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes_chat' }, (payload: any) => {
-        setMsgs(prev => [...prev, payload.new]);
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    return () => { if (interval) clearInterval(interval); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -47,13 +58,15 @@ export default function DeportistaChat() {
 
   const handleSend = async () => {
     if (!text.trim() || !userId) return;
-    const supabase = createClient();
-    await supabase.from('mensajes_chat').insert({
+    const { error } = await userDb.insert('mensajes_chat', {
       emisor_id: userId,
       contenido: text.trim(),
       tipo_contenido: 'texto',
     });
-    setText('');
+    if (!error) {
+      setText('');
+      loadMessages();
+    }
   };
 
   return (
@@ -87,7 +100,7 @@ export default function DeportistaChat() {
             }`}>
               {msg.emisor_id !== userId && (
                 <p className="text-[10px] font-semibold text-gray-400 mb-1">
-                  {msg.perfiles?.nombre || 'Anónimo'}
+                  {msg.perfiles ? `${msg.perfiles.nombre} ${msg.perfiles.apellido}` : 'Anónimo'}
                 </p>
               )}
               <p className="text-sm">{msg.contenido}</p>

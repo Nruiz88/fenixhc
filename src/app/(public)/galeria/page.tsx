@@ -20,7 +20,7 @@ export default function GaleriaPage() {
   const [filtro, setFiltro] = useState('todas');
 
   useEffect(() => {
-    fetch('/api/admin/query', {
+    fetch('/api/public/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

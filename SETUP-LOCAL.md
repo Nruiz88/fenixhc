@@ -1,77 +1,61 @@
-# 🏑 Setup Local - Club Deportivo Hockey
+# 🏑 Setup Local - Club Deportivo Hockey (MariaDB)
 
-## 1. Crear proyecto en Supabase
-1. Andá a [supabase.com](https://supabase.com) y creá un proyecto nuevo
-2. Andá a **Settings → API** y copiá:
-   - `Project URL`
-   - `anon/public key`
-   - `service_role key` (Secrets)
+## 1. Base de datos (MariaDB)
+El proyecto usa **MariaDB** (vía `mysql2`) en lugar de Supabase.
 
-## 2. Configurar variables de entorno
-Editá `.env.local` con tus datos reales:
-```
-NEXT_PUBLIC_SUPABASE_URL=https://TU-PROYECTO.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
-SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
-NEXT_PUBLIC_APP_URL=http://localhost:3001
-```
-
-## 3. Crear las tablas en Supabase
-Andá al **SQL Editor** de Supabase y ejecutá en orden:
-1. `supabase/migrations/001_initial_schema.sql` (schema de tablas + RLS)
-2. `supabase/migrations/001_initial_schema_rls.sql` (políticas RLS + triggers)
-3. `supabase/seed.sql` (datos de prueba)
-
-## 4. Crear Storage Buckets
-En **Storage** del dashboard de Supabase, creá estos buckets:
-- `fotos-perfil` (público para lectura)
-- `fotos-galeria` (público para lectura)
-- `fotos-dni` (privado)
-- `comprobantes` (privado)
-- `chat-archivos` (autenticado)
-
-Para cada bucket, creá una policy:
-```sql
--- Para buckets públicos (lectura):
-CREATE POLICY "Public read" ON storage.objects FOR SELECT USING (bucket_id = 'fotos-perfil');
-
--- Para escritura autenticada:
-CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'fotos-perfil' AND auth.role() = 'authenticated');
-
--- Para chat-archivos:
-CREATE POLICY "Auth read" ON storage.objects FOR SELECT USING (bucket_id = 'chat-archivos' AND auth.role() = 'authenticated');
-CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'chat-archivos' AND auth.role() = 'authenticated');
-```
-
-## 5. Registrar usuarios de prueba
-Los UUIDs en `seed.sql` son de ejemplo. Para que funcione:
-
-**Opción A (recomendada):** Registrá los usuarios desde la app:
-- Andá a `http://localhost:3001/registro`
-- Creá una cuenta para cada rol
-- Después editá el `seed.sql` con los UUIDs reales
-
-**Opción B:** Creá usuarios directamente en Supabase Auth:
-1. Andá a **Authentication → Users**
-2. Creá usuarios manualmente con estos emails:
-   - `admin@club.com` (password: 123456)
-   - `marcelo@mail.com` (password: 123456)
-   - `juan@mail.com` (password: 123456)
-   - `lautaro@mail.com` (password: 123456)
-   - `tomas@mail.com` (password: 123456)
-3. En **Auth → Users**, editá cada usuario y agregá en **User Metadata**:
-   ```json
-   {"rol": "admin"}  // para admin@club.com
-   {"rol": "padre"}  // para marcelo y juan
-   {"rol": "deportista"}  // para lautaro y tomas
-   ```
-
-## 6. Ejecutar la app
+### Opción A - Docker (recomendado)
 ```bash
+docker run -d --name fenix-mariadb \
+  -e MARIADB_ROOT_PASSWORD=root123 \
+  -e MARIADB_DATABASE=club_fenix \
+  -e MARIADB_USER=fenix \
+  -e MARIADB_PASSWORD=Fenix2026!DB \
+  -p 3306:3306 \
+  mariadb:11
+```
+
+### Opción B - MariaDB instalado
+Creá la base y el usuario a mano con los comandos de `mariadb/` (ver paso 3).
+
+## 2. Variables de entorno
+Copiá `.env.example` a `.env.local` y completá:
+
+```
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=fenix
+DB_PASSWORD=Fenix2026!DB
+DB_NAME=club_fenix
+JWT_SECRET=un-secreto-largo-para-produccion
+# UPLOAD_DIR=/var/fenix-uploads   (opcional)
+```
+
+## 3. Crear las tablas y datos de prueba
+Ejecutá en orden (con `mariadb` o `mysql` client):
+
+```bash
+mariadb -h localhost -u fenix -p'Fenix2026!DB' < mariadb/01_schema.sql
+mariadb -h localhost -u fenix -p'Fenix2026!DB' < mariadb/02_seed.sql
+```
+
+- `mariadb/01_schema.sql` → crea la base `club_fenix` y las 18 tablas.
+- `mariadb/02_seed.sql` → usuarios de prueba (usuarios + perfiles + deportistas + familias).
+
+> En Coolify el mismo proceso se hace con un solo comando SSH/consola (ver README).
+
+## 4. Archivos subidos
+No hay buckets externos: `/api/upload` guarda en disco (`.env.local` → `UPLOAD_DIR`,
+por defecto `./uploads`) y los sirve `/api/files/...` (requiere sesión).
+
+En producción, montá un **volume** en esa carpeta para que las fotos no se pierdan.
+
+## 5. Ejecutar la app
+```bash
+npm install
 npm run dev
 ```
 
-## 7. Probar las interfaces
+## 6. Probar las interfaces
 | URL | Qué se ve |
 |-----|-----------|
 | `/` | Landing page pública |
@@ -88,11 +72,18 @@ npm run dev
 
 | Email | Password | Rol | Nombre |
 |-------|----------|-----|--------|
-| admin@club.com | 123456 | admin | Club Admin |
-| marcelo@mail.com | 123456 | padre | Marcelo Cabrera |
-| juan@mail.com | 123456 | padre | Juan Perez |
-| lautaro@mail.com | 123456 | deportista | Lautaro Cabrera |
-| tomas@mail.com | 123456 | deportista | Tomas Perez |
+| admin@club.com | admin123 | admin | Club Admin |
+| marcelo@mail.com | marcelo123 | padre | Marcelo Cabrera |
+| juan@mail.com | juan123 | padre | Juan Perez |
+| lautaro@mail.com | lautaro123 | deportista | Lautaro Cabrera |
+| tomas@mail.com | tomas123 | deportista | Tomas Perez |
+
+## Autenticación
+- Sesión propia: JWT en cookie `httpOnly` (`fenix_token`), 7 días.
+- Endpoints: `/api/auth/login`, `/api/auth/register`, `/api/auth/logout`,
+  `/api/auth/me`, `/api/auth/password`.
+- Queries: `/api/admin/query` (admin), `/api/user/query` (sesión),
+  `/api/public/query` (público: comunicados, galería, sponsors, horarios y contacto).
 
 ## Estructura de cuota unificada
 ```

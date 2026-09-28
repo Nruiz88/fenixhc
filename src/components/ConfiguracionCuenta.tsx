@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { getCurrentUser } from '@/lib/auth-client';
+import { userDb } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,11 +23,10 @@ export function ConfiguracionCuenta({ rol, accentColor = '#DC2626' }: Configurac
   const [loadingPass, setLoadingPass] = useState(false);
 
   useEffect(() => {
-    const supabase = createClient();
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
       if (!user) return;
-      const { data } = await supabase.from('perfiles').select('*').eq('id', user.id).single();
+      const { data } = await userDb.select('perfiles', '*', { id: user.id }, { single: true });
       if (data) {
         setPerfil(data);
         setFormPerfil({ nombre: data.nombre || '', apellido: data.apellido || '', telefono: data.telefono || '', direccion: data.direccion || '' });
@@ -37,12 +37,11 @@ export function ConfiguracionCuenta({ rol, accentColor = '#DC2626' }: Configurac
   const handleGuardarPerfil = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoadingPerfil(true);
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCurrentUser();
     if (!user) { setLoadingPerfil(false); return; }
-    const { error } = await supabase.from('perfiles').update(formPerfil).eq('id', user.id);
+    const { error } = await userDb.update('perfiles', formPerfil, { id: user.id });
     if (error) {
-      toast.error('Error', { description: error.message });
+      toast.error('Error', { description: error });
     } else {
       toast.success('Perfil actualizado');
       setPerfil({ ...perfil, ...formPerfil });
@@ -61,13 +60,21 @@ export function ConfiguracionCuenta({ rol, accentColor = '#DC2626' }: Configurac
       return;
     }
     setLoadingPass(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password: formPass.nueva });
-    if (error) {
-      toast.error('Error', { description: error.message });
-    } else {
-      toast.success('Contraseña actualizada');
-      setFormPass({ nueva: '', confirmar: '' });
+    try {
+      const res = await fetch('/api/auth/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: formPass.nueva }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error('Error', { description: json.error });
+      } else {
+        toast.success('Contraseña actualizada');
+        setFormPass({ nueva: '', confirmar: '' });
+      }
+    } catch {
+      toast.error('Error', { description: 'No se pudo actualizar la contraseña' });
     }
     setLoadingPass(false);
   };

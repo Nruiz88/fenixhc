@@ -1,29 +1,34 @@
 export const dynamic = 'force-dynamic';
 
-import { createAdminClient } from '@/lib/supabase/admin';
+import { query } from '@/lib/db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, UserCheck, DollarSign, TrendingUp, TrendingDown, Calendar, AlertCircle, CheckCircle } from 'lucide-react';
 
 export default async function AdminDashboard() {
-  const supabase = createAdminClient();
-  const [socios, jugadores, cuotas, finanzas, reservas, notifs] = await Promise.all([
-    supabase.from('perfiles').select('id', { count: 'exact' }).eq('rol', 'padre'),
-    supabase.from('deportistas').select('id', { count: 'exact' }),
-    supabase.from('cuotas').select('*'),
-    supabase.from('finanzas').select('*'),
-    supabase.from('reservas').select('*, canchas(nombre)').order('fecha', { ascending: false }).limit(5),
-    supabase.from('notificaciones').select('*').order('created_at', { ascending: false }).limit(5),
+  const [sociosRows, jugadoresRows, cuotas, finanzas, reservas, notifs] = await Promise.all([
+    query<{ c: number }>("SELECT COUNT(*) AS c FROM perfiles WHERE rol = 'padre'"),
+    query<{ c: number }>('SELECT COUNT(*) AS c FROM deportistas'),
+    query('SELECT * FROM cuotas'),
+    query('SELECT * FROM finanzas'),
+    query(`SELECT r.*, c.nombre AS cancha_nombre
+           FROM reservas r
+           LEFT JOIN canchas c ON c.id = r.cancha_id
+           ORDER BY r.fecha DESC LIMIT 5`),
+    query('SELECT * FROM notificaciones ORDER BY created_at DESC LIMIT 5'),
   ]);
 
-  const cuotasPagadas = cuotas.data?.filter((c: any) => c.estado === 'pagada') || [];
-  const cuotasPendientes = cuotas.data?.filter((c: any) => c.estado === 'pendiente') || [];
+  const sociosCount = Number(sociosRows[0]?.c || 0);
+  const jugadoresCount = Number(jugadoresRows[0]?.c || 0);
+
+  const cuotasPagadas = cuotas.filter((c: any) => c.estado === 'pagada') || [];
+  const cuotasPendientes = cuotas.filter((c: any) => c.estado === 'pendiente') || [];
   const totalIngresos = cuotasPagadas.reduce((s: number, c: any) => s + Number(c.monto), 0);
-  const ingresos = finanzas.data?.filter((f: any) => f.tipo === 'ingreso') || [];
-  const egresos = finanzas.data?.filter((f: any) => f.tipo === 'egreso') || [];
+  const ingresos = finanzas.filter((f: any) => f.tipo === 'ingreso') || [];
+  const egresos = finanzas.filter((f: any) => f.tipo === 'egreso') || [];
   const totalExtra = ingresos.reduce((s: number, f: any) => s + Number(f.monto), 0);
   const totalEgresos = egresos.reduce((s: number, f: any) => s + Number(f.monto), 0);
   const balance = totalIngresos + totalExtra - totalEgresos;
-  const cobroMensual = 75000 * (socios.count || 0);
+  const cobroMensual = 75000 * sociosCount;
 
   return (
     <div className="space-y-8">
@@ -39,7 +44,7 @@ export default async function AdminDashboard() {
           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
           <Users className="h-8 w-8 mb-3 text-emerald-200" />
           <p className="text-sm text-emerald-200 font-medium">Socios (Padres)</p>
-          <p className="text-4xl font-extrabold mt-1">{socios.count || 0}</p>
+          <p className="text-4xl font-extrabold mt-1">{sociosCount}</p>
           <p className="text-xs text-[#DC2626] mt-2">Cuota mensual: ${cobroMensual.toLocaleString('es-AR')}</p>
         </div>
 
@@ -47,7 +52,7 @@ export default async function AdminDashboard() {
           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
           <UserCheck className="h-8 w-8 mb-3 text-blue-200" />
           <p className="text-sm text-blue-200 font-medium">Jugadores Activos</p>
-          <p className="text-4xl font-extrabold mt-1">{jugadores.count || 0}</p>
+          <p className="text-4xl font-extrabold mt-1">{jugadoresCount}</p>
           <p className="text-xs text-blue-300 mt-2">Categoría Cadete</p>
         </div>
 
@@ -101,7 +106,7 @@ export default async function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-400">Cuotas al Día</p>
-                <p className="text-2xl font-bold text-blue-400 mt-1">{cuotasPagadas.length}/{cuotas.data?.length || 0}</p>
+                <p className="text-2xl font-bold text-blue-400 mt-1">{cuotasPagadas.length}/{cuotas.length || 0}</p>
               </div>
               <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
                 <CheckCircle className="h-6 w-6 text-blue-400" />
@@ -122,12 +127,12 @@ export default async function AdminDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {reservas.data && reservas.data.length > 0 ? (
+            {reservas && reservas.length > 0 ? (
               <div className="divide-y divide-gray-800">
-                {reservas.data.map((r: any) => (
+                {reservas.map((r: any) => (
                   <div key={r.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-800/50 transition-colors">
                     <div>
-                      <p className="text-sm font-medium text-white">{r.canchas?.nombre || 'Cancha'}</p>
+                      <p className="text-sm font-medium text-white">{r.cancha_nombre || 'Cancha'}</p>
                       <p className="text-xs text-gray-400 mt-0.5">{r.fecha} • {r.hora_inicio} - {r.hora_fin}</p>
                     </div>
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${r.estado === 'confirmada' ? 'bg-[#DC2626]/10 text-[#DC2626]' : 'bg-gray-500/10 text-gray-400'}`}>
@@ -151,9 +156,9 @@ export default async function AdminDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {notifs.data && notifs.data.length > 0 ? (
+            {notifs && notifs.length > 0 ? (
               <div className="divide-y divide-gray-800">
-                {notifs.data.map((n: any) => (
+                {notifs.map((n: any) => (
                   <div key={n.id} className="px-6 py-4 hover:bg-gray-800/50 transition-colors">
                     <div className="flex items-start justify-between">
                       <div>

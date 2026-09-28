@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { getCurrentUser } from '@/lib/auth-client';
+import { userDb } from '@/lib/api';
 import type { Perfil } from '@/types';
 
 export function useUser() {
@@ -10,52 +11,30 @@ export function useUser() {
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) { setLoading(false); return; }
-
-    const supabase = createClient(url, key);
-
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) { setLoading(false); return; }
+        const user = await getCurrentUser();
+        if (!user) {
+          setLoading(false);
+          return;
+        }
 
-        setUserId(session.user.id);
+        setUserId(user.id);
 
-        // Try to get profile, fallback to auth metadata
-        try {
-          const { data } = await supabase
-            .from('perfiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          if (data) {
-            setPerfil(data);
-          } else {
-            // Fallback to auth metadata
-            setPerfil({
-              id: session.user.id,
-              nombre: session.user.user_metadata?.nombre || session.user.email?.split('@')[0] || '',
-              apellido: session.user.user_metadata?.apellido || '',
-              correo: session.user.email || '',
-              rol: session.user.user_metadata?.rol || 'padre',
-              dni: '00000000',
-              created_at: session.user.created_at,
-              updated_at: session.user.updated_at || session.user.created_at,
-            } as Perfil);
-          }
-        } catch {
-          // RLS might block, use metadata
+        const { data } = await userDb.select('perfiles', '*', { id: user.id }, { single: true });
+        if (data) {
+          setPerfil(data as Perfil);
+        } else {
+          // Fallback to data from the auth session
           setPerfil({
-            id: session.user.id,
-            nombre: session.user.user_metadata?.nombre || session.user.email?.split('@')[0] || '',
-            apellido: session.user.user_metadata?.apellido || '',
-            correo: session.user.email || '',
-            rol: session.user.user_metadata?.rol || 'padre',
+            id: user.id,
+            nombre: user.nombre || user.email?.split('@')[0] || '',
+            apellido: user.apellido || '',
+            correo: user.email || '',
+            rol: user.rol || 'padre',
             dni: '00000000',
-            created_at: session.user.created_at,
-            updated_at: session.user.updated_at || session.user.created_at,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           } as Perfil);
         }
       } catch {}

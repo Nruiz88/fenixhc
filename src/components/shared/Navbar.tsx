@@ -7,7 +7,7 @@ import { Menu, X, User, LogIn, LogOut, LayoutDashboard, ChevronDown } from 'luci
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { createClient } from '@supabase/supabase-js';
+import { getCurrentUser, logout } from '@/lib/auth-client';
 import { NotificationsBell } from './NotificationsBell';
 
 const PUBLIC_LINKS = [
@@ -37,62 +37,25 @@ export function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !key) { setLoading(false); return; }
-
-    const supabase = createClient(url, key);
-
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const authUser = session.user;
-          // Try to get profile, fallback to auth metadata
-          let perfil = null;
-          try {
-            const { data } = await supabase
-              .from('perfiles')
-              .select('nombre, apellido, rol')
-              .eq('id', authUser.id)
-              .single();
-            perfil = data;
-          } catch {}
-
-          setUser({
-            id: authUser.id,
-            email: authUser.email,
-            perfil: perfil || {
-              nombre: authUser.user_metadata?.nombre || authUser.email?.split('@')[0] || 'Usuario',
-              apellido: authUser.user_metadata?.apellido || '',
-              rol: authUser.user_metadata?.rol || 'padre',
-            },
-          });
-        }
+        const currentUser = await getCurrentUser();
+        if (currentUser) setUser(currentUser);
       } catch {}
       setLoading(false);
     })();
   }, []);
 
   const handleLogout = async () => {
-    try {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (url && key) {
-        const supabase = createClient(url, key);
-        await supabase.auth.signOut();
-      }
-    } catch {}
+    await logout();
     setUser(null);
     setUserMenuOpen(false);
     setOpen(false);
     window.location.href = '/';
   };
 
-  const dashboardInfo = user?.perfil?.rol ? ROLE_DASHBOARD[user.perfil.rol] : null;
-  const initials = user?.perfil
-    ? `${user.perfil.nombre?.[0] || ''}${user.perfil.apellido?.[0] || ''}`
-    : user?.email?.[0]?.toUpperCase() || '?';
+  const dashboardInfo = user?.rol ? ROLE_DASHBOARD[user.rol] : null;
+  const initials = user ? `${user.nombre?.[0] || ''}${user.apellido?.[0] || ''}` : '';
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0A0A0A]/90 backdrop-blur-xl">
@@ -121,7 +84,6 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
-          {/* More dropdown */}
           <div className="relative group">
             <button className="px-3 py-2 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all">
               Más ▾
@@ -153,7 +115,6 @@ export function Navbar() {
               <div className="h-8 w-8 rounded-full bg-gray-800 animate-pulse" />
             </div>
           ) : user ? (
-            /* Logged in */
             <div className="hidden sm:flex items-center gap-2">
               <NotificationsBell userId={user.id} />
               <div className="relative">
@@ -168,9 +129,9 @@ export function Navbar() {
                   </Avatar>
                   <div className="text-left">
                     <p className="text-sm font-medium text-white leading-tight">
-                      {user.perfil.nombre} {user.perfil.apellido}
+                      {user.nombre} {user.apellido}
                     </p>
-                    <p className="text-[10px] text-gray-500 capitalize">{user.perfil.rol}</p>
+                    <p className="text-[10px] text-gray-500 capitalize">{user.rol}</p>
                   </div>
                   <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -180,7 +141,7 @@ export function Navbar() {
                     <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
                     <div className="absolute right-0 top-full mt-2 z-50 w-52 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-2">
                       <div className="px-3 py-2 mb-1 border-b border-gray-800">
-                        <p className="text-sm font-medium text-white">{user.perfil.nombre} {user.perfil.apellido}</p>
+                        <p className="text-sm font-medium text-white">{user.nombre} {user.apellido}</p>
                         <p className="text-xs text-gray-500">{user.email}</p>
                       </div>
                       {dashboardInfo && (
@@ -206,7 +167,6 @@ export function Navbar() {
               </div>
             </div>
           ) : (
-            /* Not logged in */
             <div className="hidden sm:flex items-center gap-2">
               <Link href="/login">
                 <Button variant="ghost" className="text-gray-300 hover:text-white hover:bg-white/10 text-sm gap-2">
@@ -250,8 +210,8 @@ export function Navbar() {
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="text-sm font-medium text-white">{user.perfil.nombre} {user.perfil.apellido}</p>
-                      <p className="text-xs text-gray-500 capitalize">{user.perfil.rol}</p>
+                      <p className="text-sm font-medium text-white">{user.nombre} {user.apellido}</p>
+                      <p className="text-xs text-gray-500 capitalize">{user.rol}</p>
                     </div>
                   </div>
                 )}

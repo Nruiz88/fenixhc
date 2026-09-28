@@ -1,17 +1,39 @@
 export const dynamic = 'force-dynamic';
 
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { query } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Mail, Phone, Calendar } from 'lucide-react';
 
 export default async function PadreHijos() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
-  const admin = createAdminClient();
-  const { data: hijos } = await admin.from('familias').select('*, perfiles!deportista_perfil_id(*), deportistas(*)').eq('padre_perfil_id', user.id);
+
+  const rows = await query<any>(
+    `SELECT f.id, f.tipo_vinculo,
+            p.id AS perfil_id, p.nombre, p.apellido, p.dni, p.telefono, p.correo,
+            d.id AS deportista_id, d.club_activo
+     FROM familias f
+     LEFT JOIN perfiles p ON p.id = f.deportista_perfil_id
+     LEFT JOIN deportistas d ON d.perfil_id = f.deportista_perfil_id
+     WHERE f.padre_perfil_id = ?
+     ORDER BY p.nombre`,
+    [user.id]
+  );
+
+  const hijos = rows.map((r: any) => ({
+    id: r.id,
+    tipo_vinculo: r.tipo_vinculo,
+    perfiles: {
+      nombre: r.nombre,
+      apellido: r.apellido,
+      dni: r.dni,
+      telefono: r.telefono,
+      correo: r.correo,
+    },
+    deportistas: r.deportista_id ? { club_activo: r.club_activo } : null,
+  }));
 
   return (
     <div className="space-y-6">

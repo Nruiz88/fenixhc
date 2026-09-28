@@ -1,61 +1,142 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { executeQuery } from '@/lib/queryBuilder';
+import { query, execute, insert, uuid } from '@/lib/db';
+import { requireAuth } from '@/lib/auth';
 import { TABLES_BY_ROLE } from '@/lib/constants';
+
+const ALLOWED_OPERATIONS = ['select', 'insert', 'update', 'delete'] as const;
+const MAX_LIMIT = 1000;
+
+const TABLE_COLUMNS: Record<string, string[]> = {
+  perfiles: ['id', 'usuario_id', 'rol', 'nombre', 'apellido', 'dni', 'cuil', 'correo', 'telefono', 'direccion', 'foto_url', 'created_at', 'updated_at'],
+  deportistas: ['id', 'perfil_id', 'dni_frente_url', 'dni_fondo_url', 'club_activo', 'fecha_inscripcion', 'observaciones', 'created_at'],
+  familias: ['id', 'padre_perfil_id', 'deportista_perfil_id', 'tipo_vinculo', 'created_at'],
+  cuotas: ['id', 'familia_id', 'tipo_socio', 'monto', 'mes', 'anio', 'estado', 'metodo_pago', 'comprobante_url', 'fecha_pago', 'created_at'],
+  finanzas: ['id', 'tipo', 'concepto', 'monto', 'fecha', 'categoria', 'metodo_pago', 'descripcion', 'comprobante_url', 'created_by', 'created_at'],
+  notificaciones: ['id', 'titulo', 'mensaje', 'tipo', 'destinatario_rol', 'enviada_email', 'created_by', 'created_at'],
+  notificaciones_usuarios: ['id', 'notificacion_id', 'usuario_id', 'leida', 'created_at'],
+  mensajes_chat: ['id', 'emisor_id', 'contenido', 'tipo_contenido', 'archivo_url', 'created_at'],
+  fotos_galeria: ['id', 'subido_por', 'url', 'descripcion', 'es_video', 'created_at'],
+  canchas: ['id', 'nombre', 'descripcion', 'capacidad', 'activa'],
+  reservas: ['id', 'cancha_id', 'usuario_id', 'fecha', 'hora_inicio', 'hora_fin', 'estado', 'notas', 'created_at'],
+  contacto_publico: ['id', 'nombre', 'correo', 'telefono', 'mensaje', 'leido', 'created_at'],
+  partidos: ['id', 'fecha', 'hora', 'rival', 'escudo_url', 'cancha', 'es_local', 'competencia', 'jornada', 'estado', 'goles_nuestros', 'goles_rival', 'resultado', 'notas', 'created_by', 'created_at'],
+  comunicados: ['id', 'titulo', 'resumen', 'contenido', 'tipo', 'estado', 'imagen_url', 'autor_id', 'destacado', 'fecha_publicacion', 'created_at', 'updated_at'],
+  horarios_entrenamiento: ['id', 'dia', 'hora_inicio', 'hora_fin', 'tipo', 'descripcion', 'nivel', 'activo', 'orden', 'created_at', 'updated_at'],
+  sponsors: ['id', 'nombre', 'logo_url', 'sitio_web', 'tier', 'descripcion', 'activo', 'orden', 'created_at', 'updated_at'],
+};
+
+const IDENT_RE = /^[A-Za-z0-9_]+$/;
+
+function buildWhere(table: string, filters?: Record<string, any>): { clause: string; params: any[] } {
+  if (!filters) return { clause: '', params: [] };
+  const allowedCols = new Set(TABLE_COLUMNS[table] || []);
+  const conditions: string[] = [];
+  const params: any[] = [];
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === null || value === undefined) continue;
+    if (!allowedCols.has(key) || !IDENT_RE.test(key)) continue;
+    if (Array.isArray(value)) {
+      if (value.length === 0) { conditions.push('1 = 0'); continue; }
+      conditions.push(`${key} IN (${value.map(() => '?').join(',')})`);
+      params.push(...value);
+      continue;
+    }
+    if (typeof value === 'object' && 'op' in value) {
+      const { op, val } = value;
+      switch (op) {
+        case 'in': conditions.push(`${key} IN (${val.map(() => '?').join(',')})`); params.push(...val); break;
+        case 'like': conditions.push(`${key} LIKE ?`); params.push(`%${val}%`); break;
+        case 'gt': conditions.push(`${key} > ?`); params.push(val); break;
+        case 'gte': conditions.push(`${key} >= ?`); params.push(val); break;
+        case 'lt': conditions.push(`${key} < ?`); params.push(val); break;
+        case 'lte': conditions.push(`${key} <= ?`); params.push(val); break;
+        case 'neq': conditions.push(`${key} != ?`); params.push(val); break;
+        default: conditions.push(`${key} = ?`); params.push(value);
+      }
+    } else {
+      conditions.push(`${key} = ?`); params.push(value);
+    }
+  }
+  return { clause: conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '', params };
+}
+
+function buildOrderBy(table: string, order?: { column: string; ascending?: boolean }): string {
+  if (!order) return '';
+  const allowedCols = new Set(TABLE_COLUMNS[table] || []);
+  if (!allowedCols.has(order.column) || !IDENT_RE.test(order.column)) return '';
+  const dir = order.ascending ? 'ASC' : 'DESC';
+  return ` ORDER BY ${order.column} ${dir}`;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    const auth = await requireAuth();
+    if ('error' in auth) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { user } = auth;
 
     const body = await request.json();
-    const { table, operation = 'select', filters = {}, data, columns, limit, order, single } = body;
+    const { table, operation = 'select', filters, data, columns, limit, order, single } = body;
 
-    if (!table) {
-      return NextResponse.json({ error: 'Tabla requerida' }, { status: 400 });
+    if (!table || !TABLES_BY_ROLE[user.rol]?.includes(table)) {
+      return NextResponse.json({ error: 'Tabla no válida para tu rol' }, { status: 403 });
     }
 
-    // Get user role
-    const admin = createAdminClient();
-    const { data: perfil } = await admin.from('perfiles').select('rol').eq('id', user.id).single();
-    const rol = perfil?.rol;
-
-    // Check table access
-    const allowedTables = TABLES_BY_ROLE[rol as keyof typeof TABLES_BY_ROLE] || [];
-    if (!allowedTables.includes(table)) {
-      return NextResponse.json({ error: 'Sin acceso a esta tabla' }, { status: 403 });
+    if (!ALLOWED_OPERATIONS.includes(operation)) {
+      return NextResponse.json({ error: 'Operación no válida' }, { status: 400 });
     }
 
-    // Inject role-based filters (RLS equivalent)
-    if (rol === 'padre') {
-      if (table === 'familias') filters.padre_perfil_id = user.id;
-      if (table === 'cuotas') {
-        const { data: fams } = await admin.from('familias').select('id').eq('padre_perfil_id', user.id);
-        const famIds = (fams || []).map((f: any) => f.id);
-        if (famIds.length > 0) {
-          filters.familia_id = { op: 'in', val: famIds };
-        } else {
-          return NextResponse.json({ data: [] });
-        }
+    const allowedCols = TABLE_COLUMNS[table] || [];
+    const selectCols = columns
+      ? columns.split(',').map((c: string) => c.trim()).filter((c: string) => allowedCols.includes(c)).join(', ') || '*'
+      : '*';
+
+    switch (operation) {
+      case 'select': {
+        const { clause, params } = buildWhere(table, filters);
+        const orderBy = buildOrderBy(table, order);
+        const limitClause = limit ? ` LIMIT ${Math.min(Number(limit), MAX_LIMIT)}` : ' LIMIT ' + MAX_LIMIT;
+        const rows = await query(`SELECT ${selectCols} FROM ${table}${clause}${orderBy}${limitClause}`, params);
+        if (single) return NextResponse.json({ data: rows.length > 0 ? rows[0] : null });
+        return NextResponse.json({ data: rows });
       }
-      if (table === 'reservas') filters.usuario_id = user.id;
-      if (table === 'perfiles') filters.id = user.id;
-    } else if (rol === 'deportista') {
-      if (table === 'reservas') filters.usuario_id = user.id;
-      if (table === 'perfiles') filters.id = user.id;
-      if (table === 'notificaciones_usuarios') filters.usuario_id = user.id;
+
+      case 'insert': {
+        if (!data || typeof data !== 'object') return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
+        const filteredData: any = {};
+        for (const [k, v] of Object.entries(data)) { if (allowedCols.includes(k)) filteredData[k] = v; }
+        if (!filteredData.id) filteredData.id = uuid();
+        const keys = Object.keys(filteredData);
+        const placeholders = keys.map(() => '?').join(',');
+        await insert(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${placeholders})`, Object.values(filteredData));
+        return NextResponse.json({ data: filteredData });
+      }
+
+      case 'update': {
+        if (!data || typeof data !== 'object') return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
+        const { clause, params: filterParams } = buildWhere(table, filters);
+        if (!clause) return NextResponse.json({ error: 'Filtros requeridos' }, { status: 400 });
+        const filteredData: any = {};
+        for (const [k, v] of Object.entries(data)) { if (allowedCols.includes(k)) filteredData[k] = v; }
+        const keys = Object.keys(filteredData);
+        const sets = keys.map(k => `${k} = ?`).join(', ');
+        const result = await execute(`UPDATE ${table} SET ${sets}${clause}`, [...Object.values(filteredData), ...filterParams]);
+        return NextResponse.json({ data: { affected: result.affectedRows } });
+      }
+
+      case 'delete': {
+        const { clause, params } = buildWhere(table, filters);
+        if (!clause) return NextResponse.json({ error: 'Filtros requeridos' }, { status: 400 });
+        const result = await execute(`DELETE FROM ${table}${clause}`, params);
+        return NextResponse.json({ data: { affected: result.affectedRows } });
+      }
+
+      default:
+        return NextResponse.json({ error: 'Operación no válida' }, { status: 400 });
     }
-
-    const result = await executeQuery(admin, operation, {
-      table, columns, filters, data, limit, order, single,
-    });
-
-    return NextResponse.json(operation === 'delete' ? { ok: true } : { data: result });
   } catch (err: any) {
+    console.error('User query error:', err);
     return NextResponse.json({ error: err.message || 'Error interno' }, { status: 500 });
   }
 }

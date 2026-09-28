@@ -15,7 +15,7 @@ export default function ContactoPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await fetch('/api/admin/query', {
+      await fetch('/api/public/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ table: 'contacto_publico', operation: 'insert', data: form }),

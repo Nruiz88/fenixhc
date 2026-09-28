@@ -49,7 +49,7 @@ function HeroSection() {
 function NoticiasSection() {
   const [noticias, setNoticias] = useState<any[]>([]);
   useEffect(() => {
-    fetch('/api/admin/query', {
+    fetch('/api/public/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ table: 'comunicados', operation: 'select', columns: '*', filters: { estado: 'publicado' }, limit: 3, order: { column: 'fecha_publicacion', ascending: false } }),
@@ -104,7 +104,7 @@ function NoticiasSection() {
 function GaleriaSection() {
   const [fotos, setFotos] = useState<any[]>([]);
   useEffect(() => {
-    fetch('/api/admin/query', {
+    fetch('/api/public/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ table: 'fotos_galeria', operation: 'select', columns: '*', limit: 8, order: { column: 'created_at', ascending: false } }),
@@ -138,7 +138,7 @@ function GaleriaSection() {
 function SponsorsSection() {
   const [sponsors, setSponsors] = useState<any[]>([]);
   useEffect(() => {
-    fetch('/api/admin/query', {
+    fetch('/api/public/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ table: 'sponsors', operation: 'select', columns: '*', filters: { activo: true }, order: { column: 'orden', ascending: true } }),
