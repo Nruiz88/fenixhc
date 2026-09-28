@@ -44,5 +44,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Node.js runtime: jsonwebtoken necesita crypto de Node; en Edge la
+  // verificación falla y todos los usuarios quedarían sin sesión.
+  runtime: 'nodejs',
   matcher: ['/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|ico)$).*)'],
 };
