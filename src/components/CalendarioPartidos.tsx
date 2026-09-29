@@ -23,7 +23,7 @@ export function CalendarioPartidos() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch('/api/admin/query', {
+    fetch('/api/public/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
