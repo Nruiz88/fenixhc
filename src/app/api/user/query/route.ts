@@ -3,6 +3,7 @@ import { query, execute, insert, uuid } from '@/lib/db';
 import { requireAuth, type AuthUser } from '@/lib/auth';
 import { TABLES_BY_ROLE } from '@/lib/constants';
 import { getView, buildViewSql } from '@/lib/views';
+import { esDirectiva } from '@/lib/roles';
 
 const ALLOWED_OPERATIONS = ['select', 'insert', 'update', 'delete'] as const;
 const MAX_LIMIT = 1000;
@@ -31,15 +32,16 @@ const IDENT_RE = /^[A-Za-z0-9_]+$/;
 // Autorización por fila (reemplaza la RLS de Supabase)
 // ---------------------------------------------------------------------------
 
-// Tablas que un usuario sin rol admin solo puede leer/escribir sobre SUS filas
-// (o sobre las de sus hijos, en el caso del padre).
+// Tablas que un socio solo puede leer/escribir sobre SUS filas (o, en el caso
+// del socio benefactor, sobre las de sus hijos vinculados).
+// La directiva usa /api/admin/query, asi que no entra por aca.
 function ownerCondition(table: string, user: AuthUser): { cond: string; params: any[] } | null {
-  if (user.rol === 'admin') return null;
+  if (esDirectiva(user.rol)) return null;
   switch (table) {
     case 'perfiles':
       return { cond: 'id = ?', params: [user.id] };
     case 'deportistas':
-      return user.rol === 'deportista'
+      return user.rol === 'socio_cadete'
         ? { cond: 'perfil_id = ?', params: [user.id] }
         : { cond: 'perfil_id IN (SELECT deportista_perfil_id FROM familias WHERE padre_perfil_id = ?)', params: [user.id] };
     case 'familias':
@@ -64,8 +66,9 @@ function ownerCondition(table: string, user: AuthUser): { cond: string; params: 
 // Lectura compartida: galería, canchas y horarios se ven entre todos.
 const SHARED_READ = new Set(['fotos_galeria', 'canchas', 'horarios_entrenamiento', 'partidos', 'comunicados', 'sponsors']);
 
-// Operaciones de escritura que un no-admin NO puede hacer en absoluto
-const WRITE_BLOCKED_FOR_NON_ADMIN: Record<string, string[]> = {
+// Operaciones de escritura que un SOCIO no puede hacer en absoluto.
+// (La directiva entra por /api/admin/query, asi que no pasa por aca.)
+const WRITE_BLOCKED_POR_SOCIO: Record<string, string[]> = {
   perfiles: ['insert', 'delete'],
   deportistas: ['insert', 'delete'], // el propio deportista sube sus DNI (ver UPDATABLE_COLUMNS)
   cuotas: ['insert', 'delete'],
@@ -75,8 +78,8 @@ const WRITE_BLOCKED_FOR_NON_ADMIN: Record<string, string[]> = {
   contacto_publico: ['select', 'update', 'delete'], // el listado es solo del admin
 };
 
-// Columnas que un no-admin puede modificar en tablas sensibles
-const UPDATABLE_COLUMNS_FOR_NON_ADMIN: Record<string, string[]> = {
+// Columnas que un SOCIO puede modificar en tablas sensibles
+const UPDATABLE_POR_SOCIO: Record<string, string[]> = {
   cuotas: ['comprobante_url', 'metodo_pago'], // el padre solo sube comprobante
   perfiles: ['nombre', 'apellido', 'telefono', 'direccion', 'foto_url'],
   reservas: ['estado', 'notas'],
@@ -88,7 +91,7 @@ const UPDATABLE_COLUMNS_FOR_NON_ADMIN: Record<string, string[]> = {
 
 // Columnas que se rellenan automáticamente en inserts de usuarios no-admin
 function forcedInsertValues(table: string, user: AuthUser): Record<string, any> | null {
-  if (user.rol === 'admin') return {};
+  if (esDirectiva(user.rol)) return {};
   switch (table) {
     case 'familias': return { padre_perfil_id: user.id };
     case 'reservas': return { usuario_id: user.id };
@@ -176,15 +179,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Operación no válida' }, { status: 400 });
     }
 
-    const isAdmin = user.rol === 'admin';
-    const blocked = WRITE_BLOCKED_FOR_NON_ADMIN[table] || [];
-    if (!isAdmin && blocked.includes(operation)) {
+    const esDir = esDirectiva(user.rol);
+    const blocked = WRITE_BLOCKED_POR_SOCIO[table] || [];
+    if (!esDir && blocked.includes(operation)) {
       return NextResponse.json({ error: 'No tenés permisos para esta operación' }, { status: 403 });
     }
 
     const allowedCols = TABLE_COLUMNS[table] || [];
-    const owner = isAdmin ? null : ownerCondition(table, user);
-    const needsOwner = !isAdmin && owner !== null && !SHARED_READ.has(table);
+    const owner = esDir ? null : ownerCondition(table, user);
+    const needsOwner = !esDir && owner !== null && !SHARED_READ.has(table);
 
     // Condiciones de fila: filtros del cliente + condición de propiedad
     const { conds, params: filterParams } = buildConditions(table, filters);
@@ -222,7 +225,7 @@ export async function POST(request: NextRequest) {
       case 'update': {
         if (!data || typeof data !== 'object') return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
         if (!clause) return NextResponse.json({ error: 'Filtros requeridos' }, { status: 400 });
-        const cols = isAdmin ? allowedCols : (UPDATABLE_COLUMNS_FOR_NON_ADMIN[table] || []);
+        const cols = esDir ? allowedCols : (UPDATABLE_POR_SOCIO[table] || []);
         const filteredData: any = {};
         for (const [k, v] of Object.entries(data)) { if (cols.includes(k)) filteredData[k] = v; }
         const keys = Object.keys(filteredData);

@@ -3,14 +3,17 @@
 // ============================================================
 
 // --- Auth y Roles ---
-export type Rol = 'admin' | 'padre' | 'deportista';
+// El tipo Rol vive en lib/roles.ts (fuente unica, compartida con el ENUM).
+export type { Rol } from '@/lib/roles';
+import type { Rol } from '@/lib/roles';
+
 export type TipoVinculo = 'padre' | 'madre' | 'tutor';
 export type TipoSocio = 'cadete' | 'activo' | 'benefactor';
 export type EstadoCuota = 'pendiente' | 'pagada' | 'vencida';
 export type MetodoPago = 'mercadopago' | 'transferencia';
 export type TipoFinanza = 'ingreso' | 'egreso';
 export type TipoNotificacion = 'pago' | 'deportivo' | 'general' | 'urgente';
-export type DestinatarioNotificacion = 'padre' | 'deportista' | 'todos';
+export type DestinatarioNotificacion = Rol | 'todos';
 export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada';
 
 // --- Perfil (extendido desde auth.users) ---

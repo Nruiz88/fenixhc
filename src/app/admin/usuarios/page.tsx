@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { db } from '@/lib/adminQuery';
-import { UserPlus, Users, UserCheck, Save, X, Check, AlertCircle, Search } from 'lucide-react';
+import { ROLES, ROL_LABEL, ROL_ICONO, ROL_DESCRIPCION, ROL_COLOR, ROLES_DIRECTIVA, type Rol } from '@/lib/roles';
+import { UserPlus, Users, UserCheck, Save, X, Check, AlertCircle, Search, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminUsuariosPage() {
@@ -13,7 +14,7 @@ export default function AdminUsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
-    tipo: 'padre',
+    tipo: 'socio_benefactor',
     email: '',
     password: '',
     nombre: '',
@@ -67,7 +68,7 @@ export default function AdminUsuariosPage() {
         toast.error('Error al crear usuario', { description: result.error });
       } else {
         toast.success('Usuario creado', { description: `${form.nombre} ${form.apellido} (${form.tipo})` });
-        setForm({ tipo: 'padre', email: '', password: '', nombre: '', apellido: '', dni: '', cuil: '', telefono: '', direccion: '' });
+        setForm({ tipo: 'socio_benefactor', email: '', password: '', nombre: '', apellido: '', dni: '', cuil: '', telefono: '', direccion: '' });
         setShowForm(false);
         loadUsers();
       }
@@ -77,8 +78,9 @@ export default function AdminUsuariosPage() {
     setLoadingCreate(false);
   };
 
-  const padres = users.filter(u => u.rol === 'padre');
-  const deportistas = users.filter(u => u.rol === 'deportista');
+  const directiva = users.filter((u) => ROLES_DIRECTIVA.includes(u.rol));
+  const benefactores = users.filter((u) => u.rol === 'socio_benefactor');
+  const cadetes = users.filter((u) => u.rol === 'socio_cadete');
   const filtered = search
     ? users.filter(u => `${u.nombre} ${u.apellido} ${u.correo}`.toLowerCase().includes(search.toLowerCase()))
     : users;
@@ -97,11 +99,12 @@ export default function AdminUsuariosPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: 'Total', value: users.length, icon: Users, color: 'text-gray-400' },
-          { label: 'Padres', value: padres.length, icon: Users, color: 'text-blue-400' },
-          { label: 'Deportistas', value: deportistas.length, icon: UserCheck, color: 'text-emerald-400' },
+          { label: 'Directiva', value: directiva.length, icon: Shield, color: 'text-[#DC2626]' },
+          { label: 'Benefactores', value: benefactores.length, icon: Users, color: 'text-blue-400' },
+          { label: 'Cadetes', value: cadetes.length, icon: UserCheck, color: 'text-emerald-400' },
         ].map((s, i) => (
           <Card key={i} className="bg-gray-900 border-gray-800">
             <CardContent className="p-4 flex items-center gap-3">
@@ -126,18 +129,22 @@ export default function AdminUsuariosPage() {
           </CardHeader>
           <CardContent className="p-6">
             <form onSubmit={handleCreate} className="space-y-4">
-              {/* Tipo */}
+              {/* Rol */}
               <div className="space-y-2">
-                <Label className="text-gray-400 text-sm">Tipo de usuario *</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => setForm({ ...form, tipo: 'padre' })} className={`p-4 rounded-xl border text-left transition-all ${form.tipo === 'padre' ? 'border-[#DC2626] bg-[#DC2626]/10' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
-                    <p className="text-lg mb-1">👨‍👦</p>
-                    <p className="text-sm font-semibold text-white">Padre / Benefactor</p>
-                  </button>
-                  <button type="button" onClick={() => setForm({ ...form, tipo: 'deportista' })} className={`p-4 rounded-xl border text-left transition-all ${form.tipo === 'deportista' ? 'border-[#DC2626] bg-[#DC2626]/10' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
-                    <p className="text-lg mb-1">🏃</p>
-                    <p className="text-sm font-semibold text-white">Deportista / Jugador</p>
-                  </button>
+                <Label className="text-gray-400 text-sm">Rol *</Label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {ROLES.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setForm({ ...form, tipo: r })}
+                      title={ROL_DESCRIPCION[r]}
+                      className={`p-3 rounded-xl border text-left transition-all ${form.tipo === r ? 'border-[#DC2626] bg-[#DC2626]/10' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}
+                    >
+                      <p className="text-base mb-0.5">{ROL_ICONO[r]}</p>
+                      <p className="text-xs font-semibold text-white">{ROL_LABEL[r]}</p>
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -219,20 +226,19 @@ export default function AdminUsuariosPage() {
           filtered.map(u => (
             <Card key={u.id} className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-all">
               <CardContent className="p-4 flex items-center gap-4">
-                <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${u.rol === 'admin' ? 'bg-[#DC2626]/10' : u.rol === 'padre' ? 'bg-blue-500/10' : 'bg-emerald-500/10'}`}>
-                  <span className={`font-bold text-sm ${u.rol === 'admin' ? 'text-[#DC2626]' : u.rol === 'padre' ? 'text-blue-400' : 'text-emerald-400'}`}>
+                <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${ROL_COLOR[u.rol as Rol]?.bg ?? 'bg-gray-500/10'}`}>
+                  <span className={`font-bold text-sm ${ROL_COLOR[u.rol as Rol]?.fg ?? 'text-gray-400'}`}>
                     {u.nombre?.[0]}{u.apellido?.[0]}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-white">{u.nombre} {u.apellido}</p>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
-                      u.rol === 'admin' ? 'bg-[#DC2626]/20 text-[#DC2626]' :
-                      u.rol === 'padre' ? 'bg-blue-500/20 text-blue-400' :
-                      'bg-emerald-500/20 text-emerald-400'
-                    }`}>
-                      {u.rol}
+                    <span
+                      title={ROL_DESCRIPCION[u.rol as Rol]}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ROL_COLOR[u.rol as Rol]?.bg ?? 'bg-gray-500/20'} ${ROL_COLOR[u.rol as Rol]?.fg ?? 'text-gray-400'}`}
+                    >
+                      {ROL_LABEL[u.rol as Rol] ?? u.rol}
                     </span>
                   </div>
                   <p className="text-sm text-gray-400">{u.correo}</p>

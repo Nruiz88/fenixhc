@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   id CHAR(36) PRIMARY KEY,
   email VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  rol ENUM('admin','padre','deportista') NOT NULL DEFAULT 'padre',
+  rol ENUM('admin','presidente','secretario','tesorero','vocal_titular','vocal_suplente','socio_benefactor','socio_cadete') NOT NULL DEFAULT 'socio_benefactor',
   -- Verificación de email: obligatoria para poder iniciar sesión.
   email_verificado BOOLEAN NOT NULL DEFAULT FALSE,
   -- SHA-256 del token de verificación (nunca el token en claro).
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
 CREATE TABLE IF NOT EXISTS perfiles (
   id CHAR(36) PRIMARY KEY,
   usuario_id CHAR(36) NOT NULL UNIQUE,
-  rol ENUM('admin','padre','deportista') NOT NULL,
+  rol ENUM('admin','presidente','secretario','tesorero','vocal_titular','vocal_suplente','socio_benefactor','socio_cadete') NOT NULL,
   nombre VARCHAR(100) NOT NULL,
   apellido VARCHAR(100) NOT NULL,
   dni VARCHAR(20) NOT NULL UNIQUE,
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS notificaciones (
   titulo VARCHAR(255) NOT NULL,
   mensaje TEXT NOT NULL,
   tipo ENUM('pago','deportivo','general','urgente') DEFAULT 'general',
-  destinatario_rol ENUM('padre','deportista','todos') DEFAULT 'todos',
+  destinatario_rol ENUM('admin','presidente','secretario','tesorero','vocal_titular','vocal_suplente','socio_benefactor','socio_cadete','todos') DEFAULT 'todos',
   enviada_email BOOLEAN DEFAULT FALSE,
   created_by CHAR(36),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

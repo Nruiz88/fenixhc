@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute, insert, uuid } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireDirectiva } from '@/lib/auth';
 import { TABLES_BY_ROLE } from '@/lib/constants';
 import { getView, buildViewSql } from '@/lib/views';
 
@@ -72,7 +72,9 @@ function buildOrderBy(table: string, order?: { column: string; ascending?: boole
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth(['admin']);
+    // Cualquier cargo de directiva entra al panel; el recorte por modulo se
+    // hace en la pagina y en los endpoints especificos (finanzas, pagos...).
+    const auth = await requireDirectiva();
     if ('error' in auth) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }

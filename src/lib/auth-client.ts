@@ -1,8 +1,10 @@
 // Auth helpers using cookie-based JWT auth (no Supabase client)
 
+import type { Rol } from './roles';
+
 export interface AuthUser {
   id: string;
-  rol: 'admin' | 'padre' | 'deportista';
+  rol: Rol;
   nombre: string;
   apellido: string;
   email: string;

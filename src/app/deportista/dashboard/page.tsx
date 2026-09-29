@@ -19,7 +19,7 @@ export default function DeportistaDashboard() {
       setStats({
         fotos: f.data?.length || 0,
         reservas: r.data?.length || 0,
-        notifs: (n.data || []).filter((x: any) => x.destinatario_rol === 'deportista' || x.destinatario_rol === 'todos').length,
+        notifs: (n.data || []).filter((x: any) => x.destinatario_rol === 'socio_cadete' || x.destinatario_rol === 'todos').length,
       });
     });
   }, []);

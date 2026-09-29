@@ -17,7 +17,7 @@ export default function AdminLinksFamilia() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const { data: p } = await db.select('perfiles', 'id, nombre, apellido, dni, correo', { rol: 'padre' });
+    const { data: p } = await db.select('perfiles', 'id, nombre, apellido, dni, correo', { rol: 'socio_benefactor' });
     setPadres(p || []);
     const { data: d } = await db.view('admin_deportistas_ligeros');
     setDeportistas(d || []);
@@ -77,7 +77,7 @@ export default function AdminLinksFamilia() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Vincular Padre - Hijo</h1>
+        <h1 className="text-2xl font-bold text-white">Vincular Socio - Cadete</h1>
         <p className="text-gray-400 text-sm mt-1">Asociá padres con sus hijos deportistas. Se genera automáticamente la cuota unificada.</p>
       </div>
 

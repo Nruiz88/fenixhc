@@ -1,41 +1,61 @@
-// User roles
-export const ROLES = {
-  ADMIN: 'admin',
-  PADRE: 'padre',
-  DEPORTISTA: 'deportista',
-} as const;
+import { ROLES, ROLES_DIRECTIVA, type Rol } from './roles';
 
-export type UserRole = typeof ROLES[keyof typeof ROLES];
+// Tablas a las que cada rol puede acceder via /api/user/query.
+// Los roles de directiva y el admin usan /api/admin/query, asi que acá solo
+// importan los dos roles de socio (y el admin, que tambien usa este endpoint
+// para algunas pantallas).
+//
+// La autorizacion por fila (que un socio solo vea lo suyo) vive en
+// api/user/query/route.ts, en ownerCondition().
 
-// Allowed tables per role
-export const TABLES_BY_ROLE: Record<UserRole, string[]> = {
-  admin: [
-    'perfiles', 'deportistas', 'familias', 'cuotas', 'finanzas',
-    'notificaciones', 'notificaciones_usuarios',
-    'fotos_galeria', 'canchas', 'reservas', 'push_subscriptions',
-    'contacto_publico', 'partidos', 'comunicados', 'horarios_entrenamiento', 'sponsors',
-  ],
-  padre: [
-    'perfiles', 'deportistas', 'familias', 'cuotas', 'notificaciones',
-    'notificaciones_usuarios', 'fotos_galeria', 'reservas', 'contacto_publico',
-    // Necesario para los selectores de cancha de /padre/reservas
-    'canchas',
-  ],
-  deportista: [
-    'perfiles', 'notificaciones', 'notificaciones_usuarios',
-    'fotos_galeria', 'reservas',
-    // Necesario para /deportista/reservas
-    'canchas',
-    // El deportista lee y actualiza su propia ficha (incluye subir el DNI);
-    // ownerCondition ya lo restringe a perfil_id = su propio id.
-    'deportistas',
-  ],
+const TABLAS_SOCIO: string[] = [
+  'perfiles',
+  'notificaciones',
+  'notificaciones_usuarios',
+  'fotos_galeria',
+  'reservas',
+  'canchas',
+];
+
+const TABLAS_BENEFACTOR: string[] = [
+  ...TABLAS_SOCIO,
+  'deportistas',
+  'familias',
+  'cuotas',
+  'contacto_publico',
+];
+
+const TABLAS_CADETE: string[] = [
+  ...TABLAS_SOCIO,
+  // Su propia ficha (el ownerCondition la acota a perfil_id = su id).
+  'deportistas',
+];
+
+const TABLAS_ADMIN: string[] = [
+  'perfiles', 'deportistas', 'familias', 'cuotas', 'finanzas',
+  'notificaciones', 'notificaciones_usuarios',
+  'fotos_galeria', 'canchas', 'reservas', 'push_subscriptions',
+  'contacto_publico', 'partidos', 'comunicados', 'horarios_entrenamiento', 'sponsors',
+];
+
+// Los cargos de directiva Acceden al panel como el admin, pero cada uno con
+// un subconjunto de modulos (ver lib/roles.ts). A nivel de tablas siguen
+// teniendo el acceso completo del panel: el recorte fino por modulo se hace
+// con requireModulo() en cada endpoint.
+const TABLAS_DIRECTIVA: string[] = TABLAS_ADMIN;
+
+export const TABLES_BY_ROLE: Record<Rol, string[]> = {
+  admin: TABLAS_ADMIN,
+  presidente: TABLAS_DIRECTIVA,
+  secretario: TABLAS_DIRECTIVA,
+  tesorero: TABLAS_DIRECTIVA,
+  vocal_titular: TABLAS_DIRECTIVA,
+  vocal_suplente: TABLAS_DIRECTIVA,
+  socio_benefactor: TABLAS_BENEFACTOR,
+  socio_cadete: TABLAS_CADETE,
 };
 
-// Allowed operations
-export const ALLOWED_OPERATIONS = ['select', 'insert', 'upsert', 'update', 'delete'] as const;
-
-// Validation rules
+// Validacion rules
 export const VALIDATION = {
   MIN_PASSWORD_LENGTH: 6,
   MAX_QUERY_LIMIT: 1000,
@@ -45,19 +65,23 @@ export const VALIDATION = {
   ALLOWED_PDF_TYPES: ['application/pdf'],
 } as const;
 
-// Route protection
+// Route protection: los socios van a su portal, la directiva al panel.
 export const PROTECTED_ROUTES = ['/admin', '/padre', '/deportista'];
 
 export function isProtectedRoute(pathname: string): boolean {
-  return PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+  return PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
 }
 
-export function getRoleFromPath(pathname: string): UserRole | null {
+/** Que tipo de portal corresponde a una ruta. */
+export function getRoleFromPath(pathname: string): Rol | null {
   if (pathname.startsWith('/admin')) return 'admin';
-  if (pathname.startsWith('/padre')) return 'padre';
-  if (pathname.startsWith('/deportista')) return 'deportista';
+  if (pathname.startsWith('/padre')) return 'socio_benefactor';
+  if (pathname.startsWith('/deportista')) return 'socio_cadete';
   return null;
 }
+
+export { ROLES, ROLES_DIRECTIVA };
+export type { Rol };
 
 // Month names
 export const MESES = [

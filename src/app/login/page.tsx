@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { login, resendVerification } from '@/lib/auth-client';
+import { PORTAL_POR_ROL } from '@/lib/roles';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -45,9 +46,7 @@ function LoginForm() {
       const rol = result.user?.rol;
       let destination = '/';
       if (redirectTo) destination = redirectTo;
-      else if (rol === 'admin') destination = '/admin/dashboard';
-      else if (rol === 'padre') destination = '/padre/dashboard';
-      else if (rol === 'deportista') destination = '/deportista/dashboard';
+      else if (rol && PORTAL_POR_ROL[rol]) destination = PORTAL_POR_ROL[rol];
 
       window.location.href = destination;
     } catch (err: any) {

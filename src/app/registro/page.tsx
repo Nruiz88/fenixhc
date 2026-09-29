@@ -22,7 +22,7 @@ export default function RegistroPage() {
     cuil: '',
     telefono: '',
     direccion: '',
-    rol: 'padre',
+    rol: 'socio_benefactor',
     // Para padres: datos del hijo
     hijo_nombre: '',
     hijo_apellido: '',
@@ -54,7 +54,7 @@ export default function RegistroPage() {
     // Si es padre y quiso crear hijo, lo enviamos junto con el registro.
     // El email del hijo es obligatorio: la verificación se manda a esa
     // casilla, así que un email inventado dejaría al chico sin poder entrar.
-    if (form.rol === 'padre' && form.hijo_nombre && form.hijo_apellido && form.hijo_dni) {
+    if (form.rol === 'socio_benefactor' && form.hijo_nombre && form.hijo_apellido && form.hijo_dni) {
       if (!form.hijo_email) {
         toast.error('Falta el email del hijo', { description: 'Necesitamos su email para enviarle la verificación.' });
         setLoading(false);
@@ -150,14 +150,14 @@ export default function RegistroPage() {
               <div className="space-y-2">
                 <Label className="text-gray-400 text-sm">Tipo de cuenta</Label>
                 <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => update('rol', 'padre')} className={`p-4 rounded-xl border text-left transition-all ${form.rol === 'padre' ? 'border-[#DC2626] bg-[#DC2626]/10' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
-                    <p className="text-lg mb-1">👨‍👦</p>
-                    <p className="text-sm font-semibold text-white">Padre / Benefactor</p>
-                    <p className="text-xs text-gray-500 mt-1">Padre o madre de un deportista</p>
+                  <button type="button" onClick={() => update('rol', 'socio_benefactor')} className={`p-4 rounded-xl border text-left transition-all ${form.rol === 'socio_benefactor' ? 'border-[#DC2626] bg-[#DC2626]/10' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
+                    <p className="text-lg mb-1">🤝</p>
+                    <p className="text-sm font-semibold text-white">Socio Benefactor</p>
+                    <p className="text-xs text-gray-500 mt-1">Responsable de las cuotas de sus hijos</p>
                   </button>
-                  <button type="button" onClick={() => update('rol', 'deportista')} className={`p-4 rounded-xl border text-left transition-all ${form.rol === 'deportista' ? 'border-[#DC2626] bg-[#DC2626]/10' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
+                  <button type="button" onClick={() => update('rol', 'socio_cadete')} className={`p-4 rounded-xl border text-left transition-all ${form.rol === 'socio_cadete' ? 'border-[#DC2626] bg-[#DC2626]/10' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}>
                     <p className="text-lg mb-1">🏃</p>
-                    <p className="text-sm font-semibold text-white">Deportista / Jugador</p>
+                    <p className="text-sm font-semibold text-white">Socio Cadete</p>
                     <p className="text-xs text-gray-500 mt-1">Jugador activo del club</p>
                   </button>
                 </div>
@@ -208,7 +208,7 @@ export default function RegistroPage() {
               </div>
 
               {/* Si es padre, opcionalmente crear hijo */}
-              {form.rol === 'padre' && (
+              {form.rol === 'socio_benefactor' && (
                 <div className="border-t border-gray-800 pt-4 mt-4">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="h-6 w-6 rounded-full bg-[#DC2626]/20 flex items-center justify-center">
@@ -250,7 +250,7 @@ export default function RegistroPage() {
                 {loading ? 'Creando...' : <><span>Crear Cuenta</span><ArrowRight className="h-4 w-4 ml-1" /></>}
               </Button>
 
-              {form.rol === 'padre' && form.hijo_nombre && (
+              {form.rol === 'socio_benefactor' && form.hijo_nombre && (
                 <p className="text-center text-xs text-gray-500">
                   Se creará la cuenta de {form.hijo_nombre} y se vinculará automáticamente. Cuota: <span className="text-[#DC2626] font-semibold">$75.000/mes</span>
                 </p>

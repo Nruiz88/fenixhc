@@ -111,8 +111,33 @@ confirmarlo antes de poder hacer login (si no, `/api/auth/login` devuelve 403
 
 ## Estructura de cuota unificada
 ```
-Marcelo Cabrera (padre/benefactor) → Lautaro Cabrera (cadete)
+Marcelo Cabrera (socio benefactor) → Lautaro Cabrera (socio cadete)
   → Cuota unificada: $75.000/mes
   → Marcelo sube comprobante de transferencia
   → Admin aprueba el pago
 ```
+
+## Roles y permisos
+El enum `usuarios.rol` tiene 8 valores. La fuente única de los roles y de la
+matriz de permisos es `src/lib/roles.ts` (si se agrega un rol, se edita ese
+archivo **y** el ENUM con una migración).
+
+| Rol | Portal | Alcance |
+|-----|--------|---------|
+| `admin` | `/admin` | Todos los módulos |
+| `presidente` | `/admin` | Todos los módulos |
+| `secretario` | `/admin` | Socios, jugadores, agenda, comunicados, notificaciones, horarios, reservas |
+| `tesorero` | `/admin` | Socios, jugadores, pagos, finanzas, reportes |
+| `vocal_titular` | `/admin` | Consulta de socios, jugadores, legajos y partidos |
+| `vocal_suplente` | `/admin` | Igual que Vocal Titular |
+| `socio_benefactor` | `/padre` | Sus cuotas, sus hijos, reservas, galería |
+| `socio_cadete` | `/deportista` | Su ficha, su DNI, reservas, galería |
+
+- El registro público (`/registro`) solo admite `socio_benefactor` y
+  `socio_cadete`. Los cargos se dan de alta desde `/admin/usuarios`.
+- El menú lateral se filtra según el cargo, y el middleware bloquea por URL
+  las páginas sin permiso (no es solo cosmético).
+- Un JWT emitido antes de la migración 05 lleva el rol viejo y se rechaza:
+  hay que volver a iniciar sesión.
+
+Migración necesaria: `mariadb/05_roles_directiva.sql`.

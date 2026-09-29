@@ -6,7 +6,7 @@ import { Users, UserCheck, DollarSign, TrendingUp, TrendingDown, Calendar, Alert
 
 export default async function AdminDashboard() {
   const [sociosRows, jugadoresRows, cuotas, finanzas, reservas, notifs] = await Promise.all([
-    query<{ c: number }>("SELECT COUNT(*) AS c FROM perfiles WHERE rol = 'padre'"),
+    query<{ c: number }>("SELECT COUNT(*) AS c FROM perfiles WHERE rol = 'socio_benefactor'"),
     query<{ c: number }>('SELECT COUNT(*) AS c FROM deportistas'),
     query('SELECT * FROM cuotas'),
     query('SELECT * FROM finanzas'),
@@ -43,7 +43,7 @@ export default async function AdminDashboard() {
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 p-6 text-white shadow-lg shadow-[#DC2626]/20">
           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
           <Users className="h-8 w-8 mb-3 text-emerald-200" />
-          <p className="text-sm text-emerald-200 font-medium">Socios (Padres)</p>
+          <p className="text-sm text-emerald-200 font-medium">Socios Benefactores</p>
           <p className="text-4xl font-extrabold mt-1">{sociosCount}</p>
           <p className="text-xs text-[#DC2626] mt-2">Cuota mensual: ${cobroMensual.toLocaleString('es-AR')}</p>
         </div>

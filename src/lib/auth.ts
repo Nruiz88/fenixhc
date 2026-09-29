@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
+import { isRol, esDirectiva, tieneModulo, type Rol, type Modulo } from './roles';
 
 // El secreto es obligatorio: con uno fijo o débil cualquiera podría forjar tokens.
 const SECRET = (() => {
@@ -26,7 +27,7 @@ const EXPIRES_IN = '7d';
 
 export interface AuthUser {
   id: string;
-  rol: 'admin' | 'padre' | 'deportista';
+  rol: Rol;
   nombre: string;
   apellido: string;
   email: string;
@@ -52,9 +53,17 @@ export function createToken(user: AuthUser): string {
 }
 
 // Verify JWT token
+//
+// Se valida que el rol siga siendo uno del catalogo actual: los JWT emitidos
+// antes de la migracion 05 llevan 'padre'/'deportista' y se rechazan, lo que
+// obliga a volver a iniciar sesion (que era el costo de renombrar el ENUM).
 export function verifyToken(token: string): AuthUser | null {
   try {
-    return jwt.verify(token, SECRET) as AuthUser;
+    const payload = jwt.verify(token, SECRET) as AuthUser;
+    if (!payload || typeof payload.id !== 'string' || !isRol(payload.rol)) {
+      return null;
+    }
+    return payload;
   } catch {
     return null;
   }
@@ -111,6 +120,34 @@ export async function requireAuth(roles?: string[]): Promise<{ user: AuthUser } 
     return { error: 'Sin permisos', status: 403 };
   }
   return { user };
+}
+
+/**
+ * Exige entrar al panel: cualquier cargo de directiva o el admin.
+ * Los socios no pasan por aca.
+ */
+export async function requireDirectiva(): Promise<
+  { user: AuthUser } | { error: string; status: number }
+> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'No autenticado', status: 401 };
+  if (!esDirectiva(user.rol)) return { error: 'Sin permisos', status: 403 };
+  return { user };
+}
+
+/**
+ * Exige permiso sobre un modulo del panel. Cada cargo tiene un subconjunto
+ * distinto (ver PERMISOS en lib/roles.ts).
+ */
+export async function requireModulo(modulo: Modulo): Promise<
+  { user: AuthUser } | { error: string; status: number }
+> {
+  const auth = await requireDirectiva();
+  if ('error' in auth) return auth;
+  if (!tieneModulo(auth.user.rol, modulo)) {
+    return { error: 'Sin permisos para este módulo', status: 403 };
+  }
+  return auth;
 }
 
 // Authenticate from request (for middleware)

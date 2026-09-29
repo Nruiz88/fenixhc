@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, insert, uuid } from '@/lib/db';
-import { requireAuth, hashPassword } from '@/lib/auth';
+import { requireModulo, hashPassword } from '@/lib/auth';
 import {
   emailSchema, passwordSchema, dniSchema, nombreSchema, apellidoSchema,
   rolAdminSchema, firstError,
@@ -12,7 +12,8 @@ import {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth(['admin']);
+    // Solo quien puede administrar usuarios da de alta cuentas.
+    const auth = await requireModulo('usuarios');
     if ('error' in auth) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     const {
       email: emailRaw, password: passwordRaw, nombre: nombreRaw, apellido: apellidoRaw,
       dni: dniRaw, cuil: cuilRaw, telefono = '', direccion = '',
-      rol: rolRaw = 'padre',
+      rol: rolRaw = 'socio_benefactor',
     } = body;
 
     const email = emailSchema.safeParse(emailRaw);
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     // Un deportista necesita su fila en `deportistas` para que el portal y las
     // cuotas funcionen; un padre no.
-    if (rol.data === 'deportista') {
+    if (rol.data === 'socio_cadete') {
       await insert('INSERT INTO deportistas (id, perfil_id) VALUES (?, ?)', [uuid(), userId]);
     }
 

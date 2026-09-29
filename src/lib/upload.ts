@@ -52,7 +52,7 @@ export async function uploadComprobante(cuotaId: string, file: File): Promise<st
   return uploadFile('comprobantes', `${cuotaId}/comprobante.${ext}`, file);
 }
 
-export async function uploadGaleria(_tipo: string, file: File): Promise<string | null> {
+export async function uploadGaleria(_origen: string, file: File): Promise<string | null> {
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const ts = Date.now();
   return uploadFile('fotos-galeria', `${ts}.${ext}`, file);

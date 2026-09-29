@@ -7,27 +7,30 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Menu, LogOut, LayoutDashboard, Users, UserCheck, FileText, Link2, DollarSign, PieChart, Bell, Calendar, Home, ChevronRight, Settings, Megaphone, ImageIcon, Clock, Star } from 'lucide-react';
+import { tieneModulo, ROL_LABEL, type Modulo, type Rol } from '@/lib/roles';
 
-const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
-  { label: 'Usuarios', href: '/admin/usuarios', icon: Users },
-  { label: 'Partidos', href: '/admin/partidos', icon: Calendar },
-  { label: 'Socios', href: '/admin/socios', icon: Users },
-  { label: 'Jugadores', href: '/admin/jugadores', icon: UserCheck },
-  { label: 'Legajos', href: '/admin/legajos', icon: FileText },
-  { label: 'Familias', href: '/admin/links-familia', icon: Link2 },
-  { label: 'Pagos', href: '/admin/pagos', icon: DollarSign },
-  { label: 'Finanzas', href: '/admin/finanzas', icon: PieChart },
-  { label: 'Reservas', href: '/admin/reservas', icon: Calendar },
-  { label: 'Notificaciones', href: '/admin/notificaciones', icon: Bell },
-  { label: 'Horarios', href: '/admin/horarios', icon: Clock },
-  { label: 'Comunicados', href: '/admin/comunicados', icon: Megaphone },
-  { label: 'Sponsors', href: '/admin/sponsors', icon: Star },
-  { label: 'Reportes', href: '/admin/reportes', icon: FileText },
-  { label: 'Configuración', href: '/admin/configuracion', icon: Settings },
+// Cada item declara su modulo para poder filtrar segun el cargo:
+// un tesorero no ve "Usuarios", un vocal no ve "Finanzas".
+const NAV_ITEMS: { label: string; href: string; icon: any; modulo: Modulo }[] = [
+  { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, modulo: 'dashboard' },
+  { label: 'Usuarios', href: '/admin/usuarios', icon: Users, modulo: 'usuarios' },
+  { label: 'Partidos', href: '/admin/partidos', icon: Calendar, modulo: 'partidos' },
+  { label: 'Benefactores', href: '/admin/socios', icon: Users, modulo: 'socios' },
+  { label: 'Jugadores', href: '/admin/jugadores', icon: UserCheck, modulo: 'jugadores' },
+  { label: 'Legajos', href: '/admin/legajos', icon: FileText, modulo: 'legajos' },
+  { label: 'Familias', href: '/admin/links-familia', icon: Link2, modulo: 'familias' },
+  { label: 'Pagos', href: '/admin/pagos', icon: DollarSign, modulo: 'pagos' },
+  { label: 'Finanzas', href: '/admin/finanzas', icon: PieChart, modulo: 'finanzas' },
+  { label: 'Reservas', href: '/admin/reservas', icon: Calendar, modulo: 'reservas' },
+  { label: 'Notificaciones', href: '/admin/notificaciones', icon: Bell, modulo: 'notificaciones' },
+  { label: 'Horarios', href: '/admin/horarios', icon: Clock, modulo: 'horarios' },
+  { label: 'Comunicados', href: '/admin/comunicados', icon: Megaphone, modulo: 'comunicados' },
+  { label: 'Sponsors', href: '/admin/sponsors', icon: Star, modulo: 'sponsors' },
+  { label: 'Reportes', href: '/admin/reportes', icon: FileText, modulo: 'reportes' },
+  { label: 'Configuración', href: '/admin/configuracion', icon: Settings, modulo: 'configuracion' },
 ];
 
-function Sidebar({ currentPath, onLogout }: { currentPath: string; onLogout: () => void }) {
+function Sidebar({ currentPath, onLogout, rol }: { currentPath: string; onLogout: () => void; rol?: Rol }) {
   return (
     <div className="flex flex-col h-full">
       <div className="p-5 border-b border-gray-800">
@@ -40,7 +43,7 @@ function Sidebar({ currentPath, onLogout }: { currentPath: string; onLogout: () 
         </Link>
       </div>
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => !rol || tieneModulo(rol, item.modulo)).map((item) => {
           const isActive = currentPath === item.href || currentPath.startsWith(item.href + '/');
           return (
             <Link key={item.href} href={item.href}
@@ -89,7 +92,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-gray-950 flex">
       <aside className="hidden lg:flex w-64 bg-gray-900 border-r border-gray-800 flex-col shrink-0">
-        <Sidebar currentPath={pathname} onLogout={handleLogout} />
+        <Sidebar currentPath={pathname} onLogout={handleLogout} rol={user?.rol} />
       </aside>
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm flex items-center justify-between px-6 shrink-0">
@@ -99,7 +102,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <Button variant="ghost" size="icon" className="lg:hidden text-gray-400 hover:text-white"><Menu className="h-5 w-5" /></Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64 p-0 bg-gray-900 border-gray-800">
-                <Sidebar currentPath={pathname} onLogout={handleLogout} />
+                <Sidebar currentPath={pathname} onLogout={handleLogout} rol={user?.rol} />
               </SheetContent>
             </Sheet>
             <nav className="flex items-center gap-1 text-sm">
@@ -116,7 +119,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <>
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-medium text-white">{user.nombre} {user.apellido}</p>
-                  <p className="text-xs text-gray-500 capitalize">{user.rol}</p>
+                  <p className="text-xs text-gray-500">{ROL_LABEL[user.rol as Rol] ?? user.rol}</p>
                 </div>
                 <Link href="/admin/configuracion">
                   <Avatar className="h-9 w-9 cursor-pointer hover:ring-2 hover:ring-[#DC2626]/50 transition-all">

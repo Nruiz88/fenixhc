@@ -1,43 +1,47 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { authenticateFromRequest, COOKIE_NAME } from '@/lib/auth';
-import { PROTECTED_ROUTES, getRoleFromPath } from '@/lib/constants';
+import { authenticateFromRequest } from '@/lib/auth';
+import { isProtectedRoute } from '@/lib/constants';
+import { esDirectiva, moduloDeRuta, tieneModulo, PORTAL_POR_ROL } from '@/lib/roles';
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const user = authenticateFromRequest(request);
 
-  const isProtected = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
-  const routeRole = getRoleFromPath(pathname);
-
-  // Not logged in → protected route → redirect to login
-  if (isProtected && !user) {
+  // Sin sesion y en ruta protegida -> login (con a donde queria ir).
+  if (isProtectedRoute(pathname) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirect', pathname);
     return NextResponse.redirect(url);
   }
 
-  // Logged in → login page → redirect to dashboard
+  // Con sesion en /login -> su portal.
   if (pathname === '/login' && user) {
-    const url = request.nextUrl.clone();
-    if (user.rol === 'admin') url.pathname = '/admin/dashboard';
-    else if (user.rol === 'padre') url.pathname = '/padre/dashboard';
-    else if (user.rol === 'deportista') url.pathname = '/deportista/dashboard';
-    else url.pathname = '/';
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
   }
 
-  // Role-based access
-  if (user && isProtected && routeRole) {
-    if (routeRole === 'admin' && user.rol !== 'admin') {
-      return NextResponse.redirect(new URL('/', request.url));
+  if (!user) return NextResponse.next();
+
+  // El panel es solo para la directiva.
+  if (pathname.startsWith('/admin')) {
+    if (!esDirectiva(user.rol)) {
+      return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
     }
-    if (routeRole === 'padre' && user.rol !== 'padre' && user.rol !== 'admin') {
-      return NextResponse.redirect(new URL('/', request.url));
+    // Recorte por modulo: un tesorero no entra a /admin/pagos... al reves,
+    // el tesorero SI entra a pagos pero no a usuarios.
+    const modulo = moduloDeRuta(pathname);
+    if (modulo && !tieneModulo(user.rol, modulo)) {
+      return NextResponse.redirect(new URL('/admin/dashboard?sinPermiso=1', request.url));
     }
-    if (routeRole === 'deportista' && user.rol !== 'deportista' && user.rol !== 'admin') {
-      return NextResponse.redirect(new URL('/', request.url));
-    }
+    return NextResponse.next();
+  }
+
+  // Portales de socios.
+  if (pathname.startsWith('/padre') && user.rol !== 'socio_benefactor' && user.rol !== 'admin') {
+    return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
+  }
+  if (pathname.startsWith('/deportista') && user.rol !== 'socio_cadete' && user.rol !== 'admin') {
+    return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
   }
 
   return NextResponse.next();

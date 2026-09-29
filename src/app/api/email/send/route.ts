@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireModulo } from '@/lib/auth';
+import { sendEmail } from '@/lib/email';
 
 // Email templates
 const TEMPLATES: Record<string, { getSubject: (data: any) => string; html: (data: any) => string }> = {
@@ -62,7 +63,7 @@ const TEMPLATES: Record<string, { getSubject: (data: any) => string; html: (data
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAuth(['admin']);
+    const auth = await requireModulo('comunicados');
     if ('error' in auth) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
@@ -79,10 +80,17 @@ export async function POST(request: NextRequest) {
     let emails: string[] = [];
 
     if (destinatarios === 'todos') {
-      const rows = await query<{ correo: string }>('SELECT correo FROM perfiles');
+      const rows = await query<{ correo: string }>('SELECT correo FROM perfiles WHERE correo IS NOT NULL');
       emails = rows.map((r) => r.correo).filter(Boolean);
-    } else if (destinatarios === 'padres') {
-      const rows = await query<{ correo: string }>("SELECT correo FROM perfiles WHERE rol = 'padre'");
+    } else if (destinatarios === 'benefactores') {
+      const rows = await query<{ correo: string }>(
+        "SELECT correo FROM perfiles WHERE rol = 'socio_benefactor' AND correo IS NOT NULL"
+      );
+      emails = rows.map((r) => r.correo).filter(Boolean);
+    } else if (destinatarios === 'cadetes') {
+      const rows = await query<{ correo: string }>(
+        "SELECT correo FROM perfiles WHERE rol = 'socio_cadete' AND correo IS NOT NULL"
+      );
       emails = rows.map((r) => r.correo).filter(Boolean);
     } else if (Array.isArray(destinatarios)) {
       emails = destinatarios;
@@ -95,24 +103,36 @@ export async function POST(request: NextRequest) {
     const subject = template.getSubject(data);
     const html = template.html(data);
 
-    // Aquí iría la integración con Resend, SendGrid, etc.
-    console.log(`📧 Email sent to ${emails.length} recipients:`, { subject, tipo, count: emails.length });
+    // Envío real. Si no hay RESEND_API_KEY configurado, sendEmail() es un
+    // no-op y lo loguea (ver lib/email.ts).
+    let enviados = 0;
+    const fallos: string[] = [];
+    for (const to of emails) {
+      const r = await sendEmail({ to, subject, html });
+      if (r.sent) enviados++;
+      else fallos.push(`${to}: ${r.motivo ?? 'error'}${r.error ? ` (${r.error})` : ''}`);
+    }
+    if (fallos.length > 0) {
+      console.warn(`📧 Fallaron ${fallos.length}/${emails.length} envíos:`, fallos.slice(0, 5));
+    }
 
     // Guardar registro del email enviado
     await execute(
-      `INSERT INTO notificaciones (id, titulo, mensaje, tipo, destinatario_rol, enviada_email, created_by) VALUES (UUID(), ?, ?, ?, ?, 1, ?)`,
+      `INSERT INTO notificaciones (id, titulo, mensaje, tipo, destinatario_rol, enviada_email, created_by) VALUES (UUID(), ?, ?, ?, ?, ?, ?)`,
       [
         subject,
         data?.resumen || data?.contenido || '',
         tipo === 'cuota_pendiente' ? 'pago' : 'general',
-        destinatarios === 'padres' ? 'padre' : 'todos',
+        destinatarios === 'benefactores' ? 'socio_benefactor' : 'todos',
+        enviados > 0 ? 1 : 0,
         auth.user.id,
       ]
     );
 
     return NextResponse.json({
       ok: true,
-      sent: emails.length,
+      sent: enviados,
+      destinatarios: emails.length,
       subject,
       message: `Email enviado a ${emails.length} destinatarios`,
     });

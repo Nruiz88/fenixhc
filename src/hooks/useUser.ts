@@ -31,7 +31,7 @@ export function useUser() {
             nombre: user.nombre || user.email?.split('@')[0] || '',
             apellido: user.apellido || '',
             correo: user.email || '',
-            rol: user.rol || 'padre',
+            rol: user.rol || 'socio_benefactor',
             dni: '00000000',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),

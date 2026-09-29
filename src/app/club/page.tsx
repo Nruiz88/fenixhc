@@ -140,7 +140,7 @@ export default function ClubPage() {
             {[
               { title: 'Cadete', desc: 'Jugadores de hockey en formación. Entrenamientos técnicos y tácticos.', color: 'from-blue-500 to-indigo-600', icon: Target, badge: 'Jugador' },
               { title: 'Activo', desc: 'Jugadores que además contribuyen económicamente y participan de la comisión.', color: 'from-[#DC2626] to-[#B91C1C]', icon: Star, badge: 'Jugador + Donante' },
-              { title: 'Benefactor', desc: 'Padres/madres a cargo de los deportistas. Cuota unificada con el cadete.', color: 'from-violet-500 to-purple-600', icon: Users, badge: 'Padre/Madre' },
+              { title: 'Benefactor', desc: 'Socios a cargo de los cadetes. Cuota unificada con el cadete.', color: 'from-violet-500 to-purple-600', icon: Users, badge: 'Socio Benefactor' },
             ].map((c, i) => (
               <Card key={i} className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-all group">
                 <CardContent className="p-6">

@@ -27,7 +27,7 @@ function Sidebar({ currentPath, user, onLogout }: { currentPath: string; user: a
           <img src="/logo.png" alt="Fenix" className="h-9 w-9 object-contain" />
           <div>
             <p className="font-bold text-white text-lg leading-tight">FENIX</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Portal Padre</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Portal Socio</p>
           </div>
         </Link>
       </div>
@@ -39,7 +39,7 @@ function Sidebar({ currentPath, user, onLogout }: { currentPath: string; user: a
             </Avatar>
             <div className="min-w-0">
               <p className="text-sm font-medium text-white truncate">{user.nombre} {user.apellido}</p>
-              <p className="text-[10px] text-gray-500">Padre / Benefactor</p>
+              <p className="text-[10px] text-gray-500">Socio Benefactor</p>
             </div>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function PadreLayout({ children }: { children: React.ReactNode })
               <>
                 <div className="text-right hidden sm:block">
                   <p className="text-sm font-medium text-white">{user.nombre} {user.apellido}</p>
-                  <p className="text-xs text-gray-500">Padre</p>
+                  <p className="text-xs text-gray-500">Socio Benefactor</p>
                 </div>
                 <Link href="/padre/configuracion">
                   <Avatar className="h-9 w-9 cursor-pointer hover:ring-2 hover:ring-[#DC2626]/50 transition-all">

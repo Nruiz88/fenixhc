@@ -7,10 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { ROL_LABEL, type Rol } from '@/lib/roles';
 import { Save, Lock, User, Shield, Eye, EyeOff } from 'lucide-react';
 
 interface ConfiguracionCuentaProps {
-  rol: 'admin' | 'padre' | 'deportista';
+  rol: Rol;
   accentColor?: string;
 }
 

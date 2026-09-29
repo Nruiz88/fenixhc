@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      rol: rolSolicitado = 'padre',
+      rol: rolSolicitado = 'socio_benefactor',
       nombre: nombreRaw, apellido: apellidoRaw, dni: dniRaw, cuil: cuilRaw,
       email: emailRaw, password: passwordRaw,
       telefono = '', direccion = '',
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     // Todo se valida ANTES de escribir: si el alta del hijo falla, no debe
     // quedar un padre huérfano ya insertado.
-    const registraHijo = rol === 'padre' && !!(hijo_nombre && hijo_apellido && hijo_dni && hijo_email && hijo_password);
+    const registraHijo = rol === 'socio_benefactor' && !!(hijo_nombre && hijo_apellido && hijo_dni && hijo_email && hijo_password);
     let hijoEmailVal = '';
     let hijoPasswordVal = '';
     let hijoNombreVal = '';
@@ -129,13 +129,13 @@ export async function POST(request: NextRequest) {
 
       await insert(
         'INSERT INTO usuarios (id, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-        [hijoUserId, hijoEmailVal, hijoHash, 'deportista']
+        [hijoUserId, hijoEmailVal, hijoHash, 'socio_cadete']
       );
 
       await insert(
         'INSERT INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, correo) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [
-          hijoPerfilId, hijoUserId, 'deportista',
+          hijoPerfilId, hijoUserId, 'socio_cadete',
           hijoNombreVal, hijoApellidoVal, hijoDniFinal, hijoEmailVal,
         ]
       );
@@ -145,7 +145,8 @@ export async function POST(request: NextRequest) {
         [uuid(), hijoPerfilId]
       );
 
-      // Link parent-child
+      // Link parent-child. Ojo: tipo_vinculo describe la RELACION familiar
+      // ('padre'|'madre'|'tutor'), no el rol del usuario, asi que no se renombra.
       await insert(
         'INSERT INTO familias (id, padre_perfil_id, deportista_perfil_id, tipo_vinculo) VALUES (?, ?, ?, ?)',
         [uuid(), perfilId, hijoPerfilId, 'padre']

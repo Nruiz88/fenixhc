@@ -5,6 +5,9 @@
 // que se quedaran inconsistentes entre sí. Acá viven en un solo lugar.
 
 import { z } from 'zod';
+// Los roles viven en lib/roles.ts (fuente unica: el ENUM de la base usa los
+// mismos valores). Acá solo se arman los esquemas de zod.
+import { ROLES, ROLES_PUBLICOS } from './roles';
 
 export const MIN_PASSWORD_LENGTH = 6;
 
@@ -51,13 +54,18 @@ export const cuilSchema = z
   .or(z.literal(''))
   .transform((v) => (v ? v : null));
 
-/** Roles que puede crear el admin. El registro público NO usa este. */
-export const ROLES = ['admin', 'padre', 'deportista'] as const;
-export const rolAdminSchema = z.enum(ROLES, { message: 'Rol inválido' });
+/**
+ * Esquemas de rol.
+ */
+export const rolSchema = z.enum(ROLES, { message: 'Rol inválido' });
 
-/** Roles que admite el registro público (nunca admin: ver register/route.ts). */
-export const ROLES_PUBLICOS = ['padre', 'deportista'] as const;
-export const rolPublicoSchema = z.enum(ROLES_PUBLICOS, { message: 'Rol inválido' });
+/** Alta desde el panel: cualquier rol, incluido un cargo de directiva. */
+export const rolAdminSchema = rolSchema;
+
+/** Registro público: solo socios, nunca un cargo (ver register/route.ts). */
+export const rolPublicoSchema = z.enum(ROLES_PUBLICOS as [string, ...string[]], {
+  message: 'Rol inválido',
+});
 
 /** Convierte el error de zod en algo que se pueda mandar al cliente. */
 export function firstError(error: z.ZodError): string {

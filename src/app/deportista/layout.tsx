@@ -25,7 +25,7 @@ function Sidebar({ currentPath, user, onLogout }: { currentPath: string; user: a
           <img src="/logo.png" alt="Fenix" className="h-9 w-9 object-contain" />
           <div>
             <p className="font-bold text-white text-lg leading-tight">FENIX</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Portal Jugador</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Portal Socio Cadete</p>
           </div>
         </Link>
       </div>
@@ -37,7 +37,7 @@ function Sidebar({ currentPath, user, onLogout }: { currentPath: string; user: a
             </Avatar>
             <div className="min-w-0">
               <p className="text-sm font-medium text-white truncate">{user.nombre} {user.apellido}</p>
-              <p className="text-[10px] text-gray-500">Jugador</p>
+              <p className="text-[10px] text-gray-500">Socio Cadete</p>
             </div>
           </div>
         </div>

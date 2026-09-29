@@ -17,7 +17,7 @@ export default function AdminReportes() {
   }
   async function exportPagos() { const { data } = await db.select('cuotas', 'mes, anio, monto, estado'); downloadCSV((data || []).map((c: any) => ({ Mes: c.mes, Anio: c.anio, Monto: c.monto, Estado: c.estado })), 'pagos'); }
   async function exportFinanzas() { const { data } = await db.select('finanzas', 'tipo, concepto, monto, fecha'); downloadCSV((data || []).map((f: any) => ({ Tipo: f.tipo, Concepto: f.concepto, Monto: f.monto, Fecha: f.fecha })), 'finanzas'); }
-  async function exportSocios() { const { data } = await db.select('perfiles', '*', { rol: 'padre' }); downloadCSV((data || []).map((s: any) => ({ Nombre: s.nombre, Apellido: s.apellido, DNI: s.dni, Correo: s.correo, Telefono: s.telefono })), 'socios'); }
+  async function exportSocios() { const { data } = await db.select('perfiles', '*', { rol: 'socio_benefactor' }); downloadCSV((data || []).map((s: any) => ({ Nombre: s.nombre, Apellido: s.apellido, DNI: s.dni, Correo: s.correo, Telefono: s.telefono })), 'socios'); }
   async function exportJugadores() { const { data } = await db.view('admin_deportistas'); downloadCSV((data || []).map((j: any) => ({ Nombre: j.perfiles?.nombre, Apellido: j.perfiles?.apellido, DNI: j.perfiles?.dni, Activo: j.club_activo, Inscripcion: j.fecha_inscripcion })), 'jugadores'); }
 
   const reports = [
