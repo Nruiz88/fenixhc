@@ -4,6 +4,11 @@ import { verifyPassword } from '@/lib/auth';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
 import { reenviarVerificacion } from '@/lib/verification';
 import { getBaseUrl } from '@/lib/url';
+import { emailSchema } from '@/lib/schemas';
+
+// Respuesta idéntica exista o no la cuenta: evita enumerar qué emails están
+// registrados y no revela si la contraseña falló.
+const GENERICO = 'Si la cuenta existe y no está verificada, te enviamos un nuevo enlace.';
 
 // Reenvía el email de verificación.
 //
@@ -16,10 +21,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Demasiados reenvíos. Esperá unos minutos.' }, { status: 429 });
     }
 
-    const { email, password } = await request.json();
-    if (!email || !password) {
+    const { email: emailRaw, password } = await request.json();
+    if (!emailRaw || !password) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 });
     }
+
+    const emailParsed = emailSchema.safeParse(emailRaw);
+    if (!emailParsed.success) {
+      // Mismo mensaje que el caso "no existe": no revelamos qué emails están
+      // registrados.
+      return NextResponse.json({ ok: true, message: GENERICO });
+    }
+    const email = emailParsed.data;
 
     const user = await queryOne(
       'SELECT id, password_hash, email_verificado FROM usuarios WHERE email = ?',
@@ -27,14 +40,13 @@ export async function POST(request: NextRequest) {
     );
     // Mismo mensaje para email inexistente y contraseña incorrecta: no
     // revelamos qué emails están registrados.
-    const genérico = 'Si la cuenta existe y no está verificada, te enviamos un nuevo enlace.';
     if (!user) {
-      return NextResponse.json({ ok: true, message: genérico });
+      return NextResponse.json({ ok: true, message: GENERICO });
     }
 
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) {
-      return NextResponse.json({ ok: true, message: genérico });
+      return NextResponse.json({ ok: true, message: GENERICO });
     }
 
     if (user.email_verificado) {
@@ -50,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      message: genérico,
+      message: GENERICO,
       // Solo en dev (sin RESEND_API_KEY), para poder completar el flujo.
       devVerificationUrl: devToken ? `${getBaseUrl(request)}/verificar?token=${devToken}` : undefined,
     });

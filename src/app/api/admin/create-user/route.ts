@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne, insert, uuid } from '@/lib/db';
 import { requireAuth, hashPassword } from '@/lib/auth';
+import {
+  emailSchema, passwordSchema, dniSchema, nombreSchema, apellidoSchema,
+  rolAdminSchema, firstError,
+} from '@/lib/schemas';
 
 // Alta de usuarios desde el panel del club. El admin sí puede crear cuentas
 // de cualquier rol (a diferencia del registro público, que solo admite
 // padre/deportista), pero el rol se valida contra la lista cerrada.
-const ROLES_VALIDOS = ['admin', 'padre', 'deportista'];
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,32 +19,36 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
-      email, password, nombre, apellido,
-      dni, cuil, telefono = '', direccion = '',
-      rol = 'padre',
+      email: emailRaw, password: passwordRaw, nombre: nombreRaw, apellido: apellidoRaw,
+      dni: dniRaw, cuil: cuilRaw, telefono = '', direccion = '',
+      rol: rolRaw = 'padre',
     } = body;
 
-    if (!email || !password || !nombre || !apellido) {
-      return NextResponse.json({ error: 'Email, contraseña, nombre y apellido son obligatorios' }, { status: 400 });
-    }
-    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ error: 'Email inválido' }, { status: 400 });
-    }
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'La contraseña debe tener al menos 6 caracteres' }, { status: 400 });
-    }
-    if (!ROLES_VALIDOS.includes(rol)) {
-      return NextResponse.json({ error: 'Rol inválido' }, { status: 400 });
-    }
+    const email = emailSchema.safeParse(emailRaw);
+    const password = passwordSchema.safeParse(passwordRaw);
+    const nombre = nombreSchema.safeParse(nombreRaw);
+    const apellido = apellidoSchema.safeParse(apellidoRaw);
+    const rol = rolAdminSchema.safeParse(rolRaw);
 
-    const emailExists = await queryOne('SELECT id FROM usuarios WHERE email = ?', [email]);
+    if (!email.success) return NextResponse.json({ error: firstError(email.error) }, { status: 400 });
+    if (!password.success) return NextResponse.json({ error: firstError(password.error) }, { status: 400 });
+    if (!nombre.success) return NextResponse.json({ error: firstError(nombre.error) }, { status: 400 });
+    if (!apellido.success) return NextResponse.json({ error: firstError(apellido.error) }, { status: 400 });
+    if (!rol.success) return NextResponse.json({ error: 'Rol inválido' }, { status: 400 });
+
+    const emailVal = email.data;
+
+    const emailExists = await queryOne('SELECT id FROM usuarios WHERE email = ?', [emailVal]);
     if (emailExists) {
       return NextResponse.json({ error: 'El email ya está registrado' }, { status: 409 });
     }
 
     // El DNI es NOT NULL UNIQUE en perfiles: si no se manda, se deriva del id
     // para no romper el alta.
-    const dniFinal = dni && String(dni).trim() ? String(dni).trim() : `P${uuid().replace(/-/g, '').slice(0, 12)}`;
+    const dniPedido = dniSchema.safeParse(dniRaw);
+    const dniFinal = dniPedido.success
+      ? dniPedido.data
+      : `P${uuid().replace(/-/g, '').slice(0, 12)}`;
     const dniExists = await queryOne('SELECT id FROM perfiles WHERE dni = ?', [dniFinal]);
     if (dniExists) {
       return NextResponse.json({ error: 'El DNI ya está registrado' }, { status: 409 });
@@ -49,24 +56,27 @@ export async function POST(request: NextRequest) {
 
     const userId = uuid();
     // perfiles.id === usuarios.id (misma convención que el registro público).
-    const hash = await hashPassword(password);
+    const hash = await hashPassword(password.data);
 
     // Alta desde el panel: el admin da la clave y entrega las credenciales en
     // persona, así que la cuenta nace verificada. Quien se registra por
     // /registro sí tiene que pasar por el email.
     await insert(
       'INSERT INTO usuarios (id, email, password_hash, rol, email_verificado) VALUES (?, ?, ?, ?, 1)',
-      [userId, email, hash, rol]
+      [userId, emailVal, hash, rol.data]
     );
 
     await insert(
       'INSERT INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, cuil, correo, telefono, direccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [userId, userId, rol, nombre, apellido, dniFinal, cuil || null, email, telefono, direccion]
+      [
+        userId, userId, rol.data, nombre.data, apellido.data, dniFinal,
+        cuilRaw || null, emailVal, telefono, direccion,
+      ]
     );
 
     // Un deportista necesita su fila en `deportistas` para que el portal y las
     // cuotas funcionen; un padre no.
-    if (rol === 'deportista') {
+    if (rol.data === 'deportista') {
       await insert('INSERT INTO deportistas (id, perfil_id) VALUES (?, ?)', [uuid(), userId]);
     }
 

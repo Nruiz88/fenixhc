@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { verifyPassword, createToken, setAuthCookie } from '@/lib/auth';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
+import { emailSchema } from '@/lib/schemas';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,16 +11,21 @@ export async function POST(request: NextRequest) {
     if (!email || !password) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 });
     }
+    const parsedEmail = emailSchema.safeParse(email);
+    if (!parsedEmail.success) {
+      return NextResponse.json({ error: 'Email o contraseña inválidos' }, { status: 401 });
+    }
+    const emailLimpio = parsedEmail.data;
 
     // Anti fuerza bruta: por IP y por cuenta
     const ip = clientIp(request);
-    if (!rateLimit(`login:ip:${ip}`, 20, 60_000) || !rateLimit(`login:email:${String(email).toLowerCase()}`, 5, 60_000)) {
+    if (!rateLimit(`login:ip:${ip}`, 20, 60_000) || !rateLimit(`login:email:${emailLimpio.toLowerCase()}`, 5, 60_000)) {
       return NextResponse.json({ error: 'Demasiados intentos. Esperá un minuto.' }, { status: 429 });
     }
 
     const user = await queryOne(
       'SELECT id, email, password_hash, rol, email_verificado, verification_sent_at FROM usuarios WHERE email = ?',
-      [email]
+      [emailLimpio]
     );
 
     if (!user) {
