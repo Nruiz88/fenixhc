@@ -13,11 +13,10 @@ export default function PadreDashboard() {
 
   useEffect(() => {
     udb.select('perfiles', '*', undefined, { single: true }).then(({ data }) => setPerfil(data));
-    udb.select('familias', '*, perfiles!deportista_perfil_id(nombre, apellido, dni)').then(({ data }) => setHijos(data || []));
-    udb.select('cuotas', '*, familias(perfiles!deportista_perfil_id(nombre, apellido))').then(({ data }) => setCuotas(data || []));
-    udb.select('notificaciones', '*').then(({ data }) => {
-      setNotifs((data || []).filter((n: any) => n.destinatario_rol === 'padre' || n.destinatario_rol === 'todos').slice(0, 3));
-    });
+    udb.view('padre_hijos').then(({ data }) => setHijos(data || []));
+    udb.view('padre_cuotas').then(({ data }) => setCuotas(data || []));
+    // El endpoint ya filtra por rol en servidor.
+    udb.view('usuario_notificaciones', { limit: 3 }).then(({ data }) => setNotifs(data || []));
   }, []);
 
   const cuotasPendientes = cuotas.filter(c => c.estado === 'pendiente');

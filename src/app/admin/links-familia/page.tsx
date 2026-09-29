@@ -19,9 +19,9 @@ export default function AdminLinksFamilia() {
   async function load() {
     const { data: p } = await db.select('perfiles', 'id, nombre, apellido, dni, correo', { rol: 'padre' });
     setPadres(p || []);
-    const { data: d } = await db.select('deportistas', 'id, perfil_id, perfiles(nombre, apellido, dni)');
+    const { data: d } = await db.view('admin_deportistas_ligeros');
     setDeportistas(d || []);
-    const { data: f } = await db.select('familias', '*, perfiles!padre_perfil_id(nombre, apellido, correo), perfiles!deportista_perfil_id(nombre, apellido, correo)');
+    const { data: f } = await db.view('admin_familias');
     setFamilias(f || []);
   }
 
@@ -166,13 +166,13 @@ export default function AdminLinksFamilia() {
                   <div className="flex items-center gap-4">
                     {/* Padre avatar */}
                     <div className="h-11 w-11 rounded-xl bg-[#DC2626]/10 flex items-center justify-center shrink-0">
-                      <span className="text-[#DC2626] font-bold text-sm">{f.perfiles?.nombre?.[0]}{f.perfiles?.apellido?.[0]}</span>
+                      <span className="text-[#DC2626] font-bold text-sm">{f.padre?.nombre?.[0]}{f.padre?.apellido?.[0]}</span>
                     </div>
 
                     {/* Padre info */}
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">{f.perfiles?.nombre} {f.perfiles?.apellido}</p>
-                      <p className="text-xs text-gray-500">{f.perfiles?.correo}</p>
+                      <p className="text-sm font-semibold text-white">{f.padre?.nombre} {f.padre?.apellido}</p>
+                      <p className="text-xs text-gray-500">{f.padre?.correo}</p>
                     </div>
 
                     {/* Arrow + vínculo */}
@@ -183,13 +183,13 @@ export default function AdminLinksFamilia() {
 
                     {/* Deportista avatar */}
                     <div className="h-11 w-11 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
-                      <span className="text-blue-400 font-bold text-sm">{f.perfiles?.nombre?.[0]}{f.perfiles?.apellido?.[0]}</span>
+                      <span className="text-blue-400 font-bold text-sm">{f.hijo?.nombre?.[0]}{f.hijo?.apellido?.[0]}</span>
                     </div>
 
                     {/* Deportista info */}
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">{f.perfiles?.nombre} {f.perfiles?.apellido}</p>
-                      <p className="text-xs text-gray-500">{f.perfiles?.correo}</p>
+                      <p className="text-sm font-semibold text-white">{f.hijo?.nombre} {f.hijo?.apellido}</p>
+                      <p className="text-xs text-gray-500">{f.hijo?.correo}</p>
                     </div>
                   </div>
 

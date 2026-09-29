@@ -37,9 +37,9 @@ export default function AdminPagos() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    const { data } = await db.select('cuotas', `*, familias!inner(id, perfiles!padre_perfil_id(id, nombre, apellido, email), perfiles!deportista_perfil_id(id, nombre, apellido))`);
+    const { data } = await db.view('admin_cuotas');
     setCuotas(data || []);
-    const { data: f } = await db.select('familias', 'id, perfiles!padre_perfil_id(nombre, apellido, email), perfiles!deportista_perfil_id(nombre, apellido)');
+    const { data: f } = await db.view('admin_familias');
     setFamilias(f || []);
   }
 
@@ -114,12 +114,14 @@ export default function AdminPagos() {
     .filter(c => {
       if (!search) return true;
       const s = search.toLowerCase();
-      const padre = c.familias?.perfiles;
-      const hijo = c.familias?.perfiles;
+      const padre = c.familias?.padre;
+      const hijo = c.familias?.hijo;
       return (
         padre?.nombre?.toLowerCase().includes(s) ||
         padre?.apellido?.toLowerCase().includes(s) ||
         padre?.email?.toLowerCase().includes(s) ||
+        hijo?.nombre?.toLowerCase().includes(s) ||
+        hijo?.apellido?.toLowerCase().includes(s) ||
         `${MESES[c.mes - 1]} ${c.anio}`.toLowerCase().includes(s)
       );
     });
@@ -240,7 +242,7 @@ export default function AdminPagos() {
                   <SelectContent>
                     {familias.map((f: any) => (
                       <SelectItem key={f.id} value={f.id}>
-                        {f.perfiles?.nombre} {f.perfiles?.apellido} → {f.perfiles?.nombre} {f.perfiles?.apellido}
+                        {f.padre?.nombre} {f.padre?.apellido} → {f.hijo?.nombre} {f.hijo?.apellido}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -328,7 +330,8 @@ export default function AdminPagos() {
           ) : (
             <div className="divide-y divide-gray-800">
               {filtered.map((c) => {
-                const padre = c.familias?.perfiles;
+                const padre = c.familias?.padre;
+                const hijo = c.familias?.hijo;
                 const tieneComprobante = !!c.comprobante_url;
                 return (
                   <div key={c.id} className="px-6 py-4 hover:bg-gray-800/30 transition-colors">
@@ -444,7 +447,8 @@ export default function AdminPagos() {
             </div>
             <div className="p-6 border-t border-gray-800 flex items-center justify-between">
               <div className="text-sm text-gray-400">
-                <p>Padre: <span className="text-white">{selectedCuota.familias?.perfiles?.nombre} {selectedCuota.familias?.perfiles?.apellido}</span></p>
+                <p>Padre: <span className="text-white">{selectedCuota.familias?.padre?.nombre} {selectedCuota.familias?.padre?.apellido}</span></p>
+                <p>Deportista: <span className="text-white">{selectedCuota.familias?.hijo?.nombre} {selectedCuota.familias?.hijo?.apellido}</span></p>
               </div>
               <div className="flex gap-2">
                 {selectedCuota.estado === 'pendiente' && (

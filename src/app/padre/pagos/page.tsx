@@ -14,7 +14,7 @@ export default function PadrePagos() {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   useEffect(() => { load(); }, []);
   async function load() {
-    const { data } = await udb.select('cuotas', '*, familias(perfiles!deportista_perfil_id(nombre, apellido))');
+    const { data } = await udb.view('padre_cuotas');
     setCuotas(data || []);
   }
   const handleUpload = async (cuotaId: string, file: File) => {
@@ -60,7 +60,7 @@ export default function PadrePagos() {
       ) : (
         <div className="space-y-3">
           {cuotas.sort((a: any, b: any) => b.anio - a.anio || b.mes - a.mes).map((c) => {
-            const hijo = c.familias?.perfiles;
+            const hijo = c.familias?.hijo;
             return (
               <Card key={c.id} className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors">
                 <CardContent className="p-5">

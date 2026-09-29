@@ -8,13 +8,17 @@ interface QueryOptions {
   limit?: number;
   order?: { column: string; ascending?: boolean };
   single?: boolean;
+  view?: string;
 }
 
 export async function adminQuery<T = any>(options: QueryOptions): Promise<{ data: T | null; error: string | null }> {
+  const payload = options.view
+    ? { operation: 'select', view: options.view, limit: options.limit }
+    : { operation: 'select', ...options };
   const res = await fetch('/api/admin/query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ operation: 'select', ...options }),
+    body: JSON.stringify(payload),
   });
   const json = await res.json();
   if (!res.ok) return { data: null, error: json.error };
@@ -48,4 +52,7 @@ export const db = {
   
   delete: (table: string, filters: Record<string, any>) =>
     adminMutate('delete', table, undefined, filters),
+  /** Vista nombrada con JOINs predefinidos en el servidor. */
+  view: <T = any>(view: string, options?: { limit?: number }) =>
+    adminQuery<T>({ table: '', view, ...options } as any),
 };

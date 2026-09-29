@@ -17,8 +17,8 @@ export default function DeportistaPerfil() {
     (async () => {
       const { data: p } = await udb.select('perfiles', '*', undefined, { single: true });
       if (p) { setPerfil(p); setForm({ nombre: p.nombre, apellido: p.apellido, telefono: p.telefono || '', direccion: p.direccion || '' }); }
-      const { data: d } = await udb.select('deportistas', '*', undefined, { single: true });
-      setDeportista(d);
+      const { data: d } = await udb.view('usuario_deportistas');
+      setDeportista(Array.isArray(d) ? d[0] || null : d);
     })();
   }, []);
   const handleSave = async (e: React.FormEvent) => { e.preventDefault(); const { error } = await udb.update('perfiles', form, { id: perfil.id }); if (error) toast.error('Error'); else toast.success('Actualizado'); };

@@ -11,7 +11,7 @@ export default function PadreFotos() {
   const [fotos, setFotos] = useState<any[]>([]);
   useEffect(() => { load(); }, []);
   async function load() {
-    const { data } = await udb.select('fotos_galeria', '*', undefined, { order: { column: 'created_at', ascending: false }, limit: 50 });
+    const { data } = await udb.view('usuario_galeria', { limit: 50 });
     setFotos(data || []);
   }
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

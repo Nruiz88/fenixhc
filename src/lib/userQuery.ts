@@ -8,13 +8,17 @@ interface QueryOptions {
   limit?: number;
   order?: { column: string; ascending?: boolean };
   single?: boolean;
+  view?: string;
 }
 
 export async function userQuery<T = any>(options: QueryOptions): Promise<{ data: T | null; error: string | null }> {
+  const payload = options.view
+    ? { operation: 'select', view: options.view, limit: options.limit }
+    : { operation: 'select', ...options };
   const res = await fetch('/api/user/query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ operation: 'select', ...options }),
+    body: JSON.stringify(payload),
   });
   if (res.status === 401) return { data: null, error: 'No autenticado' };
   const json = await res.json();
@@ -43,4 +47,7 @@ export const udb = {
     userMutate<T>('update', table, data, filters),
   delete: (table: string, filters: Record<string, any>) =>
     userMutate('delete', table, undefined, filters),
+  /** Vista nombrada con JOINs predefinidos en el servidor (scope por rol). */
+  view: <T = any>(view: string, options?: { limit?: number }) =>
+    userQuery<T>({ table: '', view, ...options } as any),
 };

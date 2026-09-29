@@ -12,10 +12,10 @@ export default function AdminLegajos() {
   const [selected, setSelected] = useState<any>(null);
   const [search, setSearch] = useState('');
   useEffect(() => {
-    db.select('deportistas', '*, perfiles(*)').then(({ data }) => setJugadores(data || []));
+    db.view('admin_deportistas').then(({ data }) => setJugadores(data || []));
   }, []);
   async function selectJugador(j: any) {
-    const { data: familias } = await db.select('familias', '*, perfiles!padre_perfil_id(nombre, apellido, dni, telefono)');
+    const { data: familias } = await db.view('admin_familias');
     const familiasDeportista = (familias || []).filter((f: any) => f.deportista_perfil_id === j.perfil_id);
     const familiaIds = familiasDeportista.map((f: any) => f.id);
     const { data: cuotas } = familiaIds.length > 0
@@ -79,8 +79,8 @@ export default function AdminLegajos() {
                   <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2"><Users className="h-3.5 w-3.5" /> Familia</h3>
                   {selected.familias.length > 0 ? selected.familias.map((f: any) => (
                     <div key={f.id} className="p-3 bg-gray-800/50 rounded-lg mb-2 flex items-center justify-between">
-                      <div><p className="text-sm font-medium text-white">{f.perfiles?.nombre} {f.perfiles?.apellido}</p><p className="text-xs text-gray-500">{f.tipo_vinculo} • DNI: {f.perfiles?.dni}</p></div>
-                      {f.perfiles?.telefono && <p className="text-xs text-gray-400">{f.perfiles.telefono}</p>}
+                      <div><p className="text-sm font-medium text-white">{f.padre?.nombre} {f.padre?.apellido}</p><p className="text-xs text-gray-500">{f.tipo_vinculo} • DNI: {f.padre?.dni}</p></div>
+                      {f.padre?.telefono && <p className="text-xs text-gray-400">{f.padre.telefono}</p>}
                     </div>
                   )) : <p className="text-sm text-gray-500">Sin padre asociado</p>}
                 </div>

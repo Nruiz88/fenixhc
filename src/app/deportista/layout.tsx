@@ -6,12 +6,11 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Menu, LogOut, LayoutDashboard, User, MessageSquare, Image, Bell, Calendar, Home, ChevronRight, Settings } from 'lucide-react';
+import { Menu, LogOut, LayoutDashboard, User, Image, Bell, Calendar, Home, ChevronRight, Settings } from 'lucide-react';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/deportista/dashboard', icon: LayoutDashboard },
   { label: 'Mi Perfil', href: '/deportista/perfil', icon: User },
-  { label: 'Chat', href: '/deportista/chat', icon: MessageSquare },
   { label: 'Galería', href: '/deportista/galeria', icon: Image },
   { label: 'Reservas', href: '/deportista/reservas', icon: Calendar },
   { label: 'Notificaciones', href: '/deportista/notificaciones', icon: Bell },

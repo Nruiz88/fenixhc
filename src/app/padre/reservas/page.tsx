@@ -17,7 +17,7 @@ export default function PadreReservas() {
   useEffect(() => { load(); }, []);
   async function load() {
     const { data: c } = await udb.select('canchas', '*'); setCanchas((c || []).filter((ca: any) => ca.activa));
-    const { data: r } = await udb.select('reservas', '*, canchas(nombre)', undefined, { order: { column: 'fecha', ascending: false } }); setReservas(r || []);
+    const { data: r } = await udb.view('usuario_reservas'); setReservas(r || []);
   }
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();

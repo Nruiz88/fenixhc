@@ -7,8 +7,18 @@ import { Bell, AlertTriangle, Zap, Info } from 'lucide-react';
 export default function PadreNotificaciones() {
   const [notifs, setNotifs] = useState<any[]>([]);
   useEffect(() => {
-    udb.select('notificaciones', '*').then(({ data }) => {
-      setNotifs((data || []).filter((n: any) => n.destinatario_rol === 'padre' || n.destinatario_rol === 'todos'));
+    // El endpoint ya filtra por rol en servidor; la vista además trae el
+    // estado de lectura, así que la página marca todo lo que muestra.
+    udb.view('usuario_notificaciones').then(async ({ data }) => {
+      const list = data || [];
+      setNotifs(list);
+      if (list.length > 0) {
+        await fetch('/api/notifications/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: list.map((n: any) => n.id) }),
+        }).catch(() => {});
+      }
     });
   }, []);
   const tipoIcons: Record<string, any> = { urgente: AlertTriangle, pago: Zap, deportivo: Info, general: Bell };

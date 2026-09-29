@@ -11,7 +11,7 @@ export default function AdminReservas() {
   const [reservas, setReservas] = useState<any[]>([]);
   useEffect(() => { load(); }, []);
   async function load() {
-    const { data } = await db.select('reservas', '*, canchas(nombre), perfiles(nombre, apellido)', undefined, { order: { column: 'fecha', ascending: false } });
+    const { data } = await db.view('admin_reservas');
     setReservas(data || []);
   }
   const handleCancel = async (id: string) => { await db.update('reservas', { estado: 'cancelada' }, { id }); toast.success('Reserva cancelada'); load(); };

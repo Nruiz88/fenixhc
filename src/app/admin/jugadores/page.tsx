@@ -10,7 +10,7 @@ export default function AdminJugadores() {
   const [jugadores, setJugadores] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   useEffect(() => {
-    db.select('deportistas', '*, perfiles(*)').then(({ data }) => setJugadores(data || []));
+    db.view('admin_deportistas').then(({ data }) => setJugadores(data || []));
   }, []);
   const filtered = jugadores.filter(j => {
     const p = j.perfiles;

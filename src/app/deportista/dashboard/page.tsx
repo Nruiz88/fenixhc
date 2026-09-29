@@ -2,23 +2,21 @@
 import { useState, useEffect } from 'react';
 import { udb } from '@/lib/userQuery';
 import { Card, CardContent } from '@/components/ui/card';
-import { MessageSquare, Image, Calendar, Bell, User, Zap } from 'lucide-react';
+import { Image, Calendar, Bell, User, Zap } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DeportistaDashboard() {
   const [perfil, setPerfil] = useState<any>(null);
-  const [stats, setStats] = useState({ msgs: 0, fotos: 0, reservas: 0, notifs: 0 });
+  const [stats, setStats] = useState({ fotos: 0, reservas: 0, notifs: 0 });
 
   useEffect(() => {
     udb.select('perfiles', '*', undefined, { single: true }).then(({ data }) => setPerfil(data));
     Promise.all([
-      udb.select('mensajes_chat', 'id'),
       udb.select('fotos_galeria', 'id'),
       udb.select('reservas', 'id'),
       udb.select('notificaciones', 'id'),
-    ]).then(([m, f, r, n]) => {
+    ]).then(([f, r, n]) => {
       setStats({
-        msgs: m.data?.length || 0,
         fotos: f.data?.length || 0,
         reservas: r.data?.length || 0,
         notifs: (n.data || []).filter((x: any) => x.destinatario_rol === 'deportista' || x.destinatario_rol === 'todos').length,
@@ -50,7 +48,6 @@ export default function DeportistaDashboard() {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Chat', value: stats.msgs, icon: MessageSquare, color: 'from-blue-500 to-indigo-600', href: '/deportista/chat' },
           { label: 'Fotos', value: stats.fotos, icon: Image, color: 'from-violet-500 to-purple-600', href: '/deportista/galeria' },
           { label: 'Reservas', value: stats.reservas, icon: Calendar, color: 'from-[#DC2626] to-[#7F1D1D]', href: '/deportista/reservas' },
           { label: 'Notificaciones', value: stats.notifs, icon: Bell, color: 'from-amber-500 to-orange-600', href: '/deportista/notificaciones' },
@@ -67,17 +64,6 @@ export default function DeportistaDashboard() {
 
       {/* Quick Access */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Link href="/deportista/chat">
-          <Card className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors cursor-pointer group">
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform"><MessageSquare className="h-6 w-6 text-blue-400" /></div>
-              <div>
-                <h3 className="font-semibold text-white">Chat del Club</h3>
-                <p className="text-sm text-gray-400">Charlá con tus compañeros</p>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
         <Link href="/deportista/galeria">
           <Card className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors cursor-pointer group">
             <CardContent className="p-5 flex items-center gap-4">

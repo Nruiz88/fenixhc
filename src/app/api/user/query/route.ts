@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, execute, insert, uuid } from '@/lib/db';
 import { requireAuth, type AuthUser } from '@/lib/auth';
 import { TABLES_BY_ROLE } from '@/lib/constants';
+import { getView, buildViewSql } from '@/lib/views';
 
 const ALLOWED_OPERATIONS = ['select', 'insert', 'update', 'delete'] as const;
 const MAX_LIMIT = 1000;
@@ -14,7 +15,6 @@ const TABLE_COLUMNS: Record<string, string[]> = {
   finanzas: ['id', 'tipo', 'concepto', 'monto', 'fecha', 'categoria', 'metodo_pago', 'descripcion', 'comprobante_url', 'created_by', 'created_at'],
   notificaciones: ['id', 'titulo', 'mensaje', 'tipo', 'destinatario_rol', 'enviada_email', 'created_by', 'created_at'],
   notificaciones_usuarios: ['id', 'notificacion_id', 'usuario_id', 'leida', 'created_at'],
-  mensajes_chat: ['id', 'emisor_id', 'contenido', 'tipo_contenido', 'archivo_url', 'created_at'],
   fotos_galeria: ['id', 'subido_por', 'url', 'descripcion', 'es_video', 'created_at'],
   canchas: ['id', 'nombre', 'descripcion', 'capacidad', 'activa'],
   reservas: ['id', 'cancha_id', 'usuario_id', 'fecha', 'hora_inicio', 'hora_fin', 'estado', 'notas', 'created_at'],
@@ -54,8 +54,6 @@ function ownerCondition(table: string, user: AuthUser): { cond: string; params: 
       return { cond: 'usuario_id = ?', params: [user.id] };
     case 'push_subscriptions':
       return { cond: 'usuario_id = ?', params: [user.id] };
-    case 'mensajes_chat':
-      return { cond: 'emisor_id = ?', params: [user.id] };
     case 'fotos_galeria':
       return { cond: 'subido_por = ?', params: [user.id] };
     default:
@@ -63,8 +61,8 @@ function ownerCondition(table: string, user: AuthUser): { cond: string; params: 
   }
 }
 
-// Lectura compartida: galería, chat, canchas y horarios se ven entre todos.
-const SHARED_READ = new Set(['fotos_galeria', 'mensajes_chat', 'canchas', 'horarios_entrenamiento', 'partidos', 'comunicados', 'sponsors']);
+// Lectura compartida: galería, canchas y horarios se ven entre todos.
+const SHARED_READ = new Set(['fotos_galeria', 'canchas', 'horarios_entrenamiento', 'partidos', 'comunicados', 'sponsors']);
 
 // Operaciones de escritura que un no-admin NO puede hacer en absoluto
 const WRITE_BLOCKED_FOR_NON_ADMIN: Record<string, string[]> = {
@@ -85,7 +83,6 @@ const UPDATABLE_COLUMNS_FOR_NON_ADMIN: Record<string, string[]> = {
   familias: ['tipo_vinculo'],
   deportistas: ['dni_frente_url', 'dni_fondo_url', 'observaciones'],
   notificaciones_usuarios: ['leida'],
-  mensajes_chat: ['contenido'],
   fotos_galeria: ['descripcion'],
 };
 
@@ -95,7 +92,6 @@ function forcedInsertValues(table: string, user: AuthUser): Record<string, any> 
   switch (table) {
     case 'familias': return { padre_perfil_id: user.id };
     case 'reservas': return { usuario_id: user.id };
-    case 'mensajes_chat': return { emisor_id: user.id };
     case 'fotos_galeria': return { subido_por: user.id };
     case 'notificaciones_usuarios': return { usuario_id: user.id };
     default: return {};
@@ -156,7 +152,21 @@ export async function POST(request: NextRequest) {
     const { user } = auth;
 
     const body = await request.json();
-    const { table, operation = 'select', filters, data, columns, limit, order, single } = body;
+    const { table, view, operation = 'select', filters, data, columns, limit, order, single } = body;
+
+    // Vista nombrada (JOINs predefinidos en el servidor). Solo lectura.
+    // Cada vista aplica su propio scope por rol: es la equivalente de la RLS.
+    if (view) {
+      if (operation !== 'select') {
+        return NextResponse.json({ error: 'Las vistas solo admiten lectura' }, { status: 400 });
+      }
+      const def = getView(view);
+      if (!def || !def.allowed(user)) {
+        return NextResponse.json({ error: 'Vista no válida' }, { status: 403 });
+      }
+      const rows = await query(buildViewSql(def.sql, { limit }), def.scope(user, { limit }));
+      return NextResponse.json({ data: rows.map(def.shape) });
+    }
 
     if (!table || !TABLES_BY_ROLE[user.rol]?.includes(table)) {
       return NextResponse.json({ error: 'Tabla no válida para tu rol' }, { status: 403 });
