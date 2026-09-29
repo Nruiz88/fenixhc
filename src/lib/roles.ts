@@ -203,6 +203,6 @@ export const PORTAL_POR_ROL: Record<Rol, string> = {
   tesorero: '/admin/dashboard',
   vocal_titular: '/admin/dashboard',
   vocal_suplente: '/admin/dashboard',
-  socio_benefactor: '/padre/dashboard',
-  socio_cadete: '/deportista/dashboard',
+  socio_benefactor: '/socio-benefactor/dashboard',
+  socio_cadete: '/socio-cadete/dashboard',
 };

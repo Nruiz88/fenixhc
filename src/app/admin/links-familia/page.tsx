@@ -8,8 +8,11 @@ import { toast } from 'sonner';
 import { Link2, Trash2, Plus, ArrowRight, Users, UserCheck, DollarSign, AlertCircle } from 'lucide-react';
 
 export default function AdminLinksFamilia() {
-  const [padres, setPadres] = useState<any[]>([]);
-  const [deportistas, setDeportistas] = useState<any[]>([]);
+  // Ojo con la nomenclatura: `padre_perfil_id` y `deportista_perfil_id` son los
+  // nombres de las columnas (y describen el vinculo familiar), pero el rol del
+  // usuario es socio_benefactor / socio_cadete.
+  const [benefactores, setBenefactores] = useState<any[]>([]);
+  const [cadetes, setCadetes] = useState<any[]>([]);
   const [familias, setFamilias] = useState<any[]>([]);
   const [form, setForm] = useState({ padre_id: '', deportista_id: '', tipo_vinculo: 'padre' });
   const [loading, setLoading] = useState(false);
@@ -18,24 +21,24 @@ export default function AdminLinksFamilia() {
 
   async function load() {
     const { data: p } = await db.select('perfiles', 'id, nombre, apellido, dni, correo', { rol: 'socio_benefactor' });
-    setPadres(p || []);
+    setBenefactores(p || []);
     const { data: d } = await db.view('admin_deportistas_ligeros');
-    setDeportistas(d || []);
+    setCadetes(d || []);
     const { data: f } = await db.view('admin_familias');
     setFamilias(f || []);
   }
 
-  // Padres que ya tienen vínculo
-  const padresVinculados = new Set(familias.map((f: any) => f.padre_perfil_id));
-  // Deportistas que ya tienen vínculo
-  const deportistasVinculados = new Set(familias.map((f: any) => f.deportista_perfil_id));
+  // Benefactores que ya tienen vínculo
+  const benefactoresVinculados = new Set(familias.map((f: any) => f.padre_perfil_id));
+  // Cadetes que ya tienen vínculo
+  const cadetesVinculados = new Set(familias.map((f: any) => f.deportista_perfil_id));
 
-  const padresDisponibles = padres.filter(p => !padresVinculados.has(p.id));
-  const deportistasDisponibles = deportistas.filter(d => !deportistasVinculados.has(d.perfil_id));
+  const padresDisponibles = benefactores.filter(p => !benefactoresVinculados.has(p.id));
+  const deportistasDisponibles = cadetes.filter(d => !cadetesVinculados.has(d.perfil_id));
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.padre_id || !form.deportista_id) { toast.error('Seleccioná padre y jugador'); return; }
+    if (!form.padre_id || !form.deportista_id) { toast.error('Seleccioná el benefactor y el cadete'); return; }
 
     setLoading(true);
     const { error } = await db.insert('familias', {
@@ -47,10 +50,9 @@ export default function AdminLinksFamilia() {
     if (error) {
       toast.error('Error al crear vinculación');
     } else {
-      // Generar cuotas unificadas
-      const padre = padres.find(p => p.id === form.padre_id);
-      const deportista = deportistas.find(d => d.perfil_id === form.deportista_id);
-      toast.success(`Vinculación creada: ${padre?.nombre} → ${deportista?.perfiles?.nombre}`, {
+      const benefactor = benefactores.find(p => p.id === form.padre_id);
+      const cadete = cadetes.find(d => d.perfil_id === form.deportista_id);
+      toast.success(`Vinculación creada: ${benefactor?.nombre} → ${cadete?.perfiles?.nombre}`, {
         description: 'Cuota unificada de $75.000 generada automáticamente'
       });
       setForm({ padre_id: '', deportista_id: '', tipo_vinculo: 'padre' });

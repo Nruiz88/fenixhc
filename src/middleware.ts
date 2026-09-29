@@ -3,9 +3,31 @@ import { authenticateFromRequest } from '@/lib/auth';
 import { isProtectedRoute } from '@/lib/constants';
 import { esDirectiva, moduloDeRuta, tieneModulo, PORTAL_POR_ROL } from '@/lib/roles';
 
+// URLs viejas -> nuevas. Se redirige con 308 para no romper links guardados
+// ni perder el metodo en un POST.
+const RUTAS_VIEJAS: Record<string, string> = {
+  '/padre': '/socio-benefactor',
+  '/deportista': '/socio-cadete',
+};
+
+function redirigirSiVieja(pathname: string, request: NextRequest): NextResponse | null {
+  for (const [vieja, nueva] of Object.entries(RUTAS_VIEJAS)) {
+    if (pathname === vieja || pathname.startsWith(vieja + '/')) {
+      const url = request.nextUrl.clone();
+      url.pathname = nueva + pathname.slice(vieja.length);
+      return NextResponse.redirect(url, 308);
+    }
+  }
+  return null;
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const user = authenticateFromRequest(request);
+
+  // URLs renombradas: /socio-benefactor/* -> /socio-benefactor/*, etc.
+  const redir = redirigirSiVieja(pathname, request);
+  if (redir) return redir;
 
   // Sin sesion y en ruta protegida -> login (con a donde queria ir).
   if (isProtectedRoute(pathname) && !user) {
@@ -27,8 +49,7 @@ export async function middleware(request: NextRequest) {
     if (!esDirectiva(user.rol)) {
       return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
     }
-    // Recorte por modulo: un tesorero no entra a /admin/pagos... al reves,
-    // el tesorero SI entra a pagos pero no a usuarios.
+    // Recorte por modulo: un tesorero no entra a /admin/usuarios.
     const modulo = moduloDeRuta(pathname);
     if (modulo && !tieneModulo(user.rol, modulo)) {
       return NextResponse.redirect(new URL('/admin/dashboard?sinPermiso=1', request.url));
@@ -37,10 +58,18 @@ export async function middleware(request: NextRequest) {
   }
 
   // Portales de socios.
-  if (pathname.startsWith('/padre') && user.rol !== 'socio_benefactor' && user.rol !== 'admin') {
+  if (
+    pathname.startsWith('/socio-benefactor') &&
+    user.rol !== 'socio_benefactor' &&
+    !esDirectiva(user.rol)
+  ) {
     return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
   }
-  if (pathname.startsWith('/deportista') && user.rol !== 'socio_cadete' && user.rol !== 'admin') {
+  if (
+    pathname.startsWith('/socio-cadete') &&
+    user.rol !== 'socio_cadete' &&
+    !esDirectiva(user.rol)
+  ) {
     return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
   }
 

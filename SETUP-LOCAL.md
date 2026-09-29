@@ -67,9 +67,9 @@ npm run dev
 | `/contacto` | Formulario de contacto |
 | `/login` | Login |
 | `/registro` | Registro |
-| `/padre/dashboard` | Portal del padre |
-| `/deportista/dashboard` | Portal del deportista |
-| `/admin/dashboard` | Panel del club |
+| `/socio-benefactor/dashboard` | Portal del socio benefactor |
+| `/socio-cadete/dashboard` | Portal del socio cadete |
+| `/admin/dashboard` | Panel de la directiva |
 
 ## Usuarios de prueba
 
@@ -130,8 +130,10 @@ archivo **y** el ENUM con una migración).
 | `tesorero` | `/admin` | Socios, jugadores, pagos, finanzas, reportes |
 | `vocal_titular` | `/admin` | Consulta de socios, jugadores, legajos y partidos |
 | `vocal_suplente` | `/admin` | Igual que Vocal Titular |
-| `socio_benefactor` | `/padre` | Sus cuotas, sus hijos, reservas, galería |
-| `socio_cadete` | `/deportista` | Su ficha, su DNI, reservas, galería |
+| `socio_benefactor` | `/socio-benefactor` | Sus cuotas, sus hijos, reservas, galería |
+| `socio_cadete` | `/socio-cadete` | Su ficha, su DNI, reservas, galería |
+
+Las URLs viejas `/padre/*` y `/deportista/*` redirigen con 308 a las nuevas.
 
 - El registro público (`/registro`) solo admite `socio_benefactor` y
   `socio_cadete`. Los cargos se dan de alta desde `/admin/usuarios`.

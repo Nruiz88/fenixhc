@@ -8,7 +8,7 @@ import {
 
 // Alta de usuarios desde el panel del club. El admin sí puede crear cuentas
 // de cualquier rol (a diferencia del registro público, que solo admite
-// padre/deportista), pero el rol se valida contra la lista cerrada.
+// los dos roles de socio), pero el rol se valida contra la lista cerrada.
 
 export async function POST(request: NextRequest) {
   try {

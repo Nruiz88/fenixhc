@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { getCurrentUser, logout } from '@/lib/auth-client';
+import { PORTAL_POR_ROL, type Rol } from '@/lib/roles';
 import { NotificationsBell } from './NotificationsBell';
 
 const PUBLIC_LINKS = [
@@ -23,10 +24,17 @@ const MORE_LINKS = [
   { label: 'Sobre Nosotros', href: '/sobre-nosotros' },
 ];
 
-const ROLE_DASHBOARD: Record<string, { href: string; label: string }> = {
-  admin: { href: '/admin/dashboard', label: 'Panel Admin' },
-  padre: { href: '/padre/dashboard', label: 'Mi Cuenta' },
-  deportista: { href: '/deportista/dashboard', label: 'Mi Cuenta' },
+// El destino depende del rol. Se arma desde PORTAL_POR_ROL (lib/roles.ts) para
+// que no quede una lista de roles desincronizada como antes.
+const ROLE_LABEL_UI: Record<string, string> = {
+  admin: 'Panel Admin',
+  presidente: 'Panel de la Directiva',
+  secretario: 'Panel de la Directiva',
+  tesorero: 'Panel de la Directiva',
+  vocal_titular: 'Panel de la Directiva',
+  vocal_suplente: 'Panel de la Directiva',
+  socio_benefactor: 'Mi Cuenta',
+  socio_cadete: 'Mi Cuenta',
 };
 
 export function Navbar() {
@@ -54,7 +62,9 @@ export function Navbar() {
     window.location.href = '/';
   };
 
-  const dashboardInfo = user?.rol ? ROLE_DASHBOARD[user.rol] : null;
+  const dashboardInfo = user?.rol
+    ? { href: PORTAL_POR_ROL[user.rol as Rol], label: ROLE_LABEL_UI[user.rol] ?? 'Mi Cuenta' }
+    : null;
   const initials = user ? `${user.nombre?.[0] || ''}${user.apellido?.[0] || ''}` : '';
 
   return (

@@ -66,7 +66,7 @@ export const VALIDATION = {
 } as const;
 
 // Route protection: los socios van a su portal, la directiva al panel.
-export const PROTECTED_ROUTES = ['/admin', '/padre', '/deportista'];
+export const PROTECTED_ROUTES = ['/admin', '/socio-benefactor', '/socio-cadete'];
 
 export function isProtectedRoute(pathname: string): boolean {
   return PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
@@ -75,8 +75,8 @@ export function isProtectedRoute(pathname: string): boolean {
 /** Que tipo de portal corresponde a una ruta. */
 export function getRoleFromPath(pathname: string): Rol | null {
   if (pathname.startsWith('/admin')) return 'admin';
-  if (pathname.startsWith('/padre')) return 'socio_benefactor';
-  if (pathname.startsWith('/deportista')) return 'socio_cadete';
+  if (pathname.startsWith('/socio-benefactor')) return 'socio_benefactor';
+  if (pathname.startsWith('/socio-cadete')) return 'socio_cadete';
   return null;
 }
 
