@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne, execute, insert, uuid } from '@/lib/db';
+import { query, execute, insert, uuid } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { TABLES_BY_ROLE } from '@/lib/constants';
+import { getView, buildViewSql } from '@/lib/views';
 
 const ALLOWED_OPERATIONS = ['select', 'insert', 'update', 'delete', 'upsert'] as const;
 const MAX_LIMIT = 1000;
@@ -15,7 +16,6 @@ const TABLE_COLUMNS: Record<string, string[]> = {
   finanzas: ['id', 'tipo', 'concepto', 'monto', 'fecha', 'categoria', 'metodo_pago', 'descripcion', 'comprobante_url', 'created_by', 'created_at'],
   notificaciones: ['id', 'titulo', 'mensaje', 'tipo', 'destinatario_rol', 'enviada_email', 'created_by', 'created_at'],
   notificaciones_usuarios: ['id', 'notificacion_id', 'usuario_id', 'leida', 'created_at'],
-  mensajes_chat: ['id', 'emisor_id', 'contenido', 'tipo_contenido', 'archivo_url', 'created_at'],
   fotos_galeria: ['id', 'subido_por', 'url', 'descripcion', 'es_video', 'created_at'],
   canchas: ['id', 'nombre', 'descripcion', 'capacidad', 'activa'],
   reservas: ['id', 'cancha_id', 'usuario_id', 'fecha', 'hora_inicio', 'hora_fin', 'estado', 'notas', 'created_at'],
@@ -78,7 +78,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { table, operation = 'select', filters, data, columns, limit, order, single } = body;
+    const { table, view, operation = 'select', filters, data, columns, limit, order, single } = body;
+
+    // Vista nombrada (JOINs predefinidos en el servidor). Solo lectura.
+    if (view) {
+      if (operation !== 'select') {
+        return NextResponse.json({ error: 'Las vistas solo admiten lectura' }, { status: 400 });
+      }
+      const def = getView(view);
+      if (!def || !def.allowed(auth.user)) {
+        return NextResponse.json({ error: 'Vista no válida' }, { status: 403 });
+      }
+      const rows = await query(buildViewSql(def.sql, { limit }), def.scope(auth.user, { limit }));
+      return NextResponse.json({ data: rows.map(def.shape) });
+    }
 
     if (!table || !TABLES_BY_ROLE.admin.includes(table)) {
       return NextResponse.json({ error: 'Tabla no válida' }, { status: 400 });
@@ -112,6 +125,9 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
         }
         const filteredData = filterColumns(data, allowedCols);
+        if (Object.keys(filteredData).length === 0) {
+          return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
+        }
         if (!filteredData.id) filteredData.id = uuid();
         const keys = Object.keys(filteredData);
         const placeholders = keys.map(() => '?').join(',');
@@ -127,6 +143,9 @@ export async function POST(request: NextRequest) {
         if (!clause) return NextResponse.json({ error: 'Filtros requeridos para update' }, { status: 400 });
         const filteredData = filterColumns(data, allowedCols);
         const keys = Object.keys(filteredData);
+        if (keys.length === 0) {
+          return NextResponse.json({ error: 'No hay columnas válidas para actualizar' }, { status: 400 });
+        }
         const sets = keys.map(k => `${k} = ?`).join(', ');
         const result = await execute(`UPDATE ${table} SET ${sets}${clause}`, [...Object.values(filteredData), ...filterParams]);
         return NextResponse.json({ data: { affected: result.affectedRows } });
@@ -144,6 +163,9 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
         }
         const filteredData = filterColumns(data, allowedCols);
+        if (Object.keys(filteredData).length === 0) {
+          return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
+        }
         if (!filteredData.id) filteredData.id = uuid();
         const keys = Object.keys(filteredData);
         const placeholders = keys.map(() => '?').join(',');
@@ -161,11 +183,15 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Filtra las claves contra el whitelist de la tabla. NUNCA debe devolver
+// el `data` original como fallback: las claves se interpolan directo en el
+// SQL (INSERT INTO t (keys)), así que devolverlas sin filtrar abría una vía
+// de inyección de nombres de columna.
 function filterColumns(data: any, allowed: string[]): any {
-  if (allowed.length === 0) return data;
   const filtered: any = {};
+  if (allowed.length === 0) return filtered;
   for (const [k, v] of Object.entries(data)) {
-    if (allowed.includes(k)) filtered[k] = v;
+    if (allowed.includes(k) && IDENT_RE.test(k)) filtered[k] = v;
   }
-  return Object.keys(filtered).length > 0 ? filtered : data;
+  return filtered;
 }

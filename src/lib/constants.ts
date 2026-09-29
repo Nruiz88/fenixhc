@@ -11,17 +11,24 @@ export type UserRole = typeof ROLES[keyof typeof ROLES];
 export const TABLES_BY_ROLE: Record<UserRole, string[]> = {
   admin: [
     'perfiles', 'deportistas', 'familias', 'cuotas', 'finanzas',
-    'notificaciones', 'notificaciones_usuarios', 'mensajes_chat',
+    'notificaciones', 'notificaciones_usuarios',
     'fotos_galeria', 'canchas', 'reservas', 'push_subscriptions',
     'contacto_publico', 'partidos', 'comunicados', 'horarios_entrenamiento', 'sponsors',
   ],
   padre: [
     'perfiles', 'deportistas', 'familias', 'cuotas', 'notificaciones',
     'notificaciones_usuarios', 'fotos_galeria', 'reservas', 'contacto_publico',
+    // Necesario para los selectores de cancha de /padre/reservas
+    'canchas',
   ],
   deportista: [
     'perfiles', 'notificaciones', 'notificaciones_usuarios',
-    'mensajes_chat', 'fotos_galeria', 'reservas',
+    'fotos_galeria', 'reservas',
+    // Necesario para /deportista/reservas
+    'canchas',
+    // El deportista lee y actualiza su propia ficha (incluye subir el DNI);
+    // ownerCondition ya lo restringe a perfil_id = su propio id.
+    'deportistas',
   ],
 };
 
