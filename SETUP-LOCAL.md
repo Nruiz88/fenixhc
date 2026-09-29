@@ -101,6 +101,11 @@ confirmarlo antes de poder hacer login (si no, `/api/auth/login` devuelve 403
 - Si el usuario no puede entrar: en el login hay un botón "Reenviar email de
   verificación". El admin también puede crear cuentas ya verificadas desde
   `/admin/usuarios` (el club entrega las credenciales en persona).
+- En producción: `RESEND_API_KEY`, `EMAIL_FROM` y **`APP_URL`**. Esta última es
+  obligatoria (detrás de Traefik el link puede armarse con el host interno y no
+  abrir). Se llama `APP_URL` y no `NEXT_PUBLIC_APP_URL` a propósito: el prefijo
+  `NEXT_PUBLIC_` se inlinea en el bundle al buildear, así que si se agrega la
+  variable después del deploy no llega al código ya compilado.
 - Sin `RESEND_API_KEY` configurado **no sale ningún email**: la app muestra el
   enlace de verificación en pantalla (modo dev). Para producción hace falta la key.
 
