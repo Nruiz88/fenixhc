@@ -33,22 +33,37 @@ export function NotificationsBell({ userId }: NotificationsBellProps) {
 
   async function loadNotifications() {
     try {
-      const { data } = await userDb.select('notificaciones', '*', undefined, {
-        limit: 10,
-        order: { column: 'created_at', ascending: false },
-      });
+      const { data } = await userDb.view('usuario_notificaciones', { limit: 10 });
       if (data) setNotifications(data);
     } catch {}
     setLoading(false);
   }
 
-  const unread = notifications.length;
+  // Al abrir el panel se marcan como leídas y se recarga el contador.
+  async function handleToggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && notifications.some((n) => !n.leida)) {
+      try {
+        await fetch('/api/notifications/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: notifications.filter((n) => !n.leida).map((n) => n.id) }),
+        });
+        await loadNotifications();
+      } catch {}
+    }
+  }
+
+  // Solo cuentan las no leídas (antes contaba todo, así que el badge nunca
+  // se apagaba y no había forma de marcar nada como leído).
+  const unread = notifications.filter((n) => !n.leida).length;
   const now = new Date();
 
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(!open)}
+        onClick={handleToggle}
         className="relative p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all"
       >
         <Bell className="h-5 w-5" />
@@ -89,16 +104,17 @@ export function NotificationsBell({ userId }: NotificationsBellProps) {
                   const timeStr = diffHours < 1 ? 'Ahora' : diffHours < 24 ? `Hace ${diffHours}h` : `Hace ${Math.floor(diffHours / 24)}d`;
 
                   return (
-                    <div key={n.id} className="px-4 py-3 hover:bg-white/5 transition-colors border-b border-gray-800/50 last:border-0">
+                    <div key={n.id} className={`px-4 py-3 hover:bg-white/5 transition-colors border-b border-gray-800/50 last:border-0 ${n.leida ? '' : 'bg-[#DC2626]/[0.04]'}`}>
                       <div className="flex items-start gap-3">
                         <div className={`mt-0.5 ${color}`}>
                           <Icon className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{n.titulo}</p>
+                          <p className={`text-sm font-medium truncate ${n.leida ? 'text-gray-400' : 'text-white'}`}>{n.titulo}</p>
                           <p className="text-xs text-gray-500 truncate mt-0.5">{n.mensaje}</p>
                           <p className="text-[10px] text-gray-600 mt-1">{timeStr}</p>
                         </div>
+                        {!n.leida && <span className="mt-1.5 h-2 w-2 rounded-full bg-[#DC2626] shrink-0" />}
                       </div>
                     </div>
                   );

@@ -47,8 +47,17 @@ export function rateLimit(key: string, limit: number, windowMs: number): boolean
 // IP del cliente (Coolify/Traefik pone X-Forwarded-For)
 export function clientIp(request: NextRequest): string {
   const fwd = request.headers.get('x-forwarded-for');
-  if (fwd) return fwd.split(',')[0].trim();
+  if (fwd) {
+    const ip = fwd.split(',')[0].trim();
+    if (ip) return ip;
+  }
   const real = request.headers.get('x-real-ip');
-  if (real) return real.trim();
-  return 'unknown';
+  if (real) {
+    const ip = real.trim();
+    if (ip) return ip;
+  }
+  // Sin headers de proxy (dev local, tests): NO usar una constante compartida,
+  // porque agruparía a todos los clientes en un mismo bucket de rate-limit.
+  // Se usa un identificador por sesión/usuario como aproximación.
+  return `local:${request.cookies.get('fenix_token')?.value?.slice(-16) ?? 'anon'}`;
 }
