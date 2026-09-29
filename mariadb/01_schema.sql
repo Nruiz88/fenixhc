@@ -18,9 +18,16 @@ CREATE TABLE IF NOT EXISTS usuarios (
   email VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   rol ENUM('admin','padre','deportista') NOT NULL DEFAULT 'padre',
+  -- Verificación de email: obligatoria para poder iniciar sesión.
+  email_verificado BOOLEAN NOT NULL DEFAULT FALSE,
+  -- SHA-256 del token de verificación (nunca el token en claro).
+  verification_token CHAR(64) NULL,
+  verification_expires_at TIMESTAMP NULL,
+  verification_sent_at TIMESTAMP NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_usuarios_rol (rol)
+  INDEX idx_usuarios_rol (rol),
+  INDEX idx_usuarios_verif (verification_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS perfiles (
@@ -121,17 +128,6 @@ CREATE TABLE IF NOT EXISTS notificaciones_usuarios (
   UNIQUE KEY uq_notif_usuario (notificacion_id, usuario_id),
   FOREIGN KEY (notificacion_id) REFERENCES notificaciones(id) ON DELETE CASCADE,
   FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS mensajes_chat (
-  id CHAR(36) PRIMARY KEY,
-  emisor_id CHAR(36) NOT NULL,
-  contenido TEXT NOT NULL,
-  tipo_contenido ENUM('texto','imagen','video') DEFAULT 'texto',
-  archivo_url TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_chat_emisor (emisor_id),
-  INDEX idx_chat_fecha (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS fotos_galeria (

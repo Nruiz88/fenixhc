@@ -8,12 +8,14 @@ USE club_fenix;
 -- Contraseñas: admin123, marcelo123, juan123, lautaro123, tomas123
 -- Hashes generados con bcrypt cost 10
 
-INSERT IGNORE INTO usuarios (id, email, password_hash, rol) VALUES
-  ('00000000-0000-0000-0000-000000000001', 'admin@club.com', '$2b$10$a8KRvV9AfBrALkt8Bdhki.8CjUG2fXHH.uWEcpWLUvlxSxDwQWXRu', 'admin'),
-  ('00000000-0000-0000-0000-000000000002', 'marcelo@mail.com', '$2b$10$O.L2GpVEa9HTyVZ6jNlfQORvgsPLCGBuFvrJx7vrrwie7Y1OAt.HG', 'padre'),
-  ('00000000-0000-0000-0000-000000000003', 'juan@mail.com', '$2b$10$Lof6XuNCqaYxjAz1xSx14uPeVKgIWeSHuOyPKugshL/JoJZs4cr6K', 'padre'),
-  ('00000000-0000-0000-0000-000000000004', 'lautaro@mail.com', '$2b$10$sAsOuwLq3z7Xf8uMSRPDwuAhFuBfSkEcaaNlolg.vEXk3AxEjYOqS', 'deportista'),
-  ('00000000-0000-0000-0000-000000000005', 'tomas@mail.com', '$2b$10$bDQXArSmMfUmvGd2g5sOeupBaYTTCExZyzWJMm1W/YDQ/XHrkG7E6', 'deportista');
+-- Los usuarios de prueba nacen verificados (email_verificado = 1) para poder
+-- entrar directo en el panel sin pasar por el email de confirmación.
+INSERT IGNORE INTO usuarios (id, email, password_hash, rol, email_verificado) VALUES
+  ('00000000-0000-0000-0000-000000000001', 'admin@club.com', '$2b$10$a8KRvV9AfBrALkt8Bdhki.8CjUG2fXHH.uWEcpWLUvlxSxDwQWXRu', 'admin', 1),
+  ('00000000-0000-0000-0000-000000000002', 'marcelo@mail.com', '$2b$10$O.L2GpVEa9HTyVZ6jNlfQORvgsPLCGBuFvrJx7vrrwie7Y1OAt.HG', 'padre', 1),
+  ('00000000-0000-0000-0000-000000000003', 'juan@mail.com', '$2b$10$Lof6XuNCqaYxjAz1xSx14uPeVKgIWeSHuOyPKugshL/JoJZs4cr6K', 'padre', 1),
+  ('00000000-0000-0000-0000-000000000004', 'lautaro@mail.com', '$2b$10$sAsOuwLq3z7Xf8uMSRPDwuAhFuBfSkEcaaNlolg.vEXk3AxEjYOqS', 'deportista', 1),
+  ('00000000-0000-0000-0000-000000000005', 'tomas@mail.com', '$2b$10$bDQXArSmMfUmvGd2g5sOeupBaYTTCExZyzWJMm1W/YDQ/XHrkG7E6', 'deportista', 1);
 
 INSERT IGNORE INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, cuil, correo, telefono, direccion) VALUES
   ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'admin', 'Club', 'Admin', '00000000', '00-00000000-0', 'admin@club.com', '', ''),

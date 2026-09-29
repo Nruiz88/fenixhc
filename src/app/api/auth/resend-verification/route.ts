@@ -1,0 +1,61 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { queryOne, query } from '@/lib/db';
+import { verifyPassword } from '@/lib/auth';
+import { rateLimit, clientIp } from '@/lib/rateLimit';
+import { reenviarVerificacion } from '@/lib/verification';
+import { getBaseUrl } from '@/lib/url';
+
+// Reenvía el email de verificación.
+//
+// Exige email + contraseña: si no, cualquiera podría generar emails a
+// cualquier dirección usando este endpoint (abuso deresh / spam y permitir
+// enumerar qué emails existen en el sistema).
+export async function POST(request: NextRequest) {
+  try {
+    if (!rateLimit(`resend-verif:ip:${clientIp(request)}`, 5, 10 * 60_000)) {
+      return NextResponse.json({ error: 'Demasiados reenvíos. Esperá unos minutos.' }, { status: 429 });
+    }
+
+    const { email, password } = await request.json();
+    if (!email || !password) {
+      return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 });
+    }
+
+    const user = await queryOne(
+      'SELECT id, password_hash, email_verificado FROM usuarios WHERE email = ?',
+      [email]
+    );
+    // Mismo mensaje para email inexistente y contraseña incorrecta: no
+    // revelamos qué emails están registrados.
+    const genérico = 'Si la cuenta existe y no está verificada, te enviamos un nuevo enlace.';
+    if (!user) {
+      return NextResponse.json({ ok: true, message: genérico });
+    }
+
+    const valid = await verifyPassword(password, user.password_hash);
+    if (!valid) {
+      return NextResponse.json({ ok: true, message: genérico });
+    }
+
+    if (user.email_verificado) {
+      return NextResponse.json({ ok: true, message: 'Esta cuenta ya está verificada.' });
+    }
+
+    const perfil = await query<{ nombre: string }>(
+      'SELECT nombre FROM perfiles WHERE usuario_id = ? LIMIT 1',
+      [user.id]
+    );
+    const nombre = perfil[0]?.nombre || 'socio';
+    const { devToken } = await reenviarVerificacion(user.id, email, nombre, getBaseUrl(request));
+
+    return NextResponse.json({
+      ok: true,
+      message: genérico,
+      // Solo en dev (sin RESEND_API_KEY), para poder completar el flujo.
+      devVerificationUrl: devToken ? `${getBaseUrl(request)}/verificar?token=${devToken}` : undefined,
+    });
+  } catch (err: any) {
+    console.error('Resend verification error:', err);
+    return NextResponse.json({ error: 'Error al reenviar la verificación' }, { status: 500 });
+  }
+}

@@ -2,26 +2,42 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { login } from '@/lib/auth-client';
+import { login, resendVerification } from '@/lib/auth-client';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [noVerificado, setNoVerificado] = useState(false);
+  const [resendMsg, setResendMsg] = useState('');
+  const [resendUrl, setResendUrl] = useState('');
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect');
+
+  const handleResend = async () => {
+    setResendMsg('Enviando...');
+    const r = await resendVerification(email, password);
+    if (r.error) setResendMsg(r.error);
+    else {
+      setResendMsg(r.message || 'Si la cuenta existe, te enviamos un nuevo enlace.');
+      setResendUrl(r.devVerificationUrl || '');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setNoVerificado(false);
+    setResendMsg('');
 
     try {
       const result = await login(email, password);
 
       if (result.error) {
         setError(result.error);
+        if (result.code === 'EMAIL_NO_VERIFICADO') setNoVerificado(true);
         setLoading(false);
         return;
       }
@@ -79,6 +95,25 @@ function LoginForm() {
             {error && (
               <div className="bg-red-900/30 border border-red-800 rounded-lg p-3 text-sm text-red-400">
                 {error}
+              </div>
+            )}
+
+            {noVerificado && (
+              <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-3 text-sm text-amber-300 space-y-2">
+                <p>Revisá tu casilla de correo y seguí el enlace de confirmación.</p>
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  className="underline hover:text-amber-200"
+                >
+                  Reenviar email de verificación
+                </button>
+                {resendMsg && <p className="text-xs text-amber-400">{resendMsg}</p>}
+                {resendUrl && (
+                  <a href={resendUrl} className="block text-xs underline text-amber-200 break-all">
+                    {resendUrl}
+                  </a>
+                )}
               </div>
             )}
 

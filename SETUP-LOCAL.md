@@ -38,8 +38,11 @@ mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/01_schema.sql
 mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/02_seed.sql
 ```
 
-- `mariadb/01_schema.sql` → crea la base `club_fenix` y las 18 tablas.
+- `mariadb/01_schema.sql` → crea la base `club_fenix` y las tablas.
 - `mariadb/02_seed.sql` → usuarios de prueba (usuarios + perfiles + deportistas + familias).
+- `mariadb/03_drop_chat.sql` → solo si venís de una versión con el chat: elimina `mensajes_chat`.
+- `mariadb/04_email_verificacion.sql` → solo si la base ya existía: agrega las columnas de
+  verificación y **marca verificadas las cuentas anteriores** (si no, nadie podría entrar).
 
 > En Coolify el mismo proceso se hace con un solo comando SSH/consola (ver README).
 
@@ -84,6 +87,22 @@ npm run dev
   `/api/auth/me`, `/api/auth/password`.
 - Queries: `/api/admin/query` (admin), `/api/user/query` (sesión),
   `/api/public/query` (público: comunicados, galería, sponsors, horarios y contacto).
+
+## Verificación de email
+El registro **no abre sesión**: manda un email con un enlace y el usuario tiene que
+confirmarlo antes de poder hacer login (si no, `/api/auth/login` devuelve 403
+`EMAIL_NO_VERIFICADO`).
+
+- El token es aleatorio, expira a las **24h** y es de un solo uso.
+- En la base solo se guarda el **SHA-256** del token, nunca el token en claro.
+- Endpoints: `GET /api/auth/verify?token=...` y `POST /api/auth/resend-verification`
+  (pide email + contraseña, y responde igual exista o no la cuenta para no
+  enumerar qué emails están registrados).
+- Si el usuario no puede entrar: en el login hay un botón "Reenviar email de
+  verificación". El admin también puede crear cuentas ya verificadas desde
+  `/admin/usuarios` (el club entrega las credenciales en persona).
+- Sin `RESEND_API_KEY` configurado **no sale ningún email**: la app muestra el
+  enlace de verificación en pantalla (modo dev). Para producción hace falta la key.
 
 ## Estructura de cuota unificada
 ```

@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await queryOne(
-      'SELECT id, email, password_hash, rol FROM usuarios WHERE email = ?',
+      'SELECT id, email, password_hash, rol, email_verificado, verification_sent_at FROM usuarios WHERE email = ?',
       [email]
     );
 
@@ -29,6 +29,20 @@ export async function POST(request: NextRequest) {
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) {
       return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
+    }
+
+    // Verificación obligatoria: la contraseña correcta no alcanza si el
+    // email no fue confirmado. Se responde 403 para que el front pueda
+    // ofrecer "reenviar verificación".
+    if (!user.email_verificado) {
+      return NextResponse.json(
+        {
+          error: 'Verificá tu email para poder entrar',
+          code: 'EMAIL_NO_VERIFICADO',
+          verificationEnviado: user.verification_sent_at,
+        },
+        { status: 403 }
+      );
     }
 
     // Get profile info

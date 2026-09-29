@@ -31,6 +31,9 @@ export default function RegistroPage() {
     hijo_password: '',
   });
   const [loading, setLoading] = useState(false);
+  const [pendingVerify, setPendingVerify] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
+  const [devUrl, setDevUrl] = useState('');
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,13 +51,25 @@ export default function RegistroPage() {
       direccion: form.direccion,
     };
 
-    // Si es padre y quiso crear hijo, lo enviamos junto con el registro
+    // Si es padre y quiso crear hijo, lo enviamos junto con el registro.
+    // El email del hijo es obligatorio: la verificación se manda a esa
+    // casilla, así que un email inventado dejaría al chico sin poder entrar.
     if (form.rol === 'padre' && form.hijo_nombre && form.hijo_apellido && form.hijo_dni) {
+      if (!form.hijo_email) {
+        toast.error('Falta el email del hijo', { description: 'Necesitamos su email para enviarle la verificación.' });
+        setLoading(false);
+        return;
+      }
+      if (!form.hijo_password) {
+        toast.error('Falta la contraseña del hijo');
+        setLoading(false);
+        return;
+      }
       payload.hijo_nombre = form.hijo_nombre;
       payload.hijo_apellido = form.hijo_apellido;
       payload.hijo_dni = form.hijo_dni;
-      payload.hijo_email = form.hijo_email || `${form.hijo_dni}@fenix.local`;
-      payload.hijo_password = form.hijo_password || 'fenix2026';
+      payload.hijo_email = form.hijo_email;
+      payload.hijo_password = form.hijo_password;
     }
 
     const result = await register(payload);
@@ -70,14 +85,51 @@ export default function RegistroPage() {
         description: `Se creó la cuenta de ${form.hijo_nombre} y se vinculó automáticamente. Cuota unificada: $75.000/mes`,
       });
     } else {
-      toast.success('Cuenta creada', { description: 'Ya podés iniciar sesión' });
+      toast.success('Cuenta creada');
     }
 
-    router.push('/login');
+    // No hay sesión: hay que verificar el email antes de poder entrar.
+    setPendingVerify(true);
+    setRegisteredEmail(form.email);
+    // Solo en dev (sin RESEND_API_KEY), para poder completar el flujo.
+    setDevUrl(result.devVerificationUrl || '');
     setLoading(false);
   };
 
   const update = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
+
+  // Post-registro: la cuenta existe pero falta verificar el email.
+  if (pendingVerify) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-gray-950">
+        <div className="w-full max-w-md text-center">
+          <img src="/logo.png" alt="Fenix" className="h-14 w-14 object-contain mx-auto mb-4" />
+          <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto">
+            <span className="text-blue-400 text-2xl">✉</span>
+          </div>
+          <h2 className="text-2xl font-bold text-white mt-4">Revisá tu email</h2>
+          <p className="text-gray-400 mt-2 text-sm leading-relaxed">
+            Te enviamos un enlace de verificación a <span className="text-white font-medium">{registeredEmail}</span>.
+            Hacé clic en él para activar tu cuenta. Después vas a poder iniciar sesión.
+          </p>
+          {devUrl && (
+            <div className="mt-4 p-3 bg-amber-900/20 border border-amber-800 rounded-lg text-left">
+              <p className="text-xs text-amber-300 mb-1">
+                <strong>Modo dev:</strong> no hay RESEND_API_KEY configurado, así que el email no salió. Usá este enlace:
+              </p>
+              <a href={devUrl} className="text-xs underline text-amber-200 break-all">{devUrl}</a>
+            </div>
+          )}
+          <Link
+            href="/login"
+            className="inline-block mt-6 px-6 py-3 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white font-semibold transition-colors"
+          >
+            Ir al login
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-gray-950">
@@ -182,9 +234,14 @@ export default function RegistroPage() {
                       <Input value={form.hijo_dni} onChange={e => update('hijo_dni', e.target.value)} placeholder="DNI" className="bg-gray-800 border-gray-700 text-white text-sm" />
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-gray-400 text-xs">Email del hijo (opcional)</Label>
-                      <Input value={form.hijo_email} onChange={e => update('hijo_email', e.target.value)} placeholder="Se genera automáticamente si se deja vacío" className="bg-gray-800 border-gray-700 text-white text-sm" />
+                      <Label className="text-gray-400 text-xs">Email del hijo *</Label>
+                      <Input type="email" value={form.hijo_email} onChange={e => update('hijo_email', e.target.value)} placeholder="email@ejemplo.com" className="bg-gray-800 border-gray-700 text-white text-sm" />
                     </div>
+                  </div>
+                  <div className="space-y-2 mt-3">
+                    <Label className="text-gray-400 text-xs">Contraseña del hijo *</Label>
+                    <Input type="password" value={form.hijo_password} onChange={e => update('hijo_password', e.target.value)} placeholder="Mínimo 6 caracteres" className="bg-gray-800 border-gray-700 text-white text-sm" />
+                    <p className="text-[11px] text-gray-500">Le llega por email para que pueda verificar su cuenta.</p>
                   </div>
                 </div>
               )}

@@ -12,6 +12,13 @@ export interface AuthResponse {
   user: (AuthUser & { perfil?: any }) | null;
 }
 
+export interface LoginResult {
+  user?: AuthUser;
+  error?: string;
+  /** Presente cuando la contraseña es correcta pero el email no verificó. */
+  code?: string;
+}
+
 // Get current authenticated user from server
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
@@ -25,7 +32,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 }
 
 // Login
-export async function login(email: string, password: string): Promise<{ user?: AuthUser; error?: string }> {
+export async function login(email: string, password: string): Promise<LoginResult> {
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
@@ -33,15 +40,31 @@ export async function login(email: string, password: string): Promise<{ user?: A
       body: JSON.stringify({ email, password }),
     });
     const json = await res.json();
-    if (!res.ok) return { error: json.error };
+    if (!res.ok) return { error: json.error, code: json.code };
     return { user: json.user };
   } catch {
     return { error: 'Error de conexión' };
   }
 }
 
+/** Reenvía el email de verificación (exige email + contraseña). */
+export async function resendVerification(email: string, password: string): Promise<{ error?: string; message?: string; devVerificationUrl?: string }> {
+  try {
+    const res = await fetch('/api/auth/resend-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const json = await res.json();
+    if (!res.ok) return { error: json.error };
+    return { message: json.message, devVerificationUrl: json.devVerificationUrl };
+  } catch {
+    return { error: 'Error de conexión' };
+  }
+}
+
 // Register
-export async function register(data: any): Promise<{ userId?: string; error?: string }> {
+export async function register(data: any): Promise<{ userId?: string; error?: string; devVerificationUrl?: string }> {
   try {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
@@ -50,7 +73,7 @@ export async function register(data: any): Promise<{ userId?: string; error?: st
     });
     const json = await res.json();
     if (!res.ok) return { error: json.error };
-    return { userId: json.userId };
+    return { userId: json.userId, devVerificationUrl: json.devVerificationUrl };
   } catch {
     return { error: 'Error de conexión' };
   }
