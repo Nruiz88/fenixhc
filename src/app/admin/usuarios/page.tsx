@@ -132,17 +132,21 @@ export default function AdminUsuariosPage() {
               {/* Rol */}
               <div className="space-y-2">
                 <Label className="text-gray-400 text-sm">Rol *</Label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {/* 8 roles: en md 3 columnas en vez de 4, porque nombres como
+                    "Socio Benefactor" no entran en un cuarto de pantalla. */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                   {ROLES.map((r) => (
                     <button
                       key={r}
                       type="button"
                       onClick={() => setForm({ ...form, tipo: r })}
                       title={ROL_DESCRIPCION[r]}
-                      className={`p-3 rounded-xl border text-left transition-all ${form.tipo === r ? 'border-[#DC2626] bg-[#DC2626]/10' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}
+                      className={`min-w-0 p-3 rounded-xl border text-left transition-all ${form.tipo === r ? 'border-[#DC2626] bg-[#DC2626]/10' : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'}`}
                     >
-                      <p className="text-base mb-0.5">{ROL_ICONO[r]}</p>
-                      <p className="text-xs font-semibold text-white">{ROL_LABEL[r]}</p>
+                      <p className="text-base mb-0.5 leading-none">{ROL_ICONO[r]}</p>
+                      <p className="text-xs font-semibold text-white break-words hyphens-auto leading-tight mt-1">
+                        {ROL_LABEL[r]}
+                      </p>
                     </button>
                   ))}
                 </div>
@@ -232,17 +236,19 @@ export default function AdminUsuariosPage() {
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-white">{u.nombre} {u.apellido}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="font-semibold text-white truncate">{u.nombre} {u.apellido}</p>
                     <span
                       title={ROL_DESCRIPCION[u.rol as Rol]}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${ROL_COLOR[u.rol as Rol]?.bg ?? 'bg-gray-500/20'} ${ROL_COLOR[u.rol as Rol]?.fg ?? 'text-gray-400'}`}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 ${ROL_COLOR[u.rol as Rol]?.bg ?? 'bg-gray-500/20'} ${ROL_COLOR[u.rol as Rol]?.fg ?? 'text-gray-400'}`}
                     >
                       {ROL_LABEL[u.rol as Rol] ?? u.rol}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-400">{u.correo}</p>
-                  {u.dni && <p className="text-xs text-gray-500">DNI: {u.dni}</p>}
+                  {/* truncate + title: los emails son cadenas largas sin
+                      puntos de corte y revientan la tarjeta en pantallas angostas. */}
+                  <p className="text-sm text-gray-400 truncate" title={u.correo}>{u.correo}</p>
+                  {u.dni && <p className="text-xs text-gray-500 truncate">DNI: {u.dni}</p>}
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs text-gray-500">

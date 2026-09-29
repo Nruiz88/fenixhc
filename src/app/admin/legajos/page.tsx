@@ -65,9 +65,14 @@ export default function AdminLegajos() {
                 {/* Personal Info */}
                 <div>
                   <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2"><User className="h-3.5 w-3.5" /> Datos Personales</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {/* sm:grid-cols-3 en vez de 4: el correo y la dirección
+                      necesitan más ancho que el DNI o el estado. */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {[['DNI', selected.perfiles?.dni], ['CUIL', selected.perfiles?.cuil || '-'], ['Correo', selected.perfiles?.correo], ['Teléfono', selected.perfiles?.telefono || '-'], ['Dirección', selected.perfiles?.direccion || '-'], ['Estado', selected.club_activo ? 'Activo' : 'Inactivo']].map(([label, val]) => (
-                      <div key={label}><p className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</p><p className="text-sm text-white mt-0.5">{val}</p></div>
+                      <div key={label} className="min-w-0">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</p>
+                        <p className="text-sm text-white mt-0.5 break-words" title={String(val)}>{val}</p>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -79,7 +84,7 @@ export default function AdminLegajos() {
                   <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2"><Users className="h-3.5 w-3.5" /> Familia</h3>
                   {selected.familias.length > 0 ? selected.familias.map((f: any) => (
                     <div key={f.id} className="p-3 bg-gray-800/50 rounded-lg mb-2 flex items-center justify-between">
-                      <div><p className="text-sm font-medium text-white">{f.padre?.nombre} {f.padre?.apellido}</p><p className="text-xs text-gray-500">{f.tipo_vinculo} • DNI: {f.padre?.dni}</p></div>
+                      <div className="min-w-0"><p className="text-sm font-medium text-white truncate">{f.padre?.nombre} {f.padre?.apellido}</p><p className="text-xs text-gray-500 truncate">{f.tipo_vinculo} • DNI: {f.padre?.dni}</p></div>
                       {f.padre?.telefono && <p className="text-xs text-gray-400">{f.padre.telefono}</p>}
                     </div>
                   )) : <p className="text-sm text-gray-500">Sin padre asociado</p>}

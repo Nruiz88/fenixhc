@@ -19,7 +19,7 @@ const NAV_ITEMS = [
 
 function Sidebar({ currentPath, user, onLogout }: { currentPath: string; user: any; onLogout: () => void }) {
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       <div className="p-5 border-b border-gray-800">
         <Link href="/socio-cadete/dashboard" className="flex items-center gap-3">
           <img src="/logo.png" alt="Fenix" className="h-9 w-9 object-contain" />
@@ -42,7 +42,7 @@ function Sidebar({ currentPath, user, onLogout }: { currentPath: string; user: a
           </div>
         </div>
       )}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 min-h-0 p-3 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
           const isActive = currentPath === item.href || currentPath.startsWith(item.href + '/');
           return (
@@ -91,7 +91,7 @@ export default function SocioCadeteLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-gray-950 flex">
-      <aside className="hidden lg:flex w-64 bg-gray-900 border-r border-gray-800 flex-col shrink-0">
+      <aside className="hidden lg:flex w-64 bg-gray-900 border-r border-gray-800 flex-col shrink-0 min-h-0">
         <Sidebar currentPath={pathname} user={user} onLogout={handleLogout} />
       </aside>
       <div className="flex-1 flex flex-col min-w-0">
@@ -130,7 +130,7 @@ export default function SocioCadeteLayout({ children }: { children: React.ReactN
             )}
           </div>
         </header>
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
+        <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-x-hidden">{children}</main>
       </div>
     </div>
   );

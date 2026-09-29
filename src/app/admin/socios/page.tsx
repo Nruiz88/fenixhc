@@ -39,7 +39,7 @@ export default function AdminSocios() {
                   <h3 className="font-semibold text-white truncate">{s.nombre} {s.apellido}</h3>
                   <p className="text-xs text-gray-500 mt-0.5">DNI: {s.dni}</p>
                 </div>
-                <Badge variant="outline" className="border-[#DC2626]/30 text-[#DC2626] shrink-0">Padre</Badge>
+                <Badge variant="outline" className="border-[#DC2626]/30 text-[#DC2626] shrink-0">Benefactor</Badge>
               </div>
               <div className="mt-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm text-gray-400">

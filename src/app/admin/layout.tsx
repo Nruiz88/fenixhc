@@ -32,17 +32,20 @@ const NAV_ITEMS: { label: string; href: string; icon: any; modulo: Modulo }[] = 
 
 function Sidebar({ currentPath, onLogout, rol }: { currentPath: string; onLogout: () => void; rol?: Rol }) {
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-5 border-b border-gray-800">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="p-5 border-b border-gray-800 shrink-0">
         <Link href="/admin/dashboard" className="flex items-center gap-3">
-          <img src="/logo.png" alt="Fenix" className="h-9 w-9 object-contain" />
-          <div>
+          <img src="/logo.png" alt="Fenix" className="h-9 w-9 object-contain shrink-0" />
+          <div className="min-w-0">
             <p className="font-bold text-white text-lg leading-tight">FENIX</p>
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider">Admin Panel</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider truncate">Panel de la Directiva</p>
           </div>
         </Link>
       </div>
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      {/* min-h-0 es necesario: en una columna flex, un hijo con flex-1 +
+          overflow-y-auto sin min-h-0 no se constrain y la barra crece mas alla
+          del viewport en vez de scrollear. */}
+      <nav className="flex-1 min-h-0 p-3 space-y-1 overflow-y-auto">
         {NAV_ITEMS.filter((item) => !rol || tieneModulo(rol, item.modulo)).map((item) => {
           const isActive = currentPath === item.href || currentPath.startsWith(item.href + '/');
           return (
@@ -51,7 +54,7 @@ function Sidebar({ currentPath, onLogout, rol }: { currentPath: string; onLogout
                 isActive ? 'bg-[#DC2626] text-white shadow-lg shadow-[#DC2626]/20' : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
               }`}>
               <item.icon className="h-4 w-4 shrink-0" />
-              {item.label}
+              <span className="truncate">{item.label}</span>
             </Link>
           );
         })}
@@ -91,7 +94,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-gray-950 flex">
-      <aside className="hidden lg:flex w-64 bg-gray-900 border-r border-gray-800 flex-col shrink-0">
+      <aside className="hidden lg:flex w-64 bg-gray-900 border-r border-gray-800 flex-col shrink-0 min-h-0">
         <Sidebar currentPath={pathname} onLogout={handleLogout} rol={user?.rol} />
       </aside>
       <div className="flex-1 flex flex-col min-w-0">
@@ -130,7 +133,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             )}
           </div>
         </header>
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
+        {/* min-w-0 + overflow-x-hidden: sin esto, una tabla ancha estira el
+            contenedor y empuja la pagina completa (incluido el header). */}
+        <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-x-hidden">{children}</main>
       </div>
     </div>
   );

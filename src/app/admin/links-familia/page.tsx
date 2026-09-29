@@ -164,34 +164,36 @@ export default function AdminLinksFamilia() {
           {familias.length > 0 ? (
             <div className="divide-y divide-gray-800">
               {familias.map((f: any) => (
-                <div key={f.id} className="px-6 py-5 flex items-center justify-between hover:bg-gray-800/50 transition-colors group">
-                  <div className="flex items-center gap-4">
-                    {/* Padre avatar */}
+                <div key={f.id} className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:bg-gray-800/50 transition-colors group">
+                  {/* flex-wrap: con 5 bloques en una fila, en pantallas
+                      angostas la fila se salia del panel. */}
+                  <div className="flex flex-wrap items-center gap-4 min-w-0 flex-1">
+                    {/* Benefactor avatar */}
                     <div className="h-11 w-11 rounded-xl bg-[#DC2626]/10 flex items-center justify-center shrink-0">
                       <span className="text-[#DC2626] font-bold text-sm">{f.padre?.nombre?.[0]}{f.padre?.apellido?.[0]}</span>
                     </div>
 
-                    {/* Padre info */}
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">{f.padre?.nombre} {f.padre?.apellido}</p>
-                      <p className="text-xs text-gray-500">{f.padre?.correo}</p>
+                    {/* Benefactor info */}
+                    <div className="min-w-0 flex-1 basis-32">
+                      <p className="text-sm font-semibold text-white truncate">{f.padre?.nombre} {f.padre?.apellido}</p>
+                      <p className="text-xs text-gray-500 truncate" title={f.padre?.correo}>{f.padre?.correo}</p>
                     </div>
 
-                    {/* Arrow + vínculo */}
-                    <div className="flex flex-col items-center mx-4">
+                    {/* Arrow + vinculo */}
+                    <div className="flex flex-col items-center shrink-0">
                       <ArrowRight className="h-5 w-5 text-[#DC2626]" />
                       <span className="text-[10px] text-gray-500 mt-0.5 capitalize">{f.tipo_vinculo}</span>
                     </div>
 
-                    {/* Deportista avatar */}
+                    {/* Cadete avatar */}
                     <div className="h-11 w-11 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
                       <span className="text-blue-400 font-bold text-sm">{f.hijo?.nombre?.[0]}{f.hijo?.apellido?.[0]}</span>
                     </div>
 
-                    {/* Deportista info */}
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-white">{f.hijo?.nombre} {f.hijo?.apellido}</p>
-                      <p className="text-xs text-gray-500">{f.hijo?.correo}</p>
+                    {/* Cadete info */}
+                    <div className="min-w-0 flex-1 basis-32">
+                      <p className="text-sm font-semibold text-white truncate">{f.hijo?.nombre} {f.hijo?.apellido}</p>
+                      <p className="text-xs text-gray-500 truncate" title={f.hijo?.correo}>{f.hijo?.correo}</p>
                     </div>
                   </div>
 

@@ -44,8 +44,10 @@ export default async function AdminDashboard() {
           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
           <Users className="h-8 w-8 mb-3 text-emerald-200" />
           <p className="text-sm text-emerald-200 font-medium">Socios Benefactores</p>
-          <p className="text-4xl font-extrabold mt-1">{sociosCount}</p>
-          <p className="text-xs text-[#DC2626] mt-2">Cuota mensual: ${cobroMensual.toLocaleString('es-AR')}</p>
+          <p className="text-4xl font-extrabold mt-1 tabular-nums">{sociosCount}</p>
+          <p className="text-xs text-[#DC2626] mt-2 truncate">
+            Cuota mensual: ${cobroMensual.toLocaleString('es-AR')}
+          </p>
         </div>
 
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 p-6 text-white shadow-lg shadow-blue-500/20">
@@ -60,16 +62,22 @@ export default async function AdminDashboard() {
           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
           <AlertCircle className="h-8 w-8 mb-3 text-amber-200" />
           <p className="text-sm text-amber-200 font-medium">Cuotas Pendientes</p>
-          <p className="text-4xl font-extrabold mt-1">{cuotasPendientes.length}</p>
-          <p className="text-xs text-amber-300 mt-2">${(cuotasPendientes.length * 75000).toLocaleString('es-AR')} a cobrar</p>
+          <p className="text-4xl font-extrabold mt-1 tabular-nums">{cuotasPendientes.length}</p>
+          <p className="text-xs text-amber-300 mt-2 truncate">
+            ${(cuotasPendientes.length * 75000).toLocaleString('es-AR')} a cobrar
+          </p>
         </div>
 
         <div className={`relative overflow-hidden rounded-2xl p-6 text-white shadow-lg ${balance >= 0 ? 'bg-gradient-to-br from-violet-600 to-purple-700 shadow-violet-500/20' : 'bg-gradient-to-br from-red-600 to-red-700 shadow-red-500/20'}`}>
           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
           <TrendingUp className="h-8 w-8 mb-3 text-white/60" />
           <p className="text-sm text-white/80 font-medium">Balance Total</p>
-          <p className="text-4xl font-extrabold mt-1">${balance.toLocaleString('es-AR')}</p>
-          <p className="text-xs text-white/60 mt-2">Ingresos + Cuotas - Egresos</p>
+          {/* break-words: un balance de 6 cifras en text-4xl no entra en un
+              cuarto de pantalla y empujaba el contenido hacia afuera. */}
+          <p className="text-3xl sm:text-4xl font-extrabold mt-1 tabular-nums break-words">
+            ${balance.toLocaleString('es-AR')}
+          </p>
+          <p className="text-xs text-white/60 mt-2 truncate">Ingresos + Cuotas - Egresos</p>
         </div>
       </div>
 
@@ -80,7 +88,7 @@ export default async function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-400">Ingresos Totales</p>
-                <p className="text-2xl font-bold text-[#DC2626] mt-1">${(totalIngresos + totalExtra).toLocaleString('es-AR')}</p>
+                <p className="text-2xl font-bold text-[#DC2626] mt-1 tabular-nums truncate">${(totalIngresos + totalExtra).toLocaleString('es-AR')}</p>
               </div>
               <div className="h-12 w-12 rounded-xl bg-[#DC2626]/10 flex items-center justify-center">
                 <TrendingUp className="h-6 w-6 text-[#DC2626]" />
@@ -93,7 +101,7 @@ export default async function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-400">Egresos Totales</p>
-                <p className="text-2xl font-bold text-red-400 mt-1">${totalEgresos.toLocaleString('es-AR')}</p>
+                <p className="text-2xl font-bold text-red-400 mt-1 tabular-nums truncate">${totalEgresos.toLocaleString('es-AR')}</p>
               </div>
               <div className="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center">
                 <TrendingDown className="h-6 w-6 text-red-400" />
@@ -106,7 +114,7 @@ export default async function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-400">Cuotas al Día</p>
-                <p className="text-2xl font-bold text-blue-400 mt-1">{cuotasPagadas.length}/{cuotas.length || 0}</p>
+                <p className="text-2xl font-bold text-blue-400 mt-1 tabular-nums">{cuotasPagadas.length}/{cuotas.length || 0}</p>
               </div>
               <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
                 <CheckCircle className="h-6 w-6 text-blue-400" />
