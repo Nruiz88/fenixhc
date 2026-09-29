@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { queryOne, insert, uuid } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
@@ -32,7 +33,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Demasiados registros desde esta IP. Intentá en unos minutos.' }, { status: 429 });
     }
 
-    const body = await request.json();
+    const leido = await leerJson(request);
+    if (!leido.ok) return RESP_BAD_JSON();
+    const body = leido.data as any;
     const {
       rol: rolSolicitado = 'socio_benefactor',
       nombre: nombreRaw, apellido: apellidoRaw, dni: dniRaw, cuil: cuilRaw,

@@ -1,190 +1,282 @@
 export const dynamic = 'force-dynamic';
 
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { requireModulo } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, UserCheck, DollarSign, TrendingUp, TrendingDown, Calendar, AlertCircle, CheckCircle } from 'lucide-react';
+import { money, percent, fecha } from '@/lib/format';
+import { PageHeader, StatCard, Panel, EmptyState, StatusPill } from '@/components/admin/ui';
+import { Button } from '@/components/ui/button';
+import { BarrasComposicion } from '@/components/admin/charts';
+import {
+  Users, UserCheck, Wallet, TrendingUp, TrendingDown, Calendar,
+  AlertCircle, ArrowRight, Clock, CheckCircle2,
+} from 'lucide-react';
+
+const n = (v: unknown): number => {
+  const x = Number(v ?? 0);
+  return Number.isFinite(x) ? x : 0;
+};
 
 export default async function AdminDashboard() {
-  const [sociosRows, jugadoresRows, cuotas, finanzas, reservas, notifs] = await Promise.all([
-    query<{ c: number }>("SELECT COUNT(*) AS c FROM perfiles WHERE rol = 'socio_benefactor'"),
-    query<{ c: number }>('SELECT COUNT(*) AS c FROM deportistas'),
-    query('SELECT * FROM cuotas'),
-    query('SELECT * FROM finanzas'),
-    query(`SELECT r.*, c.nombre AS cancha_nombre
-           FROM reservas r
-           LEFT JOIN canchas c ON c.id = r.cancha_id
-           ORDER BY r.fecha DESC LIMIT 5`),
-    query('SELECT * FROM notificaciones ORDER BY created_at DESC LIMIT 5'),
-  ]);
+  const auth = await requireModulo('dashboard');
+  if ('error' in auth) redirect('/');
 
-  const sociosCount = Number(sociosRows[0]?.c || 0);
-  const jugadoresCount = Number(jugadoresRows[0]?.c || 0);
+  const mesActual = new Date().getMonth() + 1;
+  const anioActual = new Date().getFullYear();
 
-  const cuotasPagadas = cuotas.filter((c: any) => c.estado === 'pagada') || [];
-  const cuotasPendientes = cuotas.filter((c: any) => c.estado === 'pendiente') || [];
-  const totalIngresos = cuotasPagadas.reduce((s: number, c: any) => s + Number(c.monto), 0);
-  const ingresos = finanzas.filter((f: any) => f.tipo === 'ingreso') || [];
-  const egresos = finanzas.filter((f: any) => f.tipo === 'egreso') || [];
-  const totalExtra = ingresos.reduce((s: number, f: any) => s + Number(f.monto), 0);
-  const totalEgresos = egresos.reduce((s: number, f: any) => s + Number(f.monto), 0);
-  const balance = totalIngresos + totalExtra - totalEgresos;
-  const cobroMensual = 75000 * sociosCount;
+  const [sociosRows, jugadoresRows, cuotasMes, caja, reservas, notifs, proximos, categorias] =
+    await Promise.all([
+      query<{ c: number }>("SELECT COUNT(*) AS c FROM perfiles WHERE rol = 'socio_benefactor'"),
+      query<{ c: number }>('SELECT COUNT(*) AS c FROM deportistas'),
+      query<any>(
+        `SELECT COUNT(*) AS emitidas,
+                COALESCE(SUM(monto), 0) AS montoEmitido,
+                COALESCE(SUM(CASE WHEN estado='pagada' THEN monto ELSE 0 END), 0) AS cobrado
+         FROM cuotas WHERE anio = ? AND mes = ?`,
+        [anioActual, mesActual]
+      ),
+      query<any>(
+        `SELECT
+           COALESCE(SUM(CASE WHEN tipo='ingreso' THEN monto ELSE 0 END), 0) AS ingresos,
+           COALESCE(SUM(CASE WHEN tipo='egreso'  THEN monto ELSE 0 END), 0) AS egresos
+         FROM finanzas
+         WHERE DATE_FORMAT(fecha, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')`
+      ),
+      query<any>(
+        `SELECT r.id, r.fecha, r.hora_inicio, r.hora_fin, r.estado, c.nombre AS cancha
+         FROM reservas r
+         LEFT JOIN canchas c ON c.id = r.cancha_id
+         WHERE r.fecha >= CURDATE()
+         ORDER BY r.fecha, r.hora_inicio
+         LIMIT 5`
+      ),
+      query<any>('SELECT * FROM notificaciones ORDER BY created_at DESC LIMIT 4'),
+      query<any>(
+        `SELECT fecha, hora, rival, estado, es_local FROM partidos
+         WHERE fecha >= CURDATE() ORDER BY fecha LIMIT 4`
+      ),
+      query<any>(
+        `SELECT categoria, SUM(monto) AS total
+         FROM finanzas
+         WHERE tipo = 'egreso'
+           AND DATE_FORMAT(fecha, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m')
+         GROUP BY categoria ORDER BY total DESC LIMIT 5`
+      ),
+    ]);
+
+  const socios = n(sociosRows[0]?.c);
+  const jugadores = n(jugadoresRows[0]?.c);
+  const emitida = n(cuotasMes[0]?.montoEmitido);
+  const cobrado = n(cuotasMes[0]?.cobrado);
+  const cobranza = emitida > 0 ? cobrado / emitida : 0;
+
+  const ingresosMes = n(caja[0]?.ingresos);
+  const egresosMes = n(caja[0]?.egresos);
+  const resultado = ingresosMes - egresosMes;
+
+  const egresosPorCat = categorias.map((c: any) => ({
+    etiqueta: c.categoria || 'Sin categoría',
+    valor: n(c.total),
+    porcentaje: egresosMes > 0 ? n(c.total) / egresosMes : 0,
+  }));
+
+  // Lo primero que ve alguien nuevo: una tarea pendiente concreta, no un
+  // número suelto. Si la cobranza del mes está floja, lo primero que aparece
+  // es el enlace a la lista de pendientes.
+  const pendientes = emitida - cobrado;
+  const cobranzaFloja = emitida > 0 && cobranza < 0.7;
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white">Panel del Club</h1>
-        <p className="text-gray-400 mt-1">Resumen general del club deportivo</p>
+    <div className="space-y-6">
+      <PageHeader
+        title="Panel del club"
+        description="Resumen del mes en curso y lo que necesita atención."
+      />
+
+      {cobranzaFloja && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warn/25 bg-warn/10 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-warn">
+              Quedan {money(pendientes)} de cuotas sin cobrar
+            </p>
+            <p className="text-xs text-warn/80">
+              Se emitió {money(emitida)} y se cobró {money(cobrado)} ({percent(cobranza, 0)}).
+            </p>
+          </div>
+          <Button size="sm" render={<Link href="/admin/pagos" />}>
+            Ver pendientes <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Cifras del mes */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Ingresos del mes"
+          value={money(ingresosMes)}
+          hint={`Caja: ${mesActual}/${anioActual}`}
+          tone="ok"
+          icon={<TrendingUp className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Egresos del mes"
+          value={money(egresosMes)}
+          hint={`${categorias.length} categorías`}
+          tone="danger"
+          icon={<TrendingDown className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Resultado del mes"
+          value={money(resultado)}
+          hint={ingresosMes > 0 ? `Margen ${percent(resultado / ingresosMes, 1)}` : 'Sin ingresos cargados'}
+          tone={resultado >= 0 ? 'ok' : 'danger'}
+          icon={<Wallet className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Cobranza"
+          value={emitida > 0 ? percent(cobranza, 0) : '—'}
+          hint={`${money(cobrado)} de ${money(emitida)}`}
+          tone={cobranza >= 0.8 ? 'ok' : cobranza >= 0.5 ? 'warn' : 'danger'}
+          icon={<CheckCircle2 className="h-4 w-4" />}
+        />
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 p-6 text-white shadow-lg shadow-[#DC2626]/20">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
-          <Users className="h-8 w-8 mb-3 text-emerald-200" />
-          <p className="text-sm text-emerald-200 font-medium">Socios Benefactores</p>
-          <p className="text-4xl font-extrabold mt-1 tabular-nums">{sociosCount}</p>
-          <p className="text-xs text-[#DC2626] mt-2 truncate">
-            Cuota mensual: ${cobroMensual.toLocaleString('es-AR')}
-          </p>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 p-6 text-white shadow-lg shadow-blue-500/20">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
-          <UserCheck className="h-8 w-8 mb-3 text-blue-200" />
-          <p className="text-sm text-blue-200 font-medium">Jugadores Activos</p>
-          <p className="text-4xl font-extrabold mt-1">{jugadoresCount}</p>
-          <p className="text-xs text-blue-300 mt-2">Categoría Cadete</p>
-        </div>
-
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-white shadow-lg shadow-amber-500/20">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
-          <AlertCircle className="h-8 w-8 mb-3 text-amber-200" />
-          <p className="text-sm text-amber-200 font-medium">Cuotas Pendientes</p>
-          <p className="text-4xl font-extrabold mt-1 tabular-nums">{cuotasPendientes.length}</p>
-          <p className="text-xs text-amber-300 mt-2 truncate">
-            ${(cuotasPendientes.length * 75000).toLocaleString('es-AR')} a cobrar
-          </p>
-        </div>
-
-        <div className={`relative overflow-hidden rounded-2xl p-6 text-white shadow-lg ${balance >= 0 ? 'bg-gradient-to-br from-violet-600 to-purple-700 shadow-violet-500/20' : 'bg-gradient-to-br from-red-600 to-red-700 shadow-red-500/20'}`}>
-          <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-8 translate-x-8" />
-          <TrendingUp className="h-8 w-8 mb-3 text-white/60" />
-          <p className="text-sm text-white/80 font-medium">Balance Total</p>
-          {/* break-words: un balance de 6 cifras en text-4xl no entra en un
-              cuarto de pantalla y empujaba el contenido hacia afuera. */}
-          <p className="text-3xl sm:text-4xl font-extrabold mt-1 tabular-nums break-words">
-            ${balance.toLocaleString('es-AR')}
-          </p>
-          <p className="text-xs text-white/60 mt-2 truncate">Ingresos + Cuotas - Egresos</p>
-        </div>
+      {/* Personas */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <StatCard
+          label="Socios benefactores"
+          value={socios}
+          hint="Personas responsables de cuotas y reservas"
+          icon={<Users className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Jugadores inscriptos"
+          value={jugadores}
+          hint="Fichas con documentos e historial"
+          icon={<UserCheck className="h-4 w-4" />}
+        />
       </div>
 
-      {/* Second Row Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-400">Ingresos Totales</p>
-                <p className="text-2xl font-bold text-[#DC2626] mt-1 tabular-nums truncate">${(totalIngresos + totalExtra).toLocaleString('es-AR')}</p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-[#DC2626]/10 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-[#DC2626]" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-400">Egresos Totales</p>
-                <p className="text-2xl font-bold text-red-400 mt-1 tabular-nums truncate">${totalEgresos.toLocaleString('es-AR')}</p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-red-500/10 flex items-center justify-center">
-                <TrendingDown className="h-6 w-6 text-red-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-400">Cuotas al Día</p>
-                <p className="text-2xl font-bold text-blue-400 mt-1 tabular-nums">{cuotasPagadas.length}/{cuotas.length || 0}</p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Activity & Reservas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Próximas Reservas */}
-        <Card className="bg-gray-900 border-gray-800">
-          <CardHeader className="border-b border-gray-800">
-            <CardTitle className="text-white flex items-center gap-2 text-base">
-              <Calendar className="h-4 w-4 text-[#DC2626]" />
-              Próximas Reservas
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {reservas && reservas.length > 0 ? (
-              <div className="divide-y divide-gray-800">
-                {reservas.map((r: any) => (
-                  <div key={r.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-800/50 transition-colors">
-                    <div>
-                      <p className="text-sm font-medium text-white">{r.cancha_nombre || 'Cancha'}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{r.fecha} • {r.hora_inicio} - {r.hora_fin}</p>
-                    </div>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${r.estado === 'confirmada' ? 'bg-[#DC2626]/10 text-[#DC2626]' : 'bg-gray-500/10 text-gray-400'}`}>
-                      {r.estado}
-                    </span>
+      {/* Agenda + egresos */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Panel
+          title="Próximos partidos"
+          description="Agenda deportiva"
+          actions={
+            <Button size="sm" variant="ghost" render={<Link href="/admin/partidos" />}>
+              Ver todos
+            </Button>
+          }
+          bodyClassName="p-0"
+        >
+          {proximos.length === 0 ? (
+            <EmptyState
+              icon={<Calendar className="h-6 w-6" />}
+              title="No hay partidos programados"
+              description="Cuando carguen el calendario, los próximos partidos aparecen acá."
+              action={<Button size="sm" render={<Link href="/admin/partidos" />}>Cargar un partido</Button>}
+            />
+          ) : (
+            <ul className="divide-y divide-line">
+              {proximos.map((p: any, i: number) => (
+                <li key={i} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-main">{p.rival}</p>
+                    <p className="text-xs text-dim">
+                      {fecha(p.fecha)}{p.hora ? ` · ${p.hora.slice(0, 5)}` : ''} · {p.es_local ? 'Local' : 'Visitante'}
+                    </p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="px-6 py-8 text-center text-gray-500 text-sm">Sin reservas próximas</div>
-            )}
-          </CardContent>
-        </Card>
+                  <StatusPill tone={p.estado === 'programado' ? 'info' : 'neutral'}>{p.estado}</StatusPill>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
 
-        {/* Últimas Notificaciones */}
-        <Card className="bg-gray-900 border-gray-800">
-          <CardHeader className="border-b border-gray-800">
-            <CardTitle className="text-white flex items-center gap-2 text-base">
-              <AlertCircle className="h-4 w-4 text-amber-400" />
-              Últimas Notificaciones
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {notifs && notifs.length > 0 ? (
-              <div className="divide-y divide-gray-800">
-                {notifs.map((n: any) => (
-                  <div key={n.id} className="px-6 py-4 hover:bg-gray-800/50 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-white">{n.titulo}</p>
-                        <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{n.mensaje}</p>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${n.tipo === 'urgente' ? 'bg-red-500/10 text-red-400' : n.tipo === 'pago' ? 'bg-amber-500/10 text-amber-400' : 'bg-blue-500/10 text-blue-400'}`}>
-                        {n.tipo}
-                      </span>
-                    </div>
+        <Panel
+          title="Próximas reservas de cancha"
+          description="Turnos confirmados"
+          actions={
+            <Button size="sm" variant="ghost" render={<Link href="/admin/reservas" />}>
+              Ver todas
+            </Button>
+          }
+          bodyClassName="p-0"
+        >
+          {reservas.length === 0 ? (
+            <EmptyState
+              icon={<Clock className="h-6 w-6" />}
+              title="Sin reservas próximas"
+              description="Los turnos que toman los socios se listan acá por fecha."
+            />
+          ) : (
+            <ul className="divide-y divide-line">
+              {reservas.map((r: any) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-main">{r.cancha || 'Cancha'}</p>
+                    <p className="text-xs text-dim">
+                      {fecha(r.fecha)} · {String(r.hora_inicio).slice(0, 5)} a {String(r.hora_fin).slice(0, 5)}
+                    </p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="px-6 py-8 text-center text-gray-500 text-sm">Sin notificaciones</div>
-            )}
-          </CardContent>
-        </Card>
+                  <StatusPill tone={r.estado === 'confirmada' ? 'ok' : 'neutral'}>{r.estado}</StatusPill>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+
+      {/* Egresos + avisos */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <Panel
+          title="En qué se fue la plata este mes"
+          description={`Total ${money(egresosMes)}`}
+          actions={
+            <Button size="sm" variant="ghost" render={<Link href="/admin/contabilidad" />}>
+              Contabilidad
+            </Button>
+          }
+        >
+          <BarrasComposicion datos={egresosPorCat} vacio="No hay egresos cargados este mes." />
+        </Panel>
+
+        <Panel
+          title="Avisos recientes"
+          bodyClassName="p-0"
+          actions={
+            <Button size="sm" variant="ghost" render={<Link href="/admin/notificaciones" />}>
+              Ver todas
+            </Button>
+          }
+        >
+          {notifs.length === 0 ? (
+            <EmptyState
+              icon={<AlertCircle className="h-6 w-6" />}
+              title="No hay avisos"
+              description="Los comunicados que envíes a la directiva aparecerán en esta lista."
+            />
+          ) : (
+            <ul className="divide-y divide-line">
+              {notifs.map((x: any) => (
+                <li key={x.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-main">{x.titulo}</p>
+                      <p className="truncate text-xs text-dim">{x.mensaje}</p>
+                    </div>
+                    <StatusPill
+                      tone={x.tipo === 'urgente' ? 'danger' : x.tipo === 'pago' ? 'warn' : 'info'}
+                    >
+                      {x.tipo}
+                    </StatusPill>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
       </div>
     </div>
   );

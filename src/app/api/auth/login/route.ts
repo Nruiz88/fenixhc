@@ -3,10 +3,16 @@ import { queryOne } from '@/lib/db';
 import { verifyPassword, createToken, setAuthCookie } from '@/lib/auth';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
 import { emailSchema } from '@/lib/schemas';
+import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json();
+    // Un body que no es JSON válido (curl mal citado, proxy que lo parte, un
+    // cliente roto) es un error del solicitante, no una falla del servidor.
+    const leido = await leerJson<{ email?: string; password?: string }>(request);
+    if (!leido.ok) return RESP_BAD_JSON();
+
+    const { email, password } = leido.data;
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 });

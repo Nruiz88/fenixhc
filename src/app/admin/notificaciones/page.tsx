@@ -1,86 +1,217 @@
 'use client';
+
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/adminQuery';
+import { toast } from 'sonner';
+import { fechaHora } from '@/lib/format';
+import { ROL_LABEL, type Rol } from '@/lib/roles';
+import { PageHeader, Panel, EmptyState, StatusPill, Hint } from '@/components/admin/ui';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner';
-import { Send, Bell, AlertTriangle, Info, Zap } from 'lucide-react';
+import { Send, Bell, AlertTriangle, Info, Zap, Trophy } from 'lucide-react';
+
+const TIPOS = [
+  { value: 'general', label: 'General', ayuda: 'Aviso común para todos.' },
+  { value: 'pago', label: 'Pago', ayuda: 'Recordatorio de cuotas.' },
+  { value: 'deportivo', label: 'Deportivo', ayuda: 'Entrenamientos, partidos, citaciones.' },
+  { value: 'urgente', label: 'Urgente', usa: true, ayuda: 'Solo para lo que no puede esperar.' },
+] as const;
+
+const TONO: Record<string, { tone: 'danger' | 'warn' | 'info' | 'neutral'; icon: any }> = {
+  urgente: { tone: 'danger', icon: AlertTriangle },
+  pago: { tone: 'warn', icon: Zap },
+  deportivo: { tone: 'info', icon: Trophy },
+  general: { tone: 'neutral', icon: Info },
+};
+
+const FORM_VACIO = { titulo: '', mensaje: '', tipo: 'general', destinatario_rol: 'todos' };
 
 export default function AdminNotificaciones() {
   const [notifs, setNotifs] = useState<any[]>([]);
-  const [form, setForm] = useState({ titulo: '', mensaje: '', tipo: 'general', destinatario_rol: 'todos' });
-  useEffect(() => { load(); }, []);
-  async function load() {
-    const { data } = await db.select('notificaciones', '*', undefined, { order: { column: 'created_at', ascending: false }, limit: 20 });
-    setNotifs(data || []);
-  }
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.titulo || !form.mensaje) return;
-    await db.insert('notificaciones', { titulo: form.titulo, mensaje: form.mensaje, tipo: form.tipo, destinatario_rol: form.destinatario_rol });
-    toast.success('Notificación enviada');
-    setForm({ titulo: '', mensaje: '', tipo: 'general', destinatario_rol: 'todos' });
-    load();
-  };
+  const [cargando, setCargando] = useState(true);
+  const [enviando, setEnviando] = useState(false);
+  const [form, setForm] = useState({ ...FORM_VACIO });
 
-  const tipoColors: Record<string, string> = { urgente: 'bg-red-500/10 text-red-400 border-red-500/20', pago: 'bg-amber-500/10 text-amber-400 border-amber-500/20', deportivo: 'bg-blue-500/10 text-blue-400 border-blue-500/20', general: 'bg-gray-500/10 text-gray-400 border-gray-500/20' };
-  const tipoIcons: Record<string, any> = { urgente: AlertTriangle, pago: Zap, deportivo: Info, general: Bell };
+  async function cargar() {
+    setCargando(true);
+    const { data } = await db.select<any>('notificaciones', '*', undefined, {
+      order: { column: 'created_at', ascending: false },
+      limit: 30,
+    });
+    setNotifs(data ?? []);
+    setCargando(false);
+  }
+
+  useEffect(() => { cargar(); }, []);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.titulo.trim() || !form.mensaje.trim()) {
+      toast.error('Completá el título y el mensaje');
+      return;
+    }
+
+    setEnviando(true);
+    const { error } = await db.insert('notificaciones', {
+      titulo: form.titulo.trim(),
+      mensaje: form.mensaje.trim(),
+      tipo: form.tipo,
+      destinatario_rol: form.destinatario_rol,
+    });
+    setEnviando(false);
+
+    if (error) { toast.error(error); return; }
+
+    toast.success('Notificación publicada');
+    setForm({ ...FORM_VACIO });
+    await cargar();
+  }
+
+  const tipoElegido = TIPOS.find((t) => t.value === form.tipo);
 
   return (
     <div className="space-y-6">
-      <div><h1 className="text-2xl font-bold text-white">Notificaciones</h1><p className="text-gray-400 text-sm mt-1">Enviar avisos a socios y deportistas</p></div>
+      <PageHeader
+        title="Notificaciones"
+        description="Avisos que aparecen en el portal de las personas destinatarias."
+      />
 
-      {/* Send Form */}
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader className="border-b border-gray-800 pb-3">
-          <CardTitle className="text-white text-base flex items-center gap-2"><Send className="h-4 w-4 text-[#DC2626]" /> Nueva Notificación</CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          <form onSubmit={handleSend} className="space-y-4">
-            <div className="space-y-2"><Label className="text-gray-400 text-sm">Título</Label><Input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Ej: Próximo partido..." className="bg-gray-800 border-gray-700 text-white" required /></div>
-            <div className="space-y-2"><Label className="text-gray-400 text-sm">Mensaje</Label><Textarea value={form.mensaje} onChange={e => setForm({ ...form, mensaje: e.target.value })} rows={3} placeholder="Descripción del aviso..." className="bg-gray-800 border-gray-700 text-white resize-none" required /></div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label className="text-gray-400 text-sm">Tipo</Label><Select value={form.tipo} onValueChange={(v) => v && setForm({ ...form, tipo: v })}><SelectTrigger className="bg-gray-800 border-gray-700 text-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pago">💰 Pago</SelectItem><SelectItem value="deportivo">🏑 Deportivo</SelectItem><SelectItem value="general">📢 General</SelectItem><SelectItem value="urgente">🚨 Urgente</SelectItem></SelectContent></Select></div>
-              <div className="space-y-2"><Label className="text-gray-400 text-sm">Para</Label><Select value={form.destinatario_rol} onValueChange={(v) => v && setForm({ ...form, destinatario_rol: v })}><SelectTrigger className="bg-gray-800 border-gray-700 text-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="todos">👥 Todos</SelectItem><SelectItem value="socio_benefactor">🤝 Socios Benefactores</SelectItem><SelectItem value="socio_cadete">🏃 Socios Cadetes</SelectItem></SelectContent></Select></div>
+      <Hint>
+        Las notificaciones se muestran dentro del sistema, en la campana de cada
+        portal. No se envían por email. Para avisos por correo usá la página de
+        Comunicados.
+      </Hint>
+
+      {/* Formulario */}
+      <Panel
+        title="Publicar una notificación"
+        description={tipoElegido?.ayuda}
+      >
+        <form onSubmit={enviar} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Tipo</Label>
+            <div className="flex flex-wrap gap-2">
+              {TIPOS.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setForm({ ...form, tipo: t.value })}
+                  className={
+                    form.tipo === t.value
+                      ? 'rounded-lg border border-brand bg-brand/10 px-3 py-1.5 text-sm font-medium text-brand transition-colors'
+                      : 'rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm text-muted transition-colors hover:border-line-strong hover:text-main'
+                  }
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
-            <Button type="submit" className="bg-[#DC2626] hover:bg-[#B91C1C]"><Send className="h-4 w-4 mr-1" />Enviar Notificación</Button>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
 
-      {/* History */}
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader className="border-b border-gray-800 pb-3">
-          <CardTitle className="text-white text-base">Historial ({notifs.length})</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {notifs.length > 0 ? (
-            <div className="divide-y divide-gray-800">
-              {notifs.map((n) => {
-                const Icon = tipoIcons[n.tipo] || Bell;
-                return (
-                  <div key={n.id} className="px-6 py-4 hover:bg-gray-800/50 transition-colors">
-                    <div className="flex items-start gap-3">
-                      <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border ${tipoColors[n.tipo] || tipoColors.general}`}><Icon className="h-4 w-4" /></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2"><p className="text-sm font-medium text-white">{n.titulo}</p><span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${tipoColors[n.tipo] || tipoColors.general}`}>{n.tipo}</span><span className="text-[10px] text-gray-600">→ {n.destinatario_rol}</span></div>
-                        <p className="text-xs text-gray-400 mt-1">{n.mensaje}</p>
-                        <p className="text-[10px] text-gray-600 mt-1">{new Date(n.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="titulo">Título *</Label>
+              <Input
+                id="titulo"
+                value={form.titulo}
+                onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+                placeholder="Ej: Cuotas de octubre"
+                maxLength={255}
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="destinatario">Quién la recibe</Label>
+              <Select
+                value={form.destinatario_rol}
+                onValueChange={(v) => v && setForm({ ...form, destinatario_rol: v })}
+              >
+                <SelectTrigger id="destinatario"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los socios</SelectItem>
+                  {(['socio_benefactor', 'socio_cadete'] as Rol[]).map((r) => (
+                    <SelectItem key={r} value={r}>{ROL_LABEL[r]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="mensaje">Mensaje *</Label>
+            <Textarea
+              id="mensaje"
+              value={form.mensaje}
+              onChange={(e) => setForm({ ...form, mensaje: e.target.value })}
+              placeholder="Escribí el aviso completo. Los socios lo leen tal cual, sin formato."
+              rows={5}
+              required
+            />
+          </div>
+
+          <Button type="submit" disabled={enviando} variant={form.tipo === 'urgente' ? 'destructive' : 'default'}>
+            <Send className="h-4 w-4" />
+            {enviando ? 'Publicando…' : 'Publicar notificación'}
+          </Button>
+        </form>
+      </Panel>
+
+      {/* Historial */}
+      <Panel title="Notificaciones publicadas" description={`${notifs.length} recientes`} bodyClassName="p-0">
+        {cargando ? (
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-14 animate-pulse rounded-lg bg-surface-2" />
+            ))}
+          </div>
+        ) : notifs.length === 0 ? (
+          <EmptyState
+            icon={<Bell className="h-6 w-6" />}
+            title="Todavía no publicaste ninguna"
+            description="Usá el formulario de arriba para mandar el primer aviso a los socios."
+          />
+        ) : (
+          <ul className="divide-y divide-line">
+            {notifs.map((x) => {
+              const tono = TONO[x.tipo] ?? TONO.general;
+              const Icono = tono.icon;
+              return (
+                <li key={x.id} className="px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={
+                        tono.tone === 'danger' ? 'grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-danger/10 text-danger'
+                        : tono.tone === 'warn' ? 'grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-warn/10 text-warn'
+                        : tono.tone === 'info' ? 'grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-info/10 text-info'
+                        : 'grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-3 text-muted'
+                      }
+                    >
+                      <Icono className="h-4 w-4" />
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-main">{x.titulo}</p>
+                        <StatusPill tone={tono.tone}>{x.tipo}</StatusPill>
                       </div>
+                      {/* break-words: los avisos suelen incluir correos y
+                          links sin espacios, y reventaban la columna. */}
+                      <p className="mt-0.5 break-words text-xs leading-relaxed text-muted">{x.mensaje}</p>
+                      <p className="mt-1 text-[11px] text-dim">
+                        {fechaHora(x.created_at)} · para{' '}
+                        {x.destinatario_rol === 'todos' ? 'todos' : ROL_LABEL[x.destinatario_rol as Rol] ?? x.destinatario_rol}
+                      </p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="px-6 py-12 text-center"><Bell className="h-10 w-10 text-gray-700 mx-auto mb-3" /><p className="text-gray-500 text-sm">No hay notificaciones enviadas</p></div>
-          )}
-        </CardContent>
-      </Card>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Panel>
     </div>
   );
 }

@@ -1,318 +1,396 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+import { useState, useEffect, useMemo } from 'react';
+import { db } from '@/lib/adminQuery';
+import { toast } from 'sonner';
+import { fecha, fechaHora } from '@/lib/format';
+import { PageHeader, Panel, EmptyState, StatusPill, Toolbar, Hint, type StatusTone } from '@/components/admin/ui';
+import { Confirmar } from '@/components/admin/confirmar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { db } from '@/lib/adminQuery';
-import { Megaphone, Plus, Pencil, Trash2, Eye, EyeOff, Star, Clock, Save, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Megaphone, Plus, Pencil, Trash2, Star, Search, X, ExternalLink, FileText,
+} from 'lucide-react';
 
 const TIPOS = [
-  { value: 'general', label: 'General', color: 'bg-[#DC2626]', textColor: 'text-[#DC2626]' },
-  { value: 'deportivo', label: 'Deportivo', color: 'bg-blue-600', textColor: 'text-blue-400' },
-  { value: 'pago', label: 'Pago', color: 'bg-amber-600', textColor: 'text-amber-400' },
-  { value: 'urgente', label: 'Urgente', color: 'bg-red-600', textColor: 'text-red-400' },
-  { value: 'evento', label: 'Evento', color: 'bg-violet-600', textColor: 'text-violet-400' },
+  { value: 'general', label: 'General' },
+  { value: 'deportivo', label: 'Deportivo' },
+  { value: 'pago', label: 'Pago' },
+  { value: 'urgente', label: 'Urgente' },
+  { value: 'evento', label: 'Evento' },
 ];
 
 const ESTADOS = [
-  { value: 'borrador', label: 'Borrador', color: 'bg-gray-600' },
-  { value: 'publicado', label: 'Publicado', color: 'bg-emerald-600' },
-  { value: 'archivado', label: 'Archivado', color: 'bg-yellow-600' },
+  { value: 'borrador', label: 'Borrador' },
+  { value: 'publicado', label: 'Publicado' },
+  { value: 'archivado', label: 'Archivado' },
 ];
 
-interface Comunicado {
-  id: string;
-  titulo: string;
-  resumen: string;
-  contenido: string;
-  tipo: string;
-  estado: string;
-  imagen_url: string | null;
-  destacado: boolean;
-  fecha_publicacion: string;
-  created_at: string;
-}
+const TONO_TIPO: Record<string, StatusTone> = {
+  general: 'neutral',
+  deportivo: 'info',
+  pago: 'warn',
+  urgente: 'danger',
+  evento: 'brand',
+};
+
+const TONO_ESTADO: Record<string, StatusTone> = {
+  borrador: 'neutral',
+  publicado: 'ok',
+  archivado: 'warn',
+};
+
+const FORM_VACIO = {
+  titulo: '',
+  resumen: '',
+  contenido: '',
+  tipo: 'general',
+  estado: 'publicado',
+  imagen_url: '',
+  destacado: false,
+};
 
 export default function AdminComunicadosPage() {
-  const [comunicados, setComunicados] = useState<Comunicado[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<Comunicado | null>(null);
-  const [form, setForm] = useState({
-    titulo: '',
-    resumen: '',
-    contenido: '',
-    tipo: 'general',
-    estado: 'publicado',
-    imagen_url: '',
-    destacado: false,
-  });
+  const [comunicados, setComunicados] = useState<any[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [abierto, setAbierto] = useState(false);
+  const [editando, setEditando] = useState<any | null>(null);
+  const [form, setForm] = useState({ ...FORM_VACIO });
+  const [filtro, setFiltro] = useState('todos');
+  const [busqueda, setBusqueda] = useState('');
+  const [aBorrar, setABorrar] = useState<any | null>(null);
 
-  const loadComunicados = async () => {
-    setLoading(true);
-    const { data } = await db.select<Comunicado[]>('comunicados', '*', undefined, { order: { column: 'created_at', ascending: false } });
-    setComunicados(data || []);
-    setLoading(false);
-  };
+  async function cargar() {
+    setCargando(true);
+    const { data } = await db.select<any>('comunicados', '*', undefined, {
+      order: { column: 'created_at', ascending: false },
+      limit: 200,
+    });
+    setComunicados(data ?? []);
+    setCargando(false);
+  }
 
-  useEffect(() => { loadComunicados(); }, []);
+  useEffect(() => { cargar(); }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const visibles = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return comunicados
+      .filter((c) => (filtro === 'todos' ? true : c.estado === filtro))
+      .filter((c) =>
+        !q ? true : `${c.titulo} ${c.resumen ?? ''} ${c.contenido ?? ''}`.toLowerCase().includes(q)
+      );
+  }, [comunicados, filtro, busqueda]);
+
+  const publicados = comunicados.filter((c) => c.estado === 'publicado').length;
+  const borradores = comunicados.filter((c) => c.estado === 'borrador').length;
+
+  function abrirNuevo() {
+    setEditando(null);
+    setForm({ ...FORM_VACIO });
+    setAbierto(true);
+  }
+
+  function abrirEdicion(c: any) {
+    setEditando(c);
+    setForm({
+      titulo: c.titulo ?? '',
+      resumen: c.resumen ?? '',
+      contenido: c.contenuto ?? '',
+      tipo: c.tipo ?? 'general',
+      estado: c.estado ?? 'publicado',
+      imagen_url: c.imagen_url ?? '',
+      destacado: !!c.destacado,
+    });
+    setAbierto(true);
+  }
+
+  async function guardar(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.titulo.trim() || !form.contenido.trim()) {
+      toast.error('Falta el título o el contenido');
+      return;
+    }
+
+    setGuardando(true);
     const payload = {
-      titulo: form.titulo,
-      resumen: form.resumen || null,
-      contenido: form.contenido,
+      titulo: form.titulo.trim(),
+      resumen: form.resumen.trim() || null,
+      contenido: form.contenido.trim(),
       tipo: form.tipo,
       estado: form.estado,
-      imagen_url: form.imagen_url || null,
+      imagen_url: form.imagen_url.trim() || null,
       destacado: form.destacado,
-      fecha_publicacion: new Date().toISOString(),
+      // La fecha de publicación se actualiza solo cuando pasa de borrador a
+      // publicado. Si no, un comunicado republicado por error aparecía como
+      // nuevo en la web y los socios lo leían dos veces.
+      fecha_publicacion:
+        form.estado === 'publicado' ? new Date().toISOString() : (editando?.fecha_publicacion ?? null),
     };
 
-    if (editing) {
-      const { error } = await db.update('comunicados', payload, { id: editing.id });
-      if (!error) {
-        toast.success('Comunicado actualizado');
-        setShowForm(false);
-        setEditing(null);
-        resetForm();
-        loadComunicados();
-      } else {
-        toast.error('Error al actualizar');
-      }
-    } else {
-      const { error } = await db.insert('comunicados', payload);
-      if (!error) {
-        toast.success('Comunicado creado');
-        setShowForm(false);
-        resetForm();
-        loadComunicados();
-      } else {
-        toast.error('Error al crear');
-      }
-    }
-  };
+    const res = editando
+      ? await db.update('comunicados', payload, { id: editando.id })
+      : await db.insert('comunicados', payload);
+    setGuardando(false);
 
-  const handleEdit = (c: Comunicado) => {
-    setEditing(c);
-    setForm({
-      titulo: c.titulo,
-      resumen: c.resumen || '',
-      contenido: c.contenido,
-      tipo: c.tipo,
-      estado: c.estado,
-      imagen_url: c.imagen_url || '',
-      destacado: c.destacado,
-    });
-    setShowForm(true);
-  };
+    if (res.error) { toast.error(res.error); return; }
+    toast.success(
+      editando
+        ? 'Comunicado actualizado'
+        : form.estado === 'publicado'
+          ? 'Comunicado publicado. Ya está visible en la web.'
+          : 'Comunicado guardado como borrador.'
+    );
+    setAbierto(false);
+    await cargar();
+  }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este comunicado?')) return;
-    const { error } = await db.delete('comunicados', { id });
-    if (!error) {
-      toast.success('Comunicado eliminado');
-      loadComunicados();
-    } else {
-      toast.error('Error al eliminar');
-    }
-  };
-
-  const toggleDestacado = async (c: Comunicado) => {
-    await db.update('comunicados', { destacado: !c.destacado }, { id: c.id });
-    loadComunicados();
-  };
-
-  const toggleEstado = async (c: Comunicado) => {
-    const newEstado = c.estado === 'publicado' ? 'borrador' : 'publicado';
-    await db.update('comunicados', { estado: newEstado }, { id: c.id });
-    loadComunicados();
-  };
-
-  const resetForm = () => {
-    setForm({ titulo: '', resumen: '', contenido: '', tipo: 'general', estado: 'publicado', imagen_url: '', destacado: false });
-    setEditing(null);
-  };
-
-  const tipoInfo = (tipo: string) => TIPOS.find(t => t.value === tipo) || TIPOS[0];
-  const estadoInfo = (estado: string) => ESTADOS.find(e => e.value === estado) || ESTADOS[0];
-
-  const stats = {
-    total: comunicados.length,
-    publicados: comunicados.filter(c => c.estado === 'publicado').length,
-    borradores: comunicados.filter(c => c.estado === 'borrador').length,
-    destacados: comunicados.filter(c => c.destacado).length,
-  };
+  async function eliminar() {
+    if (!aBorrar) return;
+    const { error } = await db.delete('comunicados', { id: aBorrar.id });
+    if (error) { toast.error(error); return; }
+    toast.success('Comunicado eliminado');
+    setABorrar(null);
+    await cargar();
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Comunicados</h1>
-          <p className="text-sm text-gray-400 mt-1">Gestioná las noticias y comunicados del club</p>
-        </div>
-        <Button onClick={() => { resetForm(); setShowForm(true); }} className="bg-[#DC2626] hover:bg-[#B91C1C] gap-2 font-semibold">
-          <Plus className="h-4 w-4" /> Nuevo Comunicado
-        </Button>
-      </div>
+      <PageHeader
+        title="Comunicados"
+        description="Avisos que se publican en la web del club. Un borrador no lo ve nadie."
+        actions={<Button onClick={abrirNuevo}><Plus className="h-4 w-4" />Nuevo comunicado</Button>}
+      />
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <Hint>
+        Un comunicado en <strong>borrador</strong> queda guardado pero no se
+        muestra. Sirve para escribir el texto y revisarlo antes de publicar.
+      </Hint>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
-          { label: 'Total', value: stats.total, icon: Megaphone, color: 'text-gray-400' },
-          { label: 'Publicados', value: stats.publicados, icon: Eye, color: 'text-emerald-400' },
-          { label: 'Borradores', value: stats.borradores, icon: EyeOff, color: 'text-yellow-400' },
-          { label: 'Destacados', value: stats.destacados, icon: Star, color: 'text-[#DC2626]' },
-        ].map((s, i) => (
-          <Card key={i} className="bg-gray-900 border-gray-800">
-            <CardContent className="p-4 flex items-center gap-3">
-              <s.icon className={`h-5 w-5 ${s.color}`} />
-              <div>
-                <p className="text-2xl font-bold text-white">{s.value}</p>
-                <p className="text-xs text-gray-500">{s.label}</p>
-              </div>
-            </CardContent>
-          </Card>
+          { etiqueta: 'Total', valor: comunicados.length, tone: 'neutral' as StatusTone },
+          { etiqueta: 'Publicados', valor: publicados, tone: 'ok' as StatusTone },
+          { etiqueta: 'Borradores', valor: borradores, tone: 'neutral' as StatusTone },
+          { etiqueta: 'Archivados', valor: comunicados.filter((c) => c.estado === 'archivado').length, tone: 'warn' as StatusTone },
+        ].map((s) => (
+          <div key={s.etiqueta} className="rounded-xl border border-line bg-surface p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-dim">{s.etiqueta}</p>
+            <p className="mt-1 text-2xl font-bold tabular text-main">{s.valor}</p>
+          </div>
         ))}
       </div>
 
-      {/* Form Modal */}
-      {showForm && (
-        <Card className="bg-gray-900 border-gray-800 border-[#DC2626]/30">
-          <CardHeader className="border-b border-gray-800 flex flex-row items-center justify-between">
-            <CardTitle className="text-white text-lg">
-              {editing ? 'Editar Comunicado' : 'Nuevo Comunicado'}
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => { setShowForm(false); resetForm(); }} className="text-gray-400 hover:text-white">
-              <X className="h-4 w-4" />
-            </Button>
-          </CardHeader>
-          <CardContent className="p-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2 md:col-span-2">
-                  <Label className="text-gray-400 text-sm">Título *</Label>
-                  <Input value={form.titulo} onChange={e => setForm({ ...form, titulo: e.target.value })} placeholder="Título del comunicado" className="bg-gray-800 border-gray-700 text-white" required />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label className="text-gray-400 text-sm">Resumen</Label>
-                  <Input value={form.resumen} onChange={e => setForm({ ...form, resumen: e.target.value })} placeholder="Breve resumen (opcional)" className="bg-gray-800 border-gray-700 text-white" />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label className="text-gray-400 text-sm">Contenido *</Label>
-                  <Textarea value={form.contenido} onChange={e => setForm({ ...form, contenido: e.target.value })} rows={6} placeholder="Escribí el contenido completo del comunicado..." className="bg-gray-800 border-gray-700 text-white resize-none" required />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-400 text-sm">Tipo</Label>
-                  <select value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })} className="w-full h-10 px-3 rounded-md bg-gray-800 border border-gray-700 text-white text-sm">
-                    {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-400 text-sm">Estado</Label>
-                  <select value={form.estado} onChange={e => setForm({ ...form, estado: e.target.value })} className="w-full h-10 px-3 rounded-md bg-gray-800 border border-gray-700 text-white text-sm">
-                    {ESTADOS.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label className="text-gray-400 text-sm">URL de imagen (opcional)</Label>
-                  <Input value={form.imagen_url} onChange={e => setForm({ ...form, imagen_url: e.target.value })} placeholder="https://..." className="bg-gray-800 border-gray-700 text-white" />
-                </div>
-                <div className="flex items-center gap-3">
-                  <input type="checkbox" id="destacado" checked={form.destacado} onChange={e => setForm({ ...form, destacado: e.target.checked })} className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-[#DC2626] focus:ring-[#DC2626]" />
-                  <Label htmlFor="destacado" className="text-gray-400 text-sm cursor-pointer">Destacado en homepage</Label>
-                </div>
+      <Panel
+        title="Comunicados del club"
+        description={`${visibles.length} de ${comunicados.length}`}
+        bodyClassName="p-0"
+      >
+        <div className="border-b border-line p-3">
+          <Toolbar>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-0 flex-1 sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-dim" />
+                <Input
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar por título o texto"
+                  className="pl-8"
+                  aria-label="Buscar comunicados"
+                />
               </div>
-              <div className="flex gap-3 pt-2">
-                <Button type="submit" className="bg-[#DC2626] hover:bg-[#B91C1C] gap-2 font-semibold">
-                  <Save className="h-4 w-4" /> {editing ? 'Actualizar' : 'Publicar'}
+              {(busqueda || filtro !== 'todos') && (
+                <Button variant="ghost" size="sm" onClick={() => { setBusqueda(''); setFiltro('todos'); }}>
+                  <X className="h-4 w-4" />Limpiar
                 </Button>
-                <Button type="button" variant="outline" onClick={() => { setShowForm(false); resetForm(); }} className="border-gray-700 text-gray-400 hover:text-white">
-                  Cancelar
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                ['todos', 'Todos'],
+                ['publicado', 'Publicados'],
+                ['borrador', 'Borradores'],
+                ['archivado', 'Archivados'],
+              ].map(([valor, etiqueta]) => (
+                <Button key={valor} size="sm" variant={filtro === valor ? 'default' : 'outline'} onClick={() => setFiltro(valor)}>
+                  {etiqueta}
                 </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
+              ))}
+            </div>
+          </Toolbar>
+        </div>
 
-      {/* Comunicados List */}
-      <div className="space-y-3">
-        {loading ? (
-          <Card className="bg-gray-900 border-gray-800">
-            <CardContent className="p-12 text-center">
-              <div className="animate-spin h-8 w-8 border-2 border-[#DC2626] border-t-transparent rounded-full mx-auto" />
-              <p className="text-gray-500 mt-4">Cargando comunicados...</p>
-            </CardContent>
-          </Card>
-        ) : comunicados.length === 0 ? (
-          <Card className="bg-gray-900 border-gray-800">
-            <CardContent className="p-12 text-center">
-              <Megaphone className="h-12 w-12 text-gray-700 mx-auto mb-4" />
-              <p className="text-gray-500">No hay comunicados creados</p>
-              <p className="text-xs text-gray-600 mt-1">Creá el primer comunicado con el botón de arriba</p>
-            </CardContent>
-          </Card>
+        {cargando ? (
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-lg bg-surface-2" />
+            ))}
+          </div>
+        ) : visibles.length === 0 ? (
+          <EmptyState
+            icon={<Megaphone className="h-6 w-6" />}
+            title={comunicados.length === 0 ? 'Todavía no hay comunicados' : 'Ningún comunicado coincide'}
+            description={
+              comunicados.length === 0
+                ? 'Escribí el primer aviso para los socios. Podés guardarlo como borrador y publicarlo cuando esté listo.'
+                : 'Probá con otra palabra o quitá el filtro de estado.'
+            }
+            action={
+              comunicados.length === 0 ? (
+                <Button onClick={abrirNuevo}><Plus className="h-4 w-4" />Escribir el primero</Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => { setBusqueda(''); setFiltro('todos'); }}>Ver todos</Button>
+              )
+            }
+          />
         ) : (
-          comunicados.map(c => {
-            const tipo = tipoInfo(c.tipo);
-            const estado = estadoInfo(c.estado);
-            return (
-              <Card key={c.id} className={`bg-gray-900 border-gray-800 hover:border-gray-700 transition-all ${c.destacado ? 'border-l-2 border-l-[#DC2626]' : ''}`}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${tipo.color} text-white`}>
-                          {tipo.label}
-                        </span>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${estado.color} text-white`}>
-                          {estado.label}
-                        </span>
-                        {c.destacado && (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-[#DC2626]/20 text-[#DC2626]">
-                            ★ Destacado
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="font-bold text-white text-lg mb-1">{c.titulo}</h3>
-                      {c.resumen && <p className="text-sm text-gray-400 mb-2">{c.resumen}</p>}
-                      <p className="text-xs text-gray-500 flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {new Date(c.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button variant="ghost" size="sm" onClick={() => toggleDestacado(c)} className={`h-8 w-8 p-0 ${c.destacado ? 'text-[#DC2626]' : 'text-gray-500 hover:text-[#DC2626]'}`} title="Destacado">
-                        <Star className="h-4 w-4" fill={c.destacado ? 'currentColor' : 'none'} />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => toggleEstado(c)} className="h-8 w-8 p-0 text-gray-500 hover:text-emerald-400" title={c.estado === 'publicado' ? 'Ocultar' : 'Publicar'}>
-                        {c.estado === 'publicado' ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(c)} className="h-8 w-8 p-0 text-gray-500 hover:text-blue-400" title="Editar">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(c.id)} className="h-8 w-8 p-0 text-gray-500 hover:text-red-400" title="Eliminar">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+          <ul className="divide-y divide-line">
+            {visibles.map((c) => (
+              <li key={c.id} className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-surface-2">
+                <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface-3 text-muted">
+                  {c.destacado ? <Star className="h-4 w-4 text-warn" /> : <FileText className="h-4 w-4" />}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-medium text-main">{c.titulo}</p>
+                    <StatusPill tone={TONO_ESTADO[c.estado] ?? 'neutral'}>{c.estado}</StatusPill>
+                    <StatusPill tone={TONO_TIPO[c.tipo] ?? 'neutral'}>{c.tipo}</StatusPill>
+                    {c.destacado && <StatusPill tone="warn">Destacado</StatusPill>}
                   </div>
-                  {c.contenido && (
-                    <div className="mt-3 p-3 bg-gray-800/50 rounded-lg">
-                      <p className="text-sm text-gray-400 line-clamp-2">{c.contenido}</p>
-                    </div>
+                  {c.resumen && (
+                    <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted">{c.resumen}</p>
                   )}
-                </CardContent>
-              </Card>
-            );
-          })
+                  <p className="mt-1 text-[11px] text-dim">
+                    Creado el {fechaHora(c.created_at)}
+                    {c.estado === 'publicado' && c.fecha_publicacion
+                      ? ` · publicado el ${fecha(c.fecha_publicacion)}`
+                      : ''}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-1">
+                  {c.estado === 'publicado' && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-dim hover:text-main"
+                      onClick={() => window.open('/comunicados', '_blank')}
+                      aria-label="Ver en la web"
+                      title="Ver en la web"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="icon-sm" className="text-dim hover:text-main" onClick={() => abrirEdicion(c)} aria-label={`Editar ${c.titulo}`}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon-sm" className="text-dim hover:text-danger" onClick={() => setABorrar(c)} aria-label={`Eliminar ${c.titulo}`}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
-      </div>
+      </Panel>
+
+      {/* Editor */}
+      <Dialog open={abierto} onOpenChange={(o) => !o && setAbierto(false)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editando ? 'Editar comunicado' : 'Nuevo comunicado'}</DialogTitle>
+            <DialogDescription>
+              El título y el resumen son los que se ven en la lista de la web.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={guardar} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="titulo">Título *</Label>
+              <Input id="titulo" value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} maxLength={255} required />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="resumen">Resumen <span className="font-normal text-dim">(opcional)</span></Label>
+              <Input
+                id="resumen" value={form.resumen}
+                onChange={(e) => setForm({ ...form, resumen: e.target.value })}
+                placeholder="Dos líneas para que se entienda de qué se trata sin abrirlo"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="contenido">Contenido *</Label>
+              <Textarea
+                id="contenido" value={form.contenido}
+                onChange={(e) => setForm({ ...form, contenido: e.target.value })}
+                placeholder="Escribí el comunicado completo."
+                rows={10} required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="tipo">Tipo</Label>
+                <Select value={form.tipo} onValueChange={(v) => v && setForm({ ...form, tipo: v })}>
+                  <SelectTrigger id="tipo"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TIPOS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="estado">Estado</Label>
+                <Select value={form.estado} onValueChange={(v) => v && setForm({ ...form, estado: v })}>
+                  <SelectTrigger id="estado"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ESTADOS.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="imagen">Link de imagen <span className="font-normal text-dim">(opcional)</span></Label>
+              <Input
+                id="imagen" type="url" value={form.imagen_url}
+                onChange={(e) => setForm({ ...form, imagen_url: e.target.value })}
+                placeholder="https://…"
+              />
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-muted">
+              <input
+                type="checkbox"
+                checked={form.destacado}
+                onChange={(e) => setForm({ ...form, destacado: e.target.checked })}
+                className="h-4 w-4 rounded border-line accent-brand"
+              />
+              Destacar en la portada
+            </label>
+
+            <DialogFooter className="!mx-0 !mb-0 !rounded-none !border-0 !bg-transparent !p-0">
+              <Button type="button" variant="outline" onClick={() => setAbierto(false)}>Cancelar</Button>
+              <Button type="submit" disabled={guardando}>
+                {guardando ? 'Guardando…' : editando ? 'Guardar cambios' : form.estado === 'publicado' ? 'Publicar' : 'Guardar borrador'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Confirmar
+        abierto={!!aBorrar}
+        onCerrar={() => setABorrar(null)}
+        onConfirmar={eliminar}
+        titulo="Eliminar el comunicado"
+        descripcion={`Se va a eliminar "${aBorrar?.titulo}" de forma permanente. Si solo querés que deje de aparecer en la web, archivalo en lugar de eliminarlo.`}
+      />
     </div>
   );
 }

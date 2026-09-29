@@ -1,25 +1,102 @@
 @import "tailwindcss";
 
+/* ============================================================
+   FENIX — Sistema de diseño
+   ------------------------------------------------------------
+   Antes cada pagina hardcodeaba bg-gray-900 / border-gray-800 / text-gray-400.
+   Eso hacia imposible mantener coherencia. Acá hay tokens SEMANTICOS:
+   el color se elige por su significado (superficie, borde, texto, estado),
+   no por su tono.
+   ============================================================ */
+
 :root {
-  --background: #0A0A0A;
-  --foreground: #F4F4F5;
-  --primary: #DC2626;
-  --primary-dark: #B91C1C;
+  /* Marca */
+  --brand-50: #fef2f2;
+  --brand-100: #fee2e2;
+  --brand-300: #fca5a5;
+  --brand-500: #dc2626;
+  --brand-600: #b91c1c;
+  --brand-700: #991b1b;
+
+  /* Superficies (oscuro por defecto) */
+  --base: #0a0a0b;
+  --surface: #131316;
+  --surface-2: #1a1a1f;
+  --surface-3: #232329;
+
+  /* Bordes */
+  --line: #26262c;
+  --line-strong: #35353d;
+
+  /* Texto */
+  --text: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --text-dim: #71717a;
+
+  /* Estados */
+  --ok: #22c55e;
+  --ok-bg: #14532d;
+  --warn: #f59e0b;
+  --warn-bg: #78350f;
+  --danger: #ef4444;
+  --danger-bg: #7f1d1d;
+  --info: #3b82f6;
+  --info-bg: #1e3a8a;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-primary: var(--primary);
-  --color-primary-dark: var(--primary-dark);
+  --color-base: var(--base);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-main: var(--text);
+  --color-muted: var(--text-muted);
+  --color-dim: var(--text-dim);
+
+  --color-brand: var(--brand-500);
+  --color-brand-dark: var(--brand-600);
+  --color-brand-light: var(--brand-300);
+  --color-brand-soft: var(--brand-50);
+
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--base);
+  color: var(--text);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar discreto, acorde al tema oscuro */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 999px;
+  border: 2px solid var(--base);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-strong);
 }
 
 /* Scrollbar hide for horizontal scroll */
@@ -29,4 +106,29 @@ body {
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Foco visible: importante para navegación por teclado y accesibilidad.
+   Sin esto no se ve dónde está el cursor al tabular con el teclado. */
+:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Números tabulares: al comparar columnas de montos, las cifras quedan
+   alineadas y se leen mucho mejor. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Impresión: el panel a veces se imprime o se exporta a PDF. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
 }

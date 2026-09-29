@@ -1,6 +1,5 @@
-'use client';
-import { ConfiguracionCuenta } from '@/components/ConfiguracionCuenta';
+﻿import { ConfiguracionCuenta } from '@/components/ConfiguracionCuenta';
 
-export default function AdminConfiguracion() {
-  return <ConfiguracionCuenta rol="admin" accentColor="#DC2626" />;
+export default function Page() {
+  return <ConfiguracionCuenta />;
 }

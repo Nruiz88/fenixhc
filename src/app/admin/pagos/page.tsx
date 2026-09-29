@@ -1,480 +1,525 @@
 'use client';
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/adminQuery';
+import { toast } from 'sonner';
+import { money, mesNombre, fecha, periodo as fmtPeriodo } from '@/lib/format';
+import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Toolbar, Hint, tonoEstadoCuota } from '@/components/admin/ui';
+import { Confirmar } from '@/components/admin/confirmar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toast } from 'sonner';
 import {
-  ExternalLink, CheckCircle, Clock, DollarSign, XCircle,
-  Eye, Search, Filter, UserCheck, AlertTriangle, FileText
+  CheckCircle2, Clock, DollarSign, FileText, Search, X, Eye,
+  Plus, AlertTriangle, XCircle, Paperclip,
 } from 'lucide-react';
-import { MESES } from '@/lib/constants';
+
+type Filtro = 'todas' | 'pendiente' | 'pagada' | 'rechazada';
+
+const SIN_SEL = '__sin_seleccion__';
+const MONTO_SUGERIDO = '75000';
+
+const FORM_VACIO = {
+  familia_id: '',
+  mes: String(new Date().getMonth() + 1),
+  anio: String(new Date().getFullYear()),
+  monto: MONTO_SUGERIDO,
+  metodo: 'transferencia',
+};
 
 export default function AdminPagos() {
   const [cuotas, setCuotas] = useState<any[]>([]);
   const [familias, setFamilias] = useState<any[]>([]);
-  const [filter, setFilter] = useState<'all' | 'pagada' | 'pendiente' | 'rechazada'>('all');
-  const [search, setSearch] = useState('');
-  const [selectedCuota, setSelectedCuota] = useState<any>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [approving, setApproving] = useState<string | null>(null);
-  const [rejecting, setRejecting] = useState<string | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [filtro, setFiltro] = useState<Filtro>('todas');
+  const [busqueda, setBusqueda] = useState('');
+  const [anioFiltro, setAnioFiltro] = useState('todos');
+  const [mesFiltro, setMesFiltro] = useState('todos');
 
-  // Form para asignar pago manual
-  const [showAssign, setShowAssign] = useState(false);
-  const [assignForm, setAssignForm] = useState({
-    familia_id: '',
-    mes: '',
-    anio: String(new Date().getFullYear()),
-    monto: '',
-    metodo: 'transferencia',
-  });
+  const [aVer, setAVer] = useState<any | null>(null);
+  const [aRechazar, setARechazar] = useState<any | null>(null);
+  const [procesando, setProcesando] = useState<string | null>(null);
 
-  useEffect(() => { load(); }, []);
+  const [asignarAbierto, setAsignarAbierto] = useState(false);
+  const [form, setForm] = useState({ ...FORM_VACIO });
 
-  async function load() {
-    const { data } = await db.view('admin_cuotas');
-    setCuotas(data || []);
-    const { data: f } = await db.view('admin_familias');
-    setFamilias(f || []);
+  async function cargar() {
+    setCargando(true);
+    const [{ data: c }, { data: f }] = await Promise.all([
+      db.view<any>('admin_cuotas', { limit: 1000 }),
+      db.view<any>('admin_familias'),
+    ]);
+    setCuotas(c ?? []);
+    setFamilias(f ?? []);
+    setCargando(false);
   }
 
-  const handleApprove = async (id: string) => {
-    setApproving(id);
-    await db.update('cuotas', {
-      estado: 'pagada',
-      fecha_pago: new Date().toISOString(),
-    }, { id });
-    toast.success('✅ Cuota aprobada y registrada');
-    setApproving(null);
-    setShowModal(false);
-    load();
-  };
+  useEffect(() => { cargar(); }, []);
 
-  const handleReject = async (id: string) => {
-    if (!confirm('¿Rechazar este comprobante? Se marcará como pendiente.')) return;
-    setRejecting(id);
-    await db.update('cuotas', {
-      estado: 'pendiente',
-      comprobante_url: null,
-      fecha_pago: null,
-    }, { id });
-    toast.success('Comprobante rechazado');
-    setRejecting(null);
-    setShowModal(false);
-    load();
-  };
+  // Cifras del filtro actual, no de todo el historial: al buscar un socio
+  // concreto el tesorero quiere ver cuánto debe esa persona, no el total
+  // histórico del club.
+  const filtradas = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return cuotas
+      .filter((c) => (filtro === 'todas' ? true : c.estado === filtro))
+      .filter((c) => (anioFiltro === 'todos' ? true : c.anio === Number(anioFiltro)))
+      .filter((c) => (mesFiltro === 'todos' ? true : c.mes === Number(mesFiltro)))
+      .filter((c) => {
+        if (!q) return true;
+        const p = c.familias?.padre;
+        const h = c.familias?.hijo;
+        return [p?.nombre, p?.apellido, p?.correo, h?.nombre, h?.apellido, fmtPeriodo(c.mes, c.anio)]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      })
+      .sort((a, b) => b.anio - a.anio || b.mes - a.mes);
+  }, [cuotas, filtro, busqueda, anioFiltro, mesFiltro]);
 
-  const handleAssign = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!assignForm.familia_id || !assignForm.mes || !assignForm.monto) {
-      toast.error('Completá todos los campos obligatorios');
-      return;
-    }
-    // Verificar si ya existe cuota para ese mes/año/familia
-    const existente = cuotas.find(c =>
-      c.familia_id === assignForm.familia_id &&
-      c.mes === Number(assignForm.mes) &&
-      c.anio === Number(assignForm.anio)
+  const anios = useMemo(
+    () => [...new Set(cuotas.map((c) => c.anio))].filter(Number.isFinite).sort((a, b) => b - a),
+    [cuotas]
+  );
+
+  const resumen = useMemo(() => {
+    const pagadas = filtradas.filter((c) => c.estado === 'pagada');
+    const pendientes = filtradas.filter((c) => c.estado === 'pendiente');
+    return {
+      cobradas: pagadas.length,
+      montoCobrado: pagadas.reduce((s, c) => s + Number(c.monto), 0),
+      pendientes: pendientes.length,
+      montoPendiente: pendientes.reduce((s, c) => s + Number(c.monto), 0),
+      conComprobante: pendientes.filter((c) => c.comprobante_url).length,
+    };
+  }, [filtradas]);
+
+  async function aprobar(c: any) {
+    setProcesando(c.id);
+    const { error } = await db.update(
+      'cuotas',
+      { estado: 'pagada', fecha_pago: new Date().toISOString() },
+      { id: c.id }
     );
-    if (existente) {
-      toast.error('Ya existe una cuota para ese mes/año de esta familia');
+    setProcesando(null);
+
+    if (error) { toast.error(error); return; }
+    toast.success(`Cuota de ${fmtPeriodo(c.mes, c.anio)} marcada como pagada`, {
+      description: `${c.familias?.padre?.nombre} ${c.familias?.padre?.apellido} · ${money(c.monto)}`,
+    });
+    setAVer(null);
+    await cargar();
+  }
+
+  async function rechazar() {
+    if (!aRechazar) return;
+    const { error } = await db.update(
+      'cuotas',
+      { estado: 'pendiente', comprobante_url: null, fecha_pago: null },
+      { id: aRechazar.id }
+    );
+    if (error) { toast.error(error); return; }
+    toast.success('Comprobante rechazado. La cuota vuelve a pendiente para que la persona lo vuelva a subir.');
+    setARechazar(null);
+    setAVer(null);
+    await cargar();
+  }
+
+  async function asignar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.familia_id || !form.mes || !form.anio || !form.monto) {
+      toast.error('Completá familia, mes, año y monto');
       return;
     }
-    await db.insert('cuotas', {
-      familia_id: assignForm.familia_id,
-      mes: Number(assignForm.mes),
-      anio: Number(assignForm.anio),
-      monto: Number(assignForm.monto),
+    const monto = Number(form.monto);
+    if (!Number.isFinite(monto) || monto <= 0) { toast.error('El monto tiene que ser mayor a cero'); return; }
+
+    // Se valida contra la lista ya cargada porque el índice único de la base
+    // es (familia, mes, año) y un insert duplicado revienta con un error de
+    // SQL que no le dice nada a quien la está cargando.
+    const existe = cuotas.find(
+      (c) => c.familia_id === form.familia_id &&
+             c.mes === Number(form.mes) &&
+             c.anio === Number(form.anio)
+    );
+    if (existe) {
+      toast.error(`Esa familia ya tiene cuota cargada para ${fmtPeriodo(form.mes, form.anio)}`);
+      return;
+    }
+
+    setGuardando(true);
+    const { error } = await db.insert('cuotas', {
+      familia_id: form.familia_id,
+      mes: Number(form.mes),
+      anio: Number(form.anio),
+      monto,
       estado: 'pagada',
       fecha_pago: new Date().toISOString(),
       tipo_socio: 'benefactor',
-      comprobante_url: null,
+      metodo_pago: form.metodo,
     });
-    toast.success('Pago asignado correctamente');
-    setAssignForm({ familia_id: '', mes: '', anio: String(new Date().getFullYear()), monto: '', metodo: 'transferencia' });
-    setShowAssign(false);
-    load();
-  };
+    setGuardando(false);
 
-  // Stats
-  const pagadas = cuotas.filter(c => c.estado === 'pagada');
-  const pendientes = cuotas.filter(c => c.estado === 'pendiente');
-  const totalCobrado = pagadas.reduce((s: number, c: any) => s + Number(c.monto), 0);
-  const totalPendiente = pendientes.reduce((s: number, c: any) => s + Number(c.monto), 0);
-  const conComprobante = pendientes.filter(c => c.comprobante_url).length;
+    if (error) { toast.error(error); return; }
+    toast.success('Pago registrado');
+    setForm({ ...FORM_VACIO });
+    setAsignarAbierto(false);
+    await cargar();
+  }
 
-  // Filter
-  const filtered = cuotas
-    .filter(c => filter === 'all' || c.estado === filter)
-    .filter(c => {
-      if (!search) return true;
-      const s = search.toLowerCase();
-      const padre = c.familias?.padre;
-      const hijo = c.familias?.hijo;
-      return (
-        padre?.nombre?.toLowerCase().includes(s) ||
-        padre?.apellido?.toLowerCase().includes(s) ||
-        padre?.email?.toLowerCase().includes(s) ||
-        hijo?.nombre?.toLowerCase().includes(s) ||
-        hijo?.apellido?.toLowerCase().includes(s) ||
-        `${MESES[c.mes - 1]} ${c.anio}`.toLowerCase().includes(s)
-      );
-    });
+  const hayFiltros = filtro !== 'todas' || anioFiltro !== 'todos' || mesFiltro !== 'todos' || !!busqueda;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Control de Pagos</h1>
-          <p className="text-gray-400 text-sm mt-1">Validar comprobantes, aprobar pagos y asignar cuotas</p>
-        </div>
-        <Button onClick={() => setShowAssign(!showAssign)} className="bg-[#DC2626] hover:bg-[#B91C1C] text-white">
-          <DollarSign className="h-4 w-4 mr-2" /> Asignar Pago
-        </Button>
-      </div>
+      <PageHeader
+        title="Pagos de cuotas"
+        description="Aprobar comprobantes y registrar pagos que llegan por otros canales."
+        actions={
+          <Button onClick={() => setAsignarAbierto(true)}>
+            <Plus className="h-4 w-4" />Registrar pago
+          </Button>
+        }
+      />
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-emerald-900/40 to-emerald-950/40 border-emerald-800/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                <CheckCircle className="h-5 w-5 text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-xs text-emerald-400/80">Pagadas</p>
-                <p className="text-lg font-bold text-emerald-400">{pagadas.length}</p>
-                <p className="text-[10px] text-gray-500">${totalCobrado.toLocaleString('es-AR')}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-amber-900/40 to-amber-950/40 border-amber-800/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-amber-400" />
-              </div>
-              <div>
-                <p className="text-xs text-amber-400/80">Pendientes</p>
-                <p className="text-lg font-bold text-amber-400">{pendientes.length}</p>
-                <p className="text-[10px] text-gray-500">${totalPendiente.toLocaleString('es-AR')}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-blue-900/40 to-blue-950/40 border-blue-800/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                <FileText className="h-5 w-5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-xs text-blue-400/80">Con Comprobante</p>
-                <p className="text-lg font-bold text-blue-400">{conComprobante}</p>
-                <p className="text-[10px] text-gray-500">Requieren revisión</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-[#DC2626]/20 to-red-950/40 border-[#DC2626]/30">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-[#DC2626]/20 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-[#DC2626]" />
-              </div>
-              <div>
-                <p className="text-xs text-[#DC2626]/80">Total Cuotas</p>
-                <p className="text-lg font-bold text-[#DC2626]">{cuotas.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Alerta: Pagos con comprobante pendiente */}
-      {conComprobante > 0 && (
-        <Card className="bg-amber-900/20 border-amber-700/30">
-          <CardContent className="p-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-amber-300">
-                {conComprobante} pago{conComprobante > 1 ? 's' : ''} con comprobante{conComprobante > 1 ? 's' : ''} esperando revisión
+      {resumen.conComprobante > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warn/25 bg-warn/10 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-warn" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-warn">
+                {resumen.conComprobante} {resumen.conComprobante === 1 ? 'comprobante espera' : 'comprobantes esperan'} tu revisión
               </p>
-              <p className="text-xs text-amber-400/70">Los padres subieron comprobantes que necesitan tu validación</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Formulario Asignar Pago */}
-      {showAssign && (
-        <Card className="bg-gray-900 border-[#DC2626]/30">
-          <CardHeader className="border-b border-gray-800 pb-3">
-            <CardTitle className="text-white text-base flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-[#DC2626]" />
-              Asignar Pago Manual
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <form onSubmit={handleAssign} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label className="text-gray-400 text-sm">Familia / Padre *</Label>
-                <Select value={assignForm.familia_id || ''} onValueChange={(v) => {
-                  if (!v) return;
-                  setAssignForm({
-                    ...assignForm,
-                    familia_id: v,
-                    monto: assignForm.monto || '75000',
-                  });
-                }}>
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                    <SelectValue placeholder="Seleccionar padre..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {familias.map((f: any) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.padre?.nombre} {f.padre?.apellido} → {f.hijo?.nombre} {f.hijo?.apellido}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-gray-400 text-sm">Mes *</Label>
-                <Select value={assignForm.mes || ''} onValueChange={(v) => v && setAssignForm({ ...assignForm, mes: v })}>
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                    <SelectValue placeholder="Mes..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MESES.map((m, i) => (
-                      <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-gray-400 text-sm">Monto ($) *</Label>
-                <Input type="number" value={assignForm.monto} onChange={e => setAssignForm({ ...assignForm, monto: e.target.value })} placeholder="75000" className="bg-gray-800 border-gray-700 text-white" required />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-gray-400 text-sm">Año</Label>
-                <Input type="number" value={assignForm.anio} onChange={e => setAssignForm({ ...assignForm, anio: e.target.value })} className="bg-gray-800 border-gray-700 text-white" />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-gray-400 text-sm">Método</Label>
-                <Select value={assignForm.metodo || 'transferencia'} onValueChange={(v) => v && setAssignForm({ ...assignForm, metodo: v })}>
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="transferencia">🏦 Transferencia</SelectItem>
-                    <SelectItem value="efectivo">💵 Efectivo</SelectItem>
-                    <SelectItem value="debito">💳 Débito</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-end gap-2">
-                <Button type="submit" className="bg-[#DC2626] hover:bg-[#B91C1C] text-white">
-                  <CheckCircle className="h-4 w-4 mr-2" /> Asignar
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setShowAssign(false)} className="border-gray-700 text-gray-400 hover:text-white">
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Filters + Search */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-2 flex-1">
-          {(['all', 'pendiente', 'pagada'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filter === f ? 'bg-[#DC2626] text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
-              {f === 'all' ? `Todas (${cuotas.length})` : f === 'pagada' ? `Pagadas (${pagadas.length})` : `Pendientes (${pendientes.length})`}
-            </button>
-          ))}
-        </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-          <Input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, email o mes..."
-            className="pl-9 bg-gray-800 border-gray-700 text-white w-full sm:w-72"
-          />
-        </div>
-      </div>
-
-      {/* Lista de cuotas */}
-      <Card className="bg-gray-900 border-gray-800">
-        <CardContent className="p-0">
-          {filtered.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <DollarSign className="h-10 w-10 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No se encontraron cuotas</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-800">
-              {filtered.map((c) => {
-                const padre = c.familias?.padre;
-                const hijo = c.familias?.hijo;
-                const tieneComprobante = !!c.comprobante_url;
-                return (
-                  <div key={c.id} className="px-6 py-4 hover:bg-gray-800/30 transition-colors">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-4">
-                        <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${
-                          c.estado === 'pagada' ? 'bg-emerald-500/10' :
-                          tieneComprobante ? 'bg-blue-500/10' : 'bg-amber-500/10'
-                        }`}>
-                          {c.estado === 'pagada' ? <CheckCircle className="h-5 w-5 text-emerald-400" /> :
-                           tieneComprobante ? <FileText className="h-5 w-5 text-blue-400" /> :
-                           <Clock className="h-5 w-5 text-amber-400" />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-white">
-                            {MESES[c.mes - 1]} {c.anio}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {padre?.nombre} {padre?.apellido} ({padre?.email})
-                          </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <Badge variant="outline" className={`text-[10px] border-gray-700 ${
-                              c.estado === 'pagada' ? 'text-emerald-400' : 'text-amber-400'
-                            }`}>
-                              {c.estado}
-                            </Badge>
-                            {tieneComprobante && c.estado === 'pendiente' && (
-                              <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400">
-                                📎 Comprobante subido
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 ml-15 sm:ml-0">
-                        <span className="text-sm font-bold text-white w-28 text-right">
-                          ${Number(c.monto).toLocaleString('es-AR')}
-                        </span>
-
-                        {/* Ver comprobante */}
-                        {tieneComprobante && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => { setSelectedCuota(c); setShowModal(true); }}
-                            className="text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                          >
-                            <Eye className="h-4 w-4 mr-1" /> Ver
-                          </Button>
-                        )}
-
-                        {/* Aprobar */}
-                        {c.estado === 'pendiente' && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleApprove(c.id)}
-                            disabled={approving === c.id}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                          >
-                            {approving === c.id ? '...' : <><CheckCircle className="h-4 w-4 mr-1" /> Aprobar</>}
-                          </Button>
-                        )}
-
-                        {/* Rechazar */}
-                        {c.estado === 'pendiente' && tieneComprobante && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleReject(c.id)}
-                            disabled={rejecting === c.id}
-                            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                          >
-                            <XCircle className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Modal Ver Comprobante */}
-      {showModal && selectedCuota && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowModal(false)}>
-          <div className="bg-gray-900 rounded-2xl border border-gray-800 max-w-2xl w-full mx-4 max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-6 border-b border-gray-800 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold text-white">Comprobante de Pago</h2>
-                <p className="text-sm text-gray-400">{MESES[selectedCuota.mes - 1]} {selectedCuota.anio} — ${Number(selectedCuota.monto).toLocaleString('es-AR')}</p>
-              </div>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white text-2xl">&times;</button>
-            </div>
-            <div className="p-6">
-              {selectedCuota.comprobante_url ? (
-                <div className="rounded-xl overflow-hidden border border-gray-700 bg-gray-800">
-                  {selectedCuota.comprobante_url.endsWith('.pdf') ? (
-                    <iframe src={selectedCuota.comprobante_url} className="w-full h-96" title="Comprobante" />
-                  ) : (
-                    <img src={selectedCuota.comprobante_url} alt="Comprobante" className="w-full object-contain max-h-96" />
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No se adjuntó comprobante</p>
-                </div>
-              )}
-            </div>
-            <div className="p-6 border-t border-gray-800 flex items-center justify-between">
-              <div className="text-sm text-gray-400">
-                <p>Padre: <span className="text-white">{selectedCuota.familias?.padre?.nombre} {selectedCuota.familias?.padre?.apellido}</span></p>
-                <p>Deportista: <span className="text-white">{selectedCuota.familias?.hijo?.nombre} {selectedCuota.familias?.hijo?.apellido}</span></p>
-              </div>
-              <div className="flex gap-2">
-                {selectedCuota.estado === 'pendiente' && (
-                  <>
-                    <Button
-                      onClick={() => handleApprove(selectedCuota.id)}
-                      disabled={approving === selectedCuota.id}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" /> Aprobar Pago
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleReject(selectedCuota.id)}
-                      disabled={rejecting === selectedCuota.id}
-                      className="border-red-500/30 text-red-400 hover:bg-red-500/10"
-                    >
-                      <XCircle className="h-4 w-4 mr-2" /> Rechazar
-                    </Button>
-                  </>
-                )}
-              </div>
+              <p className="truncate text-xs text-warn/80">
+                Los socios subieron el comprobante de su pago. Revisá que el importe coincida antes de aprobar.
+              </p>
             </div>
           </div>
+          <Button size="sm" onClick={() => { setFiltro('pendiente'); setBusqueda(''); }}>
+            Verlas
+          </Button>
         </div>
       )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Cobrado" value={money(resumen.montoCobrado)}
+          hint={`${resumen.cobradas} cuotas`} tone="ok" icon={<CheckCircle2 className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Pendiente de cobro" value={money(resumen.montoPendiente)}
+          hint={`${resumen.pendientes} cuotas`} tone="warn" icon={<Clock className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Para revisar" value={resumen.conComprobante}
+          hint="Comprobantes sin aprobar" tone={resumen.conComprobante > 0 ? 'brand' : 'neutral'} icon={<Paperclip className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Total en la vista" value={money(resumen.montoCobrado + resumen.montoPendiente)}
+          hint={`${filtradas.length} cuotas`} icon={<DollarSign className="h-4 w-4" />}
+        />
+      </div>
+
+      {/* Lista */}
+      <Panel
+        title="Cuotas"
+        description={`${filtradas.length} de ${cuotas.length}`}
+        bodyClassName="p-0"
+      >
+        <div className="space-y-3 border-b border-line p-3">
+          <Toolbar>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-0 flex-1 sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-dim" />
+                <Input
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar por nombre o período"
+                  className="pl-8"
+                  aria-label="Buscar cuotas"
+                />
+              </div>
+              {hayFiltros && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setBusqueda(''); setFiltro('todas'); setAnioFiltro('todos'); setMesFiltro('todos'); }}
+                >
+                  <X className="h-4 w-4" />Limpiar
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={mesFiltro} onValueChange={(v) => v && setMesFiltro(v)}>
+                <SelectTrigger className="w-36"><SelectValue placeholder="Mes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los meses</SelectItem>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <SelectItem key={m} value={String(m)}>{mesNombre(m)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={anioFiltro} onValueChange={(v) => v && setAnioFiltro(v)}>
+                <SelectTrigger className="w-28"><SelectValue placeholder="Año" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {anios.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </Toolbar>
+
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              ['todas', 'Todas'],
+              ['pendiente', 'Pendientes'],
+              ['pagada', 'Pagadas'],
+              ['rechazada', 'Rechazadas'],
+            ] as [Filtro, string][]).map(([valor, etiqueta]) => (
+              <Button
+                key={valor}
+                size="sm"
+                variant={filtro === valor ? 'default' : 'outline'}
+                onClick={() => setFiltro(valor)}
+              >
+                {etiqueta}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {cargando ? (
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-16 animate-pulse rounded-lg bg-surface-2" />
+            ))}
+          </div>
+        ) : filtradas.length === 0 ? (
+          <EmptyState
+            icon={<DollarSign className="h-6 w-6" />}
+            title={cuotas.length === 0 ? 'Todavía no hay cuotas cargadas' : 'Ninguna cuota coincide con el filtro'}
+            description={
+              cuotas.length === 0
+                ? 'Registrá el primer pago con el botón de arriba. Las cuotas se pueden cargar una por una o munculendo al cobrar.'
+                : 'Probá con otro nombre, otro mes o quitá los filtros.'
+            }
+            action={
+              <Button onClick={() => setAsignarAbierto(true)}>
+                <Plus className="h-4 w-4" />Registrar el primero
+              </Button>
+            }
+          />
+        ) : (
+          <ul className="divide-y divide-line">
+            {filtradas.map((c) => {
+              const padre = c.familias?.padre;
+              const hijo = c.familias?.hijo;
+              const tono = tonoEstadoCuota(c.estado);
+              const comprobante = c.estado === 'pendiente' && c.comprobante_url;
+              return (
+                <li key={c.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2">
+                  <span
+                    className={
+                      c.estado === 'pagada'
+                        ? 'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ok/10 text-ok'
+                        : comprobante
+                          ? 'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-info/10 text-info'
+                          : 'grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-warn/10 text-warn'
+                    }
+                  >
+                    {c.estado === 'pagada' ? <CheckCircle2 className="h-5 w-5" /> : comprobante ? <FileText className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-medium text-main">
+                        {padre?.nombre} {padre?.apellido}
+                      </p>
+                      <StatusPill tone={tono.tone}>{tono.label}</StatusPill>
+                      {comprobante && <StatusPill tone="info"><Paperclip className="h-3 w-3" />Para revisar</StatusPill>}
+                    </div>
+                    <p className="truncate text-xs text-dim">
+                      {fmtPeriodo(c.mes, c.anio)}
+                      {hijo ? ` · ${hijo.nombre} ${hijo.apellido}` : ''}
+                      {c.fecha_pago ? ` · pagado el ${fecha(c.fecha_pago)}` : ''}
+                    </p>
+                  </div>
+
+                  <span className="shrink-0 text-sm font-semibold tabular text-main">{money(c.monto)}</span>
+
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {c.comprobante_url && (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="text-dim hover:text-info"
+                        onClick={() => setAVer(c)}
+                        aria-label={`Ver comprobante de ${padre?.nombre}`}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {c.estado === 'pendiente' && (
+                      <Button
+                        size="sm"
+                        variant="success"
+                        disabled={procesando === c.id}
+                        onClick={() => aprobar(c)}
+                      >
+                        {procesando === c.id ? 'Aprobando…' : 'Aprobar'}
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Panel>
+
+      {/* Comprobante */}
+      <Dialog open={!!aVer} onOpenChange={(o) => !o && setAVer(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          {aVer && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Comprobante de pago</DialogTitle>
+                <DialogDescription>
+                  {aVer.familias?.padre?.nombre} {aVer.familias?.padre?.apellido} ·{' '}
+                  {mesNombre(aVer.mes)} {aVer.anio} · {money(aVer.monto)}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="overflow-hidden rounded-lg border border-line bg-surface-2">
+                {aVer.comprobante_url?.toLowerCase().endsWith('.pdf') ? (
+                  <iframe src={aVer.comprobante_url} className="h-96 w-full" title="Comprobante de pago" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={aVer.comprobante_url}
+                    alt={`Comprobante de ${aVer.familias?.padre?.nombre}`}
+                    className="max-h-96 w-full object-contain"
+                  />
+                )}
+              </div>
+
+              <Hint>
+                Verificá que el importe del comprobante sea el mismo que figura
+                arriba antes de aprobar. Si no coincide, rechazalo para que la
+                persona lo vuelva a subir.
+              </Hint>
+
+              {aVer.estado === 'pendiente' && (
+                <DialogFooter className="!mx-0 !mb-0 !rounded-none !border-0 !bg-transparent !p-0">
+                  <Button variant="outline" onClick={() => setARechazar(aVer)}>
+                    <XCircle className="h-4 w-4" />Rechazar
+                  </Button>
+                  <Button variant="success" disabled={procesando === aVer.id} onClick={() => aprobar(aVer)}>
+                    <CheckCircle2 className="h-4 w-4" />
+                    {procesando === aVer.id ? 'Aprobando…' : 'Aprobar pago'}
+                  </Button>
+                </DialogFooter>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Rechazo */}
+      <Confirmar
+        abierto={!!aRechazar}
+        onCerrar={() => setARechazar(null)}
+        onConfirmar={rechazar}
+        titulo="Rechazar el comprobante"
+        descripcion={`La cuota de ${aRechazar?.familias?.padre?.nombre} ${aRechazar?.familias?.padre?.apellido} por ${money(aRechazar?.monto)} vuelve a pendiente y se borra el comprobante adjunto. La persona va a ver que el pago no fue aceptado.`}
+        textoConfirmar="Rechazar"
+      />
+
+      {/* Alta de pago */}
+      <Dialog open={asignarAbierto} onOpenChange={(o) => !o && setAsignarAbierto(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar un pago</DialogTitle>
+            <DialogDescription>
+              Para cuando la persona paga por otro medio y no sube el comprobante
+              desde el portal.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={asignar} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="familia">Familia *</Label>
+              <Select
+                value={form.familia_id || SIN_SEL}
+                onValueChange={(v) => setForm({ ...form, familia_id: v === SIN_SEL ? '' : (v ?? '') })}
+              >
+                <SelectTrigger id="familia"><SelectValue placeholder="Elegí la familia" /></SelectTrigger>
+                <SelectContent>
+                  {familias.length === 0 ? (
+                    <SelectItem value={SIN_SEL} disabled>No hay familias vinculadas</SelectItem>
+                  ) : (
+                    familias.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        {f.padre?.nombre} {f.padre?.apellido}
+                        {f.hijo ? ` — ${f.hijo.nombre} ${f.hijo.apellido}` : ''}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              {familias.length === 0 && (
+                <p className="text-[11px] text-warn">
+                  No hay vínculos familiares. Crealo primero en Vínculos familiares.
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="mes">Mes *</Label>
+                <Select value={form.mes} onValueChange={(v) => v && setForm({ ...form, mes: v })}>
+                  <SelectTrigger id="mes"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                      <SelectItem key={m} value={String(m)}>{mesNombre(m)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="anio">Año *</Label>
+                <Input id="anio" type="number" value={form.anio} onChange={(e) => setForm({ ...form, anio: e.target.value })} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="monto">Monto *</Label>
+                <Input id="monto" type="number" step="0.01" min="0" value={form.monto} onChange={(e) => setForm({ ...form, monto: e.target.value })} required />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="metodo">Cómo se pagó</Label>
+              <Select value={form.metodo} onValueChange={(v) => v && setForm({ ...form, metodo: v })}>
+                <SelectTrigger id="metodo"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="debito">Débito automático</SelectItem>
+                  <SelectItem value="credito">Tarjeta de crédito</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter className="!mx-0 !mb-0 !rounded-none !border-0 !bg-transparent !p-0">
+              <Button type="button" variant="outline" onClick={() => setAsignarAbierto(false)}>Cancelar</Button>
+              <Button type="submit" disabled={guardando || familias.length === 0}>
+                {guardando ? 'Guardando…' : 'Registrar pago'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

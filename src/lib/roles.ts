@@ -105,6 +105,8 @@ export const MODULOS = [
   'comunicados',
   'sponsors',
   'reportes',
+  // Suite contable: estado de resultados, balance, cuentas por cobrar.
+  'contabilidad',
   'configuracion',
 ] as const;
 
@@ -127,6 +129,7 @@ export const MODULO_RUTA: Record<Modulo, string> = {
   comunicados: '/admin/comunicados',
   sponsors: '/admin/sponsors',
   reportes: '/admin/reportes',
+  contabilidad: '/admin/contabilidad',
   configuracion: '/admin/configuracion',
 };
 
@@ -154,6 +157,7 @@ const PERMISOS_TESORERO: readonly Modulo[] = [
   'pagos',
   'finanzas',
   'reportes',
+  'contabilidad',
 ];
 
 const PERMISOS_VOCAL: readonly Modulo[] = [

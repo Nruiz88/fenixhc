@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { queryOne, query } from '@/lib/db';
 import { verifyPassword } from '@/lib/auth';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
@@ -21,7 +22,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Demasiados reenvíos. Esperá unos minutos.' }, { status: 429 });
     }
 
-    const { email: emailRaw, password } = await request.json();
+    const leido = await leerJson<{ email?: string; password?: string }>(request);
+    if (!leido.ok) return RESP_BAD_JSON();
+    const { email: emailRaw, password } = leido.data;
+
     if (!emailRaw || !password) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 });
     }

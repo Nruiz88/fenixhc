@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { queryOne, execute } from '@/lib/db';
 import { requireAuth, hashPassword, verifyPassword, setAuthCookie, createToken } from '@/lib/auth';
 import { passwordSchema, firstError } from '@/lib/schemas';
@@ -15,7 +16,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const body = await request.json();
+    const leido = await leerJson(request);
+    if (!leido.ok) return RESP_BAD_JSON();
+    const body = leido.data as any;
     const { currentPassword, password } = body ?? {};
 
     if (!currentPassword) {

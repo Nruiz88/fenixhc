@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { query, execute, insert, uuid } from '@/lib/db';
 import { requireAuth, type AuthUser } from '@/lib/auth';
 import { TABLES_BY_ROLE } from '@/lib/constants';
@@ -154,7 +155,9 @@ export async function POST(request: NextRequest) {
     }
     const { user } = auth;
 
-    const body = await request.json();
+    const leido = await leerJson(request);
+    if (!leido.ok) return RESP_BAD_JSON();
+    const body = leido.data as any;
     const { table, view, operation = 'select', filters, data, columns, limit, order, single } = body;
 
     // Vista nombrada (JOINs predefinidos en el servidor). Solo lectura.

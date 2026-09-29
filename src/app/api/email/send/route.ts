@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { query, execute } from '@/lib/db';
 import { requireModulo } from '@/lib/auth';
 import { sendEmail } from '@/lib/email';
@@ -68,7 +69,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const { tipo, destinatarios, data } = await request.json();
+    const leido = await leerJson<{ tipo?: string; destinatarios?: string; data?: any }>(request);
+    if (!leido.ok) return RESP_BAD_JSON();
+    const { tipo, destinatarios, data } = leido.data;
 
     if (!tipo || !TEMPLATES[tipo]) {
       return NextResponse.json({ error: 'Invalid email type' }, { status: 400 });

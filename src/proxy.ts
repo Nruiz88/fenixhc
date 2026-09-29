@@ -21,11 +21,11 @@ function redirigirSiVieja(pathname: string, request: NextRequest): NextResponse 
   return null;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const user = authenticateFromRequest(request);
 
-  // URLs renombradas: /socio-benefactor/* -> /socio-benefactor/*, etc.
+  // URLs renombradas: /padre/* -> /socio-benefactor/*, /deportista/* -> /socio-cadete/*
   const redir = redirigirSiVieja(pathname, request);
   if (redir) return redir;
 
@@ -77,8 +77,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Node.js runtime: jsonwebtoken necesita crypto de Node; en Edge la
-  // verificación falla y todos los usuarios quedarían sin sesión.
-  runtime: 'nodejs',
+  // No se declara `runtime`: el proxy corre en Node.js y no es configurable.
+  // Antes había que poner `runtime: 'nodejs'` explícito porque corría en Edge
+  // por defecto, y ahí jsonwebtoken fallaba al verificar el token. Con proxy
+  // eso ya no es un problema de configuración.
   matcher: ['/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|ico)$).*)'],
 };

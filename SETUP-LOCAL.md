@@ -127,7 +127,7 @@ archivo **y** el ENUM con una migración).
 | `admin` | `/admin` | Todos los módulos |
 | `presidente` | `/admin` | Todos los módulos |
 | `secretario` | `/admin` | Socios, jugadores, agenda, comunicados, notificaciones, horarios, reservas |
-| `tesorero` | `/admin` | Socios, jugadores, pagos, finanzas, reportes |
+| `tesorero` | `/admin` | Socios, jugadores, pagos, finanzas, reportes, contabilidad |
 | `vocal_titular` | `/admin` | Consulta de socios, jugadores, legajos y partidos |
 | `vocal_suplente` | `/admin` | Igual que Vocal Titular |
 | `socio_benefactor` | `/socio-benefactor` | Sus cuotas, sus hijos, reservas, galería |
@@ -143,3 +143,49 @@ Las URLs viejas `/padre/*` y `/deportista/*` redirigen con 308 a las nuevas.
   hay que volver a iniciar sesión.
 
 Migración necesaria: `mariadb/05_roles_directiva.sql`.
+
+## Contabilidad
+`/admin/contabilidad` (módulo `contabilidad`, permiso de admin, presidente y
+tesorero). Todos los cálculos viven en `src/lib/contabilidad.ts`; la pantalla es
+solo presentación. Si hay que cambiar una fórmula se edita ese archivo, no el
+JSX, para que el gráfico y los totales no se desincronicen.
+
+Tres cosas que conviene no revertir sin pensarlo:
+
+1. **Las cuotas no se suman a la caja.** `finanzas` es la fuente del estado de
+   resultados; `cuotas` aparece aparte como cobranza del mes y cuentas por
+   cobrar. Una cuota pagada suele estar registrada en las dos tablas, y sumar
+   ambas duplica los ingresos del club.
+2. **La antigüedad de una cuota sale de su período** (mes/año), no de una
+   columna de vencimiento: `cuotas` no la tiene. Es una limitación del modelo,
+   no un atajo.
+3. **La categoría de un movimiento se normaliza al cargar.** `finanzas.categoria`
+   es texto libre; sin normalizar, "alquiler", "Alquiler" y "alquiler cancha"
+   serían tres filas que no suman al total. Lo que no se reconoce queda en
+   "Sin clasificar" y se muestra en pantalla para que se corrija la carga.
+
+Gráficos: son SVG propio en `src/components/admin/charts.tsx`, sin librería de
+charts. Pesan menos que el bundle de una dependencia y se ven nítidos en
+cualquier densidad de pantalla.
+
+## Sistema de diseño del panel
+`src/app/globals.css` define tokens **semánticos** (`surface`, `line`, `muted`,
+`ok`, `warn`, `danger`, `brand`). Las páginas eligen color por significado, no
+por tono: no hay `bg-gray-900` ni `text-gray-400` en `/admin`. Si hace falta un
+color nuevo se agrega un token, no un gris hardcodeado.
+
+Piezas compartidas en `src/components/admin/ui.tsx`: `PageHeader`, `StatCard`,
+`Panel`, `EmptyState`, `StatusPill`, `Toolbar`, `Hint`, `DataPoint`. Formato de
+importes, fechas y antigüedad en `src/lib/format.ts` (importes en es-AR con
+separador de miles: `$ 75.000`, nunca `$75000`).
+
+Regla para pantallas nuevas: todo importe con `money()`, toda fecha con
+`fecha()`, y confirmación con `Confirmar` antes de cualquier borrado. Nunca
+`window.confirm`: el texto del navegador está en inglés y no dice qué se está
+borrando.
+
+## Proxy (antes middleware)
+El archivo se llama `src/proxy.ts` y exporta `proxy()`. En Next 16 la
+convención `middleware` está deprecada. Corre en Node.js por diseño (jsonwebtoken
+necesita crypto de Node), así que ya no hace falta declarar runtime.
+

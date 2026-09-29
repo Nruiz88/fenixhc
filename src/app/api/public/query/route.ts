@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { query, insert, uuid } from '@/lib/db';
 
 // Endpoint publico (sin autenticacion) para paginas: home, galeria,
@@ -61,7 +62,9 @@ function buildWhere(table: string, filters?: Record<string, any>): { clause: str
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const leido = await leerJson(request);
+    if (!leido.ok) return RESP_BAD_JSON();
+    const body = leido.data as any;
     const { table, operation = 'select', filters, data, columns, limit, order, single } = body;
 
     if (!table) {

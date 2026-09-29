@@ -1,220 +1,283 @@
 'use client';
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/adminQuery';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Link2, Trash2, Plus, ArrowRight, Users, UserCheck, DollarSign, AlertCircle } from 'lucide-react';
+import { iniciales } from '@/lib/format';
+import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Hint } from '@/components/admin/ui';
+import { Confirmar } from '@/components/admin/confirmar';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Link2, Trash2, ArrowRight, Users, UserCheck, CheckCircle2 } from 'lucide-react';
+
+// Ojo con la nomenclatura: `padre_perfil_id` y `deportista_perfil_id` son los
+// nombres de las columnas y describen el vínculo familiar, pero el ROL del
+// usuario es socio_benefactor / socio_cadete.
+
+const VINCULOS = [
+  { value: 'padre', label: 'Padre' },
+  { value: 'madre', label: 'Madre' },
+  { value: 'tutor', label: 'Tutor' },
+];
+
+const ETIQUETA_VINCULO: Record<string, string> = {
+  padre: 'Padre', madre: 'Madre', tutor: 'Tutor',
+};
+
+// Centinela para "nada seleccionado": base-ui no dispara onValueChange con
+// string vacío, así que la opción quedaría sin poder elegirse.
+const SIN_SEL = '__sin_seleccion__';
 
 export default function AdminLinksFamilia() {
-  // Ojo con la nomenclatura: `padre_perfil_id` y `deportista_perfil_id` son los
-  // nombres de las columnas (y describen el vinculo familiar), pero el rol del
-  // usuario es socio_benefactor / socio_cadete.
   const [benefactores, setBenefactores] = useState<any[]>([]);
   const [cadetes, setCadetes] = useState<any[]>([]);
   const [familias, setFamilias] = useState<any[]>([]);
   const [form, setForm] = useState({ padre_id: '', deportista_id: '', tipo_vinculo: 'padre' });
-  const [loading, setLoading] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [aDesvincular, setADesvincular] = useState<any | null>(null);
 
-  useEffect(() => { load(); }, []);
-
-  async function load() {
-    const { data: p } = await db.select('perfiles', 'id, nombre, apellido, dni, correo', { rol: 'socio_benefactor' });
-    setBenefactores(p || []);
-    const { data: d } = await db.view('admin_deportistas_ligeros');
-    setCadetes(d || []);
-    const { data: f } = await db.view('admin_familias');
-    setFamilias(f || []);
+  async function cargar() {
+    const [{ data: p }, { data: d }, { data: f }] = await Promise.all([
+      db.select<any>('perfiles', 'id, nombre, apellido, dni, correo', { rol: 'socio_benefactor' }, { limit: 1000 }),
+      db.view<any>('admin_deportistas_ligeros'),
+      db.view<any>('admin_familias'),
+    ]);
+    setBenefactores(p ?? []);
+    setCadetes(d ?? []);
+    setFamilias(f ?? []);
   }
 
-  // Benefactores que ya tienen vínculo
-  const benefactoresVinculados = new Set(familias.map((f: any) => f.padre_perfil_id));
-  // Cadetes que ya tienen vínculo
-  const cadetesVinculados = new Set(familias.map((f: any) => f.deportista_perfil_id));
+  useEffect(() => { cargar(); }, []);
 
-  const padresDisponibles = benefactores.filter(p => !benefactoresVinculados.has(p.id));
-  const deportistasDisponibles = cadetes.filter(d => !cadetesVinculados.has(d.perfil_id));
+  const { benefactoresLibres, cadetesLibres } = useMemo(() => {
+    const vinculosBenefactor = new Set(familias.map((f) => f.padre_perfil_id));
+    const vinculosCadete = new Set(familias.map((f) => f.deportista_perfil_id));
+    return {
+      benefactoresLibres: benefactores.filter((p) => !vinculosBenefactor.has(p.id)),
+      cadetesLibres: cadetes.filter((d) => !vinculosCadete.has(d.perfil_id)),
+    };
+  }, [familias, benefactores, cadetes]);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  async function crear(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.padre_id || !form.deportista_id) { toast.error('Seleccioná el benefactor y el cadete'); return; }
+    if (!form.padre_id || !form.deportista_id) {
+      toast.error('Elegí un socio y un jugador');
+      return;
+    }
 
-    setLoading(true);
+    setGuardando(true);
     const { error } = await db.insert('familias', {
       padre_perfil_id: form.padre_id,
       deportista_perfil_id: form.deportista_id,
       tipo_vinculo: form.tipo_vinculo,
     });
+    setGuardando(false);
 
-    if (error) {
-      toast.error('Error al crear vinculación');
-    } else {
-      const benefactor = benefactores.find(p => p.id === form.padre_id);
-      const cadete = cadetes.find(d => d.perfil_id === form.deportista_id);
-      toast.success(`Vinculación creada: ${benefactor?.nombre} → ${cadete?.perfiles?.nombre}`, {
-        description: 'Cuota unificada de $75.000 generada automáticamente'
-      });
-      setForm({ padre_id: '', deportista_id: '', tipo_vinculo: 'padre' });
-      load();
-    }
-    setLoading(false);
-  };
+    if (error) { toast.error(error); return; }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar esta vinculación? Se cancelarán las cuotas pendientes.')) return;
-    await db.delete('familias', { id });
-    toast.success('Vinculación eliminada');
-    load();
-  };
+    const socio = benefactores.find((p) => p.id === form.padre_id);
+    const jugador = cadetes.find((d) => d.perfil_id === form.deportista_id);
+    toast.success(`${socio?.nombre} quedó vinculado con ${jugador?.perfiles?.nombre}`, {
+      description: 'Ahora las cuotas que emitás para esta familia se le asignan a este socio.',
+    });
+    setForm({ padre_id: '', deportista_id: '', tipo_vinculo: 'padre' });
+    await cargar();
+  }
 
-  const stats = {
-    total: familias.length,
-    cuotaTotal: familias.length * 75000,
-    padresDisponibles: padresDisponibles.length,
-    deportistasDisponibles: deportistasDisponibles.length,
-  };
+  async function desvincular() {
+    if (!aDesvincular) return;
+    const nombreSocio = `${aDesvincular.padre?.nombre ?? ''} ${aDesvincular.padre?.apellido ?? ''}`.trim();
+    const nombreCadete = `${aDesvincular.hijo?.nombre ?? ''} ${aDesvincular.hijo?.apellido ?? ''}`.trim();
+
+    const { error } = await db.delete('familias', { id: aDesvincular.id });
+    if (error) { toast.error(error); return; }
+
+    // Las cuotas cuelgan de la familia con ON DELETE CASCADE, así que al
+    // desvincular se borran también las pendientes de esa familia. Avisarlo
+    // es obligatorio: alguien puede desvincular por error y perder meses de
+    // historial de cobranza sin darse cuenta.
+    toast.success('Vínculo eliminado', {
+      description: `Se desvincularon ${nombreSocio} y ${nombreCadete}. Revisá las cuotas de esa familia: las pendientes se borraron.`,
+    });
+    setADesvincular(null);
+    await cargar();
+  }
+
+  const nadaParaVincular = benefactoresLibres.length === 0 && cadetesLibres.length === 0;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Vincular Socio - Cadete</h1>
-        <p className="text-gray-400 text-sm mt-1">Asociá padres con sus hijos deportistas. Se genera automáticamente la cuota unificada.</p>
+      <PageHeader
+        title="Vínculos familiares"
+        description="Asociá un socio benefactor con el jugador que responde por sus cuotas."
+      />
+
+      <Hint>
+        El vínculo define a quién se le cobra y a qué jugador se le imputa la
+        cuota. Sin vínculo, la familia no aparece en la cobranza.
+      </Hint>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard label="Vínculos activos" value={familias.length} tone="brand" icon={<Link2 className="h-4 w-4" />} />
+        <StatCard
+          label="Socios sin vincular"
+          value={benefactoresLibres.length}
+          hint="No responden por ningún jugador"
+          tone={benefactoresLibres.length > 0 ? 'warn' : 'ok'}
+          icon={<Users className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Jugadores sin vincular"
+          value={cadetesLibres.length}
+          hint="Sin socio responsable"
+          tone={cadetesLibres.length > 0 ? 'warn' : 'ok'}
+          icon={<UserCheck className="h-4 w-4" />}
+        />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Vínculos', value: stats.total, icon: Link2, color: 'text-[#DC2626]' },
-          { label: 'Cuota Mensual', value: `$${(stats.cuotaTotal / 1000).toFixed(0)}K`, icon: DollarSign, color: 'text-emerald-400' },
-          { label: 'Padres sin hijo', value: stats.padresDisponibles, icon: Users, color: 'text-blue-400' },
-          { label: 'Jugadores libres', value: stats.deportistasDisponibles, icon: UserCheck, color: 'text-violet-400' },
-        ].map((s, i) => (
-          <Card key={i} className="bg-gray-900 border-gray-800">
-            <CardContent className="p-4 flex items-center gap-3">
-              <s.icon className={`h-5 w-5 ${s.color}`} />
-              <div>
-                <p className="text-2xl font-bold text-white">{s.value}</p>
-                <p className="text-xs text-gray-500">{s.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Create Form */}
-      <Card className="bg-gray-900 border-gray-800 border-[#DC2626]/20">
-        <CardHeader className="border-b border-gray-800 pb-3">
-          <CardTitle className="text-white text-base flex items-center gap-2">
-            <Plus className="h-4 w-4 text-[#DC2626]" /> Nueva Vinculación
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-6">
-          {padresDisponibles.length === 0 && deportistasDisponibles.length === 0 ? (
-            <div className="text-center py-6">
-              <AlertCircle className="h-10 w-10 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400">Todos los padres y jugadores ya están vinculados</p>
-              <p className="text-xs text-gray-600 mt-1">Creá nuevos padres o jugadores para poder vincularlos</p>
+      {/* Alta */}
+      <Panel title="Nueva vinculación" description="Elegí el socio y el jugador que se asocian">
+        {nadaParaVincular ? (
+          <EmptyState
+            icon={<CheckCircle2 className="h-6 w-6" />}
+            title="Todo está vinculado"
+            description="No quedan socios ni jugadores sin vincular. Si falta alguno, crealo desde la pantalla de Usuarios."
+          />
+        ) : (
+          <form onSubmit={crear} className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="socio">Socio benefactor *</Label>
+              <Select
+                value={form.padre_id || SIN_SEL}
+                onValueChange={(v) => setForm({ ...form, padre_id: v === SIN_SEL ? '' : (v ?? '') })}
+              >
+                <SelectTrigger id="socio"><SelectValue placeholder="Elegí un socio" /></SelectTrigger>
+                <SelectContent>
+                  {benefactoresLibres.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre} {p.apellido}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          ) : (
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-gray-400 text-sm">Padre/Madre *</Label>
-                  <select value={form.padre_id} onChange={e => setForm({ ...form, padre_id: e.target.value })} className="w-full h-10 px-3 rounded-md bg-gray-800 border border-gray-700 text-white text-sm">
-                    <option value="">Seleccionar padre</option>
-                    {padresDisponibles.map(p => <option key={p.id} value={p.id}>{p.nombre} {p.apellido}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-400 text-sm">Jugador *</Label>
-                  <select value={form.deportista_id} onChange={e => setForm({ ...form, deportista_id: e.target.value })} className="w-full h-10 px-3 rounded-md bg-gray-800 border border-gray-700 text-white text-sm">
-                    <option value="">Seleccionar jugador</option>
-                    {deportistasDisponibles.map(d => <option key={d.id} value={d.perfil_id}>{d.perfiles?.nombre} {d.perfiles?.apellido}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-400 text-sm">Vínculo</Label>
-                  <select value={form.tipo_vinculo} onChange={e => setForm({ ...form, tipo_vinculo: e.target.value })} className="w-full h-10 px-3 rounded-md bg-gray-800 border border-gray-700 text-white text-sm">
-                    <option value="padre">Padre</option>
-                    <option value="madre">Madre</option>
-                    <option value="tutor">Tutor</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500">Se generará una cuota unificada de <span className="text-[#DC2626] font-semibold">$75.000/mes</span> (benefactor + cadete)</p>
-                <Button type="submit" disabled={loading} className="bg-[#DC2626] hover:bg-[#B91C1C] gap-2 font-semibold">
-                  <Link2 className="h-4 w-4" />
-                  {loading ? 'Creando...' : 'Vincular'}
-                </Button>
-              </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Family Links */}
-      <Card className="bg-gray-900 border-gray-800">
-        <CardHeader className="border-b border-gray-800 pb-3">
-          <CardTitle className="text-white text-base">Vinculaciones Activas ({familias.length})</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {familias.length > 0 ? (
-            <div className="divide-y divide-gray-800">
-              {familias.map((f: any) => (
-                <div key={f.id} className="px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:bg-gray-800/50 transition-colors group">
-                  {/* flex-wrap: con 5 bloques en una fila, en pantallas
-                      angostas la fila se salia del panel. */}
-                  <div className="flex flex-wrap items-center gap-4 min-w-0 flex-1">
-                    {/* Benefactor avatar */}
-                    <div className="h-11 w-11 rounded-xl bg-[#DC2626]/10 flex items-center justify-center shrink-0">
-                      <span className="text-[#DC2626] font-bold text-sm">{f.padre?.nombre?.[0]}{f.padre?.apellido?.[0]}</span>
-                    </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cadete">Jugador *</Label>
+              <Select
+                value={form.deportista_id || SIN_SEL}
+                onValueChange={(v) => setForm({ ...form, deportista_id: v === SIN_SEL ? '' : (v ?? '') })}
+              >
+                <SelectTrigger id="cadete"><SelectValue placeholder="Elegí un jugador" /></SelectTrigger>
+                <SelectContent>
+                  {cadetesLibres.map((d) => (
+                    <SelectItem key={d.id} value={d.perfil_id}>
+                      {d.perfiles?.nombre} {d.perfiles?.apellido}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-                    {/* Benefactor info */}
-                    <div className="min-w-0 flex-1 basis-32">
-                      <p className="text-sm font-semibold text-white truncate">{f.padre?.nombre} {f.padre?.apellido}</p>
-                      <p className="text-xs text-gray-500 truncate" title={f.padre?.correo}>{f.padre?.correo}</p>
-                    </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="vinculo">Tipo de vínculo</Label>
+              <Select
+                value={form.tipo_vinculo}
+                onValueChange={(v) => v && setForm({ ...form, tipo_vinculo: v })}
+              >
+                <SelectTrigger id="vinculo"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {VINCULOS.map((v) => <SelectItem key={v.value} value={v.value}>{v.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
 
-                    {/* Arrow + vinculo */}
-                    <div className="flex flex-col items-center shrink-0">
-                      <ArrowRight className="h-5 w-5 text-[#DC2626]" />
-                      <span className="text-[10px] text-gray-500 mt-0.5 capitalize">{f.tipo_vinculo}</span>
-                    </div>
+            <div className="lg:col-span-3">
+              <Button type="submit" disabled={guardando}>
+                <Link2 className="h-4 w-4" />
+                {guardando ? 'Vinculando…' : 'Vincular'}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Panel>
 
-                    {/* Cadete avatar */}
-                    <div className="h-11 w-11 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
-                      <span className="text-blue-400 font-bold text-sm">{f.hijo?.nombre?.[0]}{f.hijo?.apellido?.[0]}</span>
-                    </div>
-
-                    {/* Cadete info */}
-                    <div className="min-w-0 flex-1 basis-32">
-                      <p className="text-sm font-semibold text-white truncate">{f.hijo?.nombre} {f.hijo?.apellido}</p>
-                      <p className="text-xs text-gray-500 truncate" title={f.hijo?.correo}>{f.hijo?.correo}</p>
+      {/* Listado */}
+      <Panel
+        title="Vínculos activos"
+        description={`${familias.length} ${familias.length === 1 ? 'vínculo' : 'vínculos'}`}
+        bodyClassName="p-0"
+      >
+        {familias.length === 0 ? (
+          <EmptyState
+            icon={<Link2 className="h-6 w-6" />}
+            title="Todavía no hay vínculos"
+            description="Usá el formulario de arriba para asociar el primer socio con su jugador."
+          />
+        ) : (
+          <ul className="divide-y divide-line">
+            {familias.map((f) => (
+              <li key={f.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2">
+                {/* flex-wrap: los dos bloques de persona y la flecha no
+                    entraban en una línea angosta y se cortaban a la mitad. */}
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+                  <div className="flex min-w-0 flex-1 basis-40 items-center gap-2.5">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand/15 text-[11px] font-bold text-brand">
+                      {iniciales(f.padre?.nombre, f.padre?.apellido)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-main">
+                        {f.padre?.nombre} {f.padre?.apellido}
+                      </p>
+                      <p className="truncate text-xs text-dim" title={f.padre?.correo}>{f.padre?.correo}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="px-3 py-1 rounded-lg bg-[#DC2626]/10 text-[#DC2626] text-xs font-semibold">$75.000/mes</span>
-                    <Button variant="ghost" size="sm" onClick={() => handleDelete(f.id)} className="h-8 w-8 p-0 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Desvincular">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <div className="flex shrink-0 items-center gap-1.5 text-dim">
+                    <ArrowRight className="h-4 w-4" />
+                    <span className="text-[10px]">{ETIQUETA_VINCULO[f.tipo_vinculo] ?? f.tipo_vinculo}</span>
+                  </div>
+
+                  <div className="flex min-w-0 flex-1 basis-40 items-center gap-2.5">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-info/15 text-[11px] font-bold text-info">
+                      {iniciales(f.hijo?.nombre, f.hijo?.apellido)}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-main">
+                        {f.hijo?.nombre} {f.hijo?.apellido}
+                      </p>
+                      <p className="truncate text-xs text-dim" title={f.hijo?.correo}>{f.hijo?.correo}</p>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="px-6 py-12 text-center">
-              <Link2 className="h-12 w-12 text-gray-700 mx-auto mb-4" />
-              <p className="text-gray-500">No hay vinculaciones creadas</p>
-              <p className="text-xs text-gray-600 mt-1">Usá el formulario de arriba para vincular un padre con su hijo</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  <StatusPill tone="ok">Vigente</StatusPill>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-dim hover:text-danger"
+                    onClick={() => setADesvincular(f)}
+                    aria-label={`Desvincular a ${f.padre?.nombre}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <Confirmar
+        abierto={!!aDesvincular}
+        onCerrar={() => setADesvincular(null)}
+        onConfirmar={desvincular}
+        titulo="Desvincular la familia"
+        descripcion={`${aDesvincular?.padre?.nombre} ${aDesvincular?.padre?.apellido} va a quedar desvinculado de ${aDesvincular?.hijo?.nombre} ${aDesvincular?.hijo?.apellido}. ATENCIÓN: las cuotas pendientes de esta familia se borran junto con el vínculo.`}
+        textoConfirmar="Desvincular"
+      />
     </div>
   );
 }
