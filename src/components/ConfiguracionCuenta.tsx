@@ -17,7 +17,7 @@ interface ConfiguracionCuentaProps {
 export function ConfiguracionCuenta({ rol, accentColor = '#DC2626' }: ConfiguracionCuentaProps) {
   const [perfil, setPerfil] = useState<any>(null);
   const [formPerfil, setFormPerfil] = useState({ nombre: '', apellido: '', telefono: '', direccion: '' });
-  const [formPass, setFormPass] = useState({ nueva: '', confirmar: '' });
+  const [formPass, setFormPass] = useState({ actual: '', nueva: '', confirmar: '' });
   const [showPass, setShowPass] = useState(false);
   const [loadingPerfil, setLoadingPerfil] = useState(false);
   const [loadingPass, setLoadingPass] = useState(false);
@@ -51,6 +51,10 @@ export function ConfiguracionCuenta({ rol, accentColor = '#DC2626' }: Configurac
 
   const handleCambiarPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formPass.actual) {
+      toast.error('Ingresá tu contraseña actual');
+      return;
+    }
     if (formPass.nueva !== formPass.confirmar) {
       toast.error('Las contraseñas no coinciden');
       return;
@@ -64,14 +68,14 @@ export function ConfiguracionCuenta({ rol, accentColor = '#DC2626' }: Configurac
       const res = await fetch('/api/auth/password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: formPass.nueva }),
+        body: JSON.stringify({ currentPassword: formPass.actual, password: formPass.nueva }),
       });
       const json = await res.json();
       if (!res.ok) {
-        toast.error('Error', { description: json.error });
+        toast.error('No se pudo cambiar la contraseña', { description: json.error });
       } else {
         toast.success('Contraseña actualizada');
-        setFormPass({ nueva: '', confirmar: '' });
+        setFormPass({ actual: '', nueva: '', confirmar: '' });
       }
     } catch {
       toast.error('Error', { description: 'No se pudo actualizar la contraseña' });
@@ -135,6 +139,19 @@ export function ConfiguracionCuenta({ rol, accentColor = '#DC2626' }: Configurac
         </CardHeader>
         <CardContent className="p-6">
           <form onSubmit={handleCambiarPassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-gray-400 text-sm">Contraseña actual</Label>
+              <Input
+                type={showPass ? 'text' : 'password'}
+                value={formPass.actual}
+                onChange={e => setFormPass({ ...formPass, actual: e.target.value })}
+                placeholder="Para confirmar que sos vos"
+                autoComplete="current-password"
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+              <p className="text-xs text-gray-600">La pedimos para evitar que alguien con acceso a esta sesión cambie tu contraseña.</p>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-gray-400 text-sm">Nueva Contraseña</Label>
@@ -164,7 +181,7 @@ export function ConfiguracionCuenta({ rol, accentColor = '#DC2626' }: Configurac
             </div>
             <Button
               type="submit"
-              disabled={loadingPass || !formPass.nueva || !formPass.confirmar}
+              disabled={loadingPass || !formPass.actual || !formPass.nueva || !formPass.confirmar}
               className="bg-gray-700 hover:bg-gray-600 text-white font-semibold"
             >
               <Lock className="h-4 w-4 mr-2" />
