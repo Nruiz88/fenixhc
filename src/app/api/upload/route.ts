@@ -5,7 +5,7 @@ import path from 'path';
 
 export const runtime = 'nodejs';
 
-const ALLOWED_BUCKETS = ['fotos-perfil', 'fotos-dni', 'comprobantes', 'fotos-galeria', 'chat-archivos', 'comunicados', 'sponsors', 'partidos'];
+const ALLOWED_BUCKETS = ['fotos-perfil', 'fotos-dni', 'comprobantes', 'fotos-galeria', 'comunicados', 'sponsors', 'partidos'];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 // Whitelist de tipos: nada de .svg/.html/.js que podrían ejecutarse en el mismo origen

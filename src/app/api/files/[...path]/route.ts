@@ -19,7 +19,7 @@ const MIME: Record<string, string> = {
 };
 
 // Buckets visibles sin sesión (imágenes de las páginas públicas).
-// El resto (DNI, comprobantes, chat) solo lo ve el dueño de la carpeta o un admin.
+// El resto (DNI, comprobantes) solo lo ve el dueño de la carpeta o un admin.
 const PUBLIC_READ = new Set(['fotos-galeria', 'fotos-perfil', 'comunicados', 'sponsors', 'partidos']);
 
 export async function GET(

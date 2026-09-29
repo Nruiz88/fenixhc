@@ -57,9 +57,3 @@ export async function uploadGaleria(_tipo: string, file: File): Promise<string |
   const ts = Date.now();
   return uploadFile('fotos-galeria', `${ts}.${ext}`, file);
 }
-
-export async function uploadChatFile(_userId: string, file: File): Promise<string | null> {
-  const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
-  const ts = Date.now();
-  return uploadFile('chat-archivos', `${ts}.${ext}`, file);
-}

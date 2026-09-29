@@ -11,7 +11,6 @@ export type MetodoPago = 'mercadopago' | 'transferencia';
 export type TipoFinanza = 'ingreso' | 'egreso';
 export type TipoNotificacion = 'pago' | 'deportivo' | 'general' | 'urgente';
 export type DestinatarioNotificacion = 'padre' | 'deportista' | 'todos';
-export type TipoContenido = 'texto' | 'imagen' | 'video';
 export type EstadoReserva = 'confirmada' | 'cancelada' | 'completada';
 
 // --- Perfil (extendido desde auth.users) ---
@@ -100,17 +99,7 @@ export interface Notificacion {
   leida?: boolean;
 }
 
-// --- Mensaje de Chat ---
-export interface MensajeChat {
-  id: string;
-  emisor_id: string;
-  contenido: string;
-  tipo_contenido: TipoContenido;
-  archivo_url?: string;
-  created_at: string;
-  // Relación
-  emisor?: Perfil;
-}
+
 
 // --- Foto de Galería ---
 export interface FotoGaleria {
