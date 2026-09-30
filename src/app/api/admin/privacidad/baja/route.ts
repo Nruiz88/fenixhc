@@ -107,18 +107,52 @@ export async function POST(request: NextRequest) {
         [persona.id]
       );
 
-      // 3. Vínculos familiares: se despegan para que la cuota quede sin
-      //    persona identificable detrás. El marcador es un UUID pelado, del
-      //    largo exacto de la columna: prefijarlo con "baja-" lo pasaba de 36
-      //    caracteres y el UPDATE entero fallaba.
-      await conn.execute(
-        'UPDATE familias SET padre_perfil_id = ? WHERE padre_perfil_id = ?',
-        [uuid(), persona.id]
+      // 3. Vínculos familiares.
+      //
+      //    No se pueden "desvincular" poniendo un id nuevo: familias tiene
+      //    FK contra perfiles, así que un id que no existe lo rechaza. Y
+      //    borrar la fila no sirve tampoco, porque las cuotas cuelgan de la
+      //    familia con ON DELETE CASCADE y se perdería el historial de pagos.
+      //
+      //    Lo que se hace es crear un perfil sustituto, ya anonimizado, y
+      //    apuntar el vínculo ahí. La familia y sus cuotas sobreviven, pero
+      //    ya no hay detrás una persona identificable.
+      const [familiasAfectadas] = await conn.execute<any[]>(
+        'SELECT id, padre_perfil_id, deportista_perfil_id FROM familias WHERE padre_perfil_id = ? OR deportista_perfil_id = ?',
+        [persona.id, persona.id]
       );
-      await conn.execute(
-        'UPDATE familias SET deportista_perfil_id = ? WHERE deportista_perfil_id = ?',
-        [uuid(), persona.id]
-      );
+
+      for (const f of familiasAfectadas) {
+        const sustituto = async (rol: string) => {
+          const nuevoId = uuid();
+          await conn.execute(
+            `INSERT INTO perfiles
+               (id, usuario_id, rol, nombre, apellido, dni, cuil, correo, telefono, direccion)
+             VALUES (?, NULL, ?, ?, 'DADO DE BAJA', ?, NULL, ?, NULL, NULL)`,
+            [
+              nuevoId,
+              rol,
+              `BAJA-${uuid().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+              // El DNI es NOT NULL UNIQUE: un uuid distinto por fila.
+              `B${uuid().replace(/-/g, '').slice(0, 17).toUpperCase()}`,
+              `baja+${nuevoId.slice(0, 8)}@club.local`,
+            ]
+          );
+          return nuevoId;
+        };
+
+        const padreNuevo =
+          f.padre_perfil_id === persona.id ? await sustituto('socio_benefactor') : f.padre_perfil_id;
+        const deportistaNuevo =
+          f.deportista_perfil_id === persona.id
+            ? await sustituto('socio_cadete')
+            : f.deportista_perfil_id;
+
+        await conn.execute(
+          'UPDATE familias SET padre_perfil_id = ?, deportista_perfil_id = ? WHERE id = ?',
+          [padreNuevo, deportistaNuevo, f.id]
+        );
+      }
 
       // 4. Perfil anonimizado.
       await conn.execute(
