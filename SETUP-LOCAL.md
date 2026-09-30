@@ -100,10 +100,40 @@ npm run dev
 | lautaro@mail.com | lautaro123 | deportista | Lautaro Cabrera |
 | tomas@mail.com | tomas123 | deportista | Tomas Perez |
 
+> Las cuentas de directiva que no están en el seed (`admin2@`, `presidente@`,
+> `secretario@`, `tesorero@`, `vocal@` con `club.com`) se crearon a mano y
+> **no tienen clave conocida en este archivo**. `vocal@club.com` quedó en
+> `vocal123` después de una prueba de recuperación de clave; las otras cuatro
+> solo se usan con un token de sesión. Si se pierden, se cambian desde
+> `/admin/usuarios`.
+
 ## Autenticación
 - Sesión propia: JWT en cookie `httpOnly` (`fenix_token`), 7 días.
 - Endpoints: `/api/auth/login`, `/api/auth/register`, `/api/auth/logout`,
   `/api/auth/me`, `/api/auth/password`.
+
+### Recuperación de clave
+- `/recuperar` pide el email; `/recuperar/[token]` escribe la clave nueva.
+- **La respuesta es siempre la misma**, exista o no la cuenta. Si dijera "no
+  encontramos esa cuenta", la pantalla serviría para averiguar qué familias
+  están inscriptas y para mandar correo a direcciones ajenas con el remitente
+  del club.
+- **Solo recupera con email verificado.** Sin eso, cualquiera puede registrarse
+  con el correo de otra persona y quedarse con la cuenta.
+- El link dura **una hora** (la verificación dura 24 h), es de **un solo uso**, y
+  pedir uno nuevo invalida el anterior. El token se guarda hasheado (SHA-256).
+- Rate limit: 5/hora por IP y 3/hora por email.
+- El correo **nunca pide la clave**: el link abre una pantalla para escribir la
+  nueva. Así el ataque de suplantación no tiene qué robar.
+
+> **Limitación conocida:** cambiar la clave **no cierra las sesiones abiertas**.
+> El JWT de sesión es sin estado y no hay dónde anotar "esta sesión fue
+> revocada", así que un dispositivo que ya estaba adentro sigue adentro hasta
+> que su token expira (7 días). Rotar el `JWT_SECRET` cerraría las sesiones de
+> todo el club, que para una clave olvidada es un mal canje. Cuando haga falta,
+> la solución es una tabla de sesiones revocadas con un chequeo **en el login**,
+> no en el proxy: la verificación del JWT tiene que seguir siendo sin base de
+> datos porque corre en cada request.
 - Queries: `/api/admin/query` (admin), `/api/user/query` (sesión),
   `/api/public/query` (público: comunicados, galería, sponsors, horarios y contacto).
 
