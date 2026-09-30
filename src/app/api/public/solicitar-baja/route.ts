@@ -38,13 +38,15 @@ export async function POST(request: NextRequest) {
 
     const p = validado.datos;
 
+    const id = uuid();
+
     await execute(
       `INSERT INTO solicitudes_baja
          (id, perfil_id, solicitante_nombre, solicitante_email, documento_verificacion,
           motivo, estado, canal, notas, created_at)
        VALUES (?, NULL, ?, ?, ?, ?, 'pendiente', 'formulario', ?, NOW())`,
       [
-        uuid(),
+        id,
         p.nombre,
         p.email,
         p.documento,
@@ -56,6 +58,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: true,
+        // El código sirve para reclamar. Sin él, quien pide la baja no tiene
+        // forma de referirse al pedido y tiene que describirlo de memoria.
+        referencia: id.slice(0, 8).toUpperCase(),
         mensaje:
           'Recibimos tu pedido. La administración lo revisa y te responde a este mismo correo.',
         plazo:

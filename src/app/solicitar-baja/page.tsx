@@ -35,6 +35,7 @@ export default function SolicitarBaja() {
   });
   const [enviando, setEnviando] = useState(false);
   const [listo, setListo] = useState(false);
+  const [referencia, setReferencia] = useState('');
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +51,7 @@ export default function SolicitarBaja() {
       if (!res.ok) { toast.error(json.error || 'No pudimos registrar el pedido'); return; }
 
       setListo(true);
+      setReferencia(json.referencia ?? '');
       toast.success('Pedido registrado');
     } catch {
       toast.error('No pudimos registrar el pedido. Probá de nuevo en un rato.');
@@ -73,16 +75,18 @@ export default function SolicitarBaja() {
               hábiles.
             </p>
             <p className="max-w-md text-xs text-dim">
-              Guardá este número de pedido si necesitás reclamar:
+              Guardá este número. Es con lo que se reclama si el club se demora:
               <br />
-              <span className="font-mono text-muted">
-                {new Date().toISOString().slice(0, 10).replace(/-/g, '')}
-              </span>{' '}
-              (la fecha de envío sirve como referencia).
+              <span className="font-mono text-base text-main">{referencia}</span>
             </p>
-            <Button variant="outline" className="mt-2" onClick={() => setListo(false)}>
-              Cargar otro pedido
-            </Button>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-4">
+              <Button variant="outline" onClick={() => setListo(false)}>
+                Cargar otro pedido
+              </Button>
+              <a href="/" className="text-xs text-dim underline transition-colors hover:text-muted">
+                Volver al sitio
+              </a>
+            </div>
           </div>
         </Panel>
       </div>
@@ -200,6 +204,13 @@ export default function SolicitarBaja() {
       </Panel>
 
       <p className="text-center text-xs text-dim">
+        {/* Esta pantalla no tiene barra de navegación — se entra desde un
+            enlace en un correo o desde el pie del sitio. Sin una salida, quien
+            se equivoca queda atrapado en una pantalla de 404 sin ayuda. */}
+        <a href="/" className="hover:text-muted">
+          Volver al sitio
+        </a>
+        {' · '}
         <a href="/privacidad" className="hover:text-muted">
           Leé el aviso de privacidad
         </a>

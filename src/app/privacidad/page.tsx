@@ -171,7 +171,20 @@ export default function PrivacidadPage() {
             <a href="mailto:privacidad@clubfenix.org.ar" className="text-brand hover:underline">
               privacidad@clubfenix.org.ar
             </a>{' '}
-            , o desde tu propio portal si tenés cuenta.
+            , desde tu propio portal si tenés cuenta, o{' '}
+            {/* El formulario es el canal para quien ya no tiene cuenta. Si este
+                aviso no lo menciona, el derecho existe en el papel y no en los
+                hechos para el ex-socio que es justo el caso más común. */}
+            <a href="/solicitar-baja" className="text-brand hover:underline">
+              completando el formulario de solicitud de baja
+            </a>
+            , que no necesita que tengas cuenta.
+          </p>
+          <p>
+            Para borrar tus datos hace falta verificar tu identidad. En el
+            formulario se pide el DNI de la persona cuya baja se solicita; en el
+            caso de un menor de edad, el de la madre, el padre o la persona
+            tutora que lo acompaña.
           </p>
         </section>
 
@@ -207,8 +220,18 @@ export default function PrivacidadPage() {
             25.326 de Protección de los Datos Personales.
           </p>
           <p className="mt-2">
+            {/* Esta página no tiene barra de navegación: si alguien cae acá
+                desde un correo o un mensaje, necesita una salida. */}
+            <a href="/" className="text-brand hover:underline">
+              Volver al sitio
+            </a>{' '}
+            ·{' '}
+            <a href="/solicitar-baja" className="text-brand hover:underline">
+              Pedir la baja de mis datos
+            </a>{' '}
+            ·{' '}
             <a href="/login" className="text-brand hover:underline">
-              Volver al inicio de sesión
+              Iniciar sesión
             </a>
           </p>
         </footer>
