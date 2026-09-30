@@ -71,6 +71,16 @@ describe('lo que pediste, cargo por cargo', () => {
     expect(puede('tesorero', 'publicar_comunicacion_interna')).toBe(false);
   });
 
+  it('el tesorero CARGA el parte financiero aunque no vea el administrativo', () => {
+    // Al revés de como funciona una tesorería: poder leer el estado de cuenta
+    // sin poder escribirlo lo deja depending de que otro se lo pase.
+    // Tener `publicar_parte` no le abre la secretaría: la API vuelve a mirar
+    // el tipo del parte.
+    expect(puede('tesorero', 'publicar_parte')).toBe(true);
+    expect(puede('tesorero', 'ver_parte_financiero')).toBe(true);
+    expect(puede('tesorero', 'ver_parte_administrativo')).toBe(false);
+  });
+
   it('VOCAL: mira fotos y comunicación interna, y nada más', () => {
     expect(puede('vocal_titular', 'ver_fotos')).toBe(true);
     expect(puede('vocal_titular', 'ver_comunicacion_interna')).toBe(true);

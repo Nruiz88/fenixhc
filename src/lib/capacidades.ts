@@ -136,6 +136,14 @@ const CAPACIDADES_SECRETARIO: readonly Capacidad[] = [
 const CAPACIDADES_TESORERO: readonly Capacidad[] = [
   'ver_comunicacion_interna',
   'ver_parte_financiero',
+  // Puede CARGAR el parte financiero aunque no pueda cargar el administrativo.
+  // La API vuelve a mirar qué tipo es: tener `publicar_parte` no le abre la
+  // secretaría, solo le deja escribir lo suyo.
+  //
+  // Sin esta línea el tesorero podía leer el parte de ingresos y egresos pero
+  // no escribirlo, que es al revés de como funciona una tesorería. Se detectó
+  // probando por cargo contra producción.
+  'publicar_parte',
   'ver_fotos',
   'comunicar_padres',
   'ver_vencimientos',
