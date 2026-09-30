@@ -11,6 +11,13 @@ const MAX_LIMIT = 1000;
 // Whitelist of columns per table for safety
 const TABLE_COLUMNS: Record<string, string[]> = {
   perfiles: ['id', 'usuario_id', 'rol', 'nombre', 'apellido', 'dni', 'cuil', 'correo', 'telefono', 'direccion', 'foto_url', 'created_at', 'updated_at'],
+  // Solo lectura de estado de cuentas. `password_hash`, `verification_token`
+  // y los expiry NO están en la lista a propósito: si aparecieran, el endpoint
+  // genérico permitiría escribir texto plano en la columna de la contraseña
+  // o leer los tokens de verificación de cualquier usuario. El alta, la
+  // edición y el cambio de contraseña van por /api/admin/create-user y
+  // /api/admin/update-user, que hashean y validan.
+  usuarios: ['id', 'email', 'rol', 'email_verificado', 'verification_sent_at', 'created_at', 'updated_at'],
   deportistas: ['id', 'perfil_id', 'dni_frente_url', 'dni_fondo_url', 'club_activo', 'fecha_inscripcion', 'observaciones', 'created_at'],
   familias: ['id', 'padre_perfil_id', 'deportista_perfil_id', 'tipo_vinculo', 'created_at'],
   cuotas: ['id', 'familia_id', 'tipo_socio', 'monto', 'mes', 'anio', 'estado', 'metodo_pago', 'comprobante_url', 'fecha_pago', 'created_at'],

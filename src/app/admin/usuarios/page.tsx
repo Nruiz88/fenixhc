@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/adminQuery';
+import { getCurrentUser } from '@/lib/auth-client';
 import { ROLES, ROL_LABEL, ROL_DESCRIPCION, ROLES_DIRECTIVA, type Rol } from '@/lib/roles';
 import { iniciales, fecha } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,8 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Toolbar } from '@/components/admin/ui';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Users, UserCheck, Shield, UserPlus, Search, X, Check, Copy } from 'lucide-react';
+import { DialogoEditarUsuario, type UsuarioEditable } from '@/components/admin/editarUsuario';
+import { Users, UserCheck, Shield, UserPlus, Search, X, Check, Copy, Pencil, MailWarning } from 'lucide-react';
 
 const FORM_VACIO = {
   rol: 'socio_benefactor' as Rol,
@@ -45,15 +47,34 @@ export default function AdminUsuariosPage() {
   const [filtroRol, setFiltroRol] = useState<Rol | 'todos'>('todos');
   const [form, setForm] = useState(FORM_VACIO);
   const [creado, setCreado] = useState<{ nombre: string; email: string; password: string } | null>(null);
+  const [editando, setEditando] = useState<UsuarioEditable | null>(null);
+  const [miId, setMiId] = useState<string | null>(null);
 
   async function cargar() {
     setCargando(true);
-    const { data } = await db.select<any>('perfiles', 'id, correo, nombre, apellido, dni, rol, created_at', undefined, { limit: 1000 });
-    setUsers(data ?? []);
+    // Se leen de `usuarios` y no de `perfiles` porque hace falta el estado de
+    // verificación del email, y el rol: mostrar quién está sin confirmar evita
+    // que el club se pregunte después por qué alguien no puede entrar.
+    const { data } = await db.select<any>('perfiles', '*', undefined, { limit: 1000 });
+
+    let verificados: Record<string, number> = {};
+    if ((data ?? []).length) {
+      const { data: usr } = await db.select<any>('usuarios', 'id, email_verificado', undefined, { limit: 1000 });
+      verificados = Object.fromEntries((usr ?? []).map((u: any) => [u.id, u.email_verificado]));
+    }
+
+    setUsers(
+      ((data ?? []) as any[]).map((p) => ({ ...p, email_verificado: verificados[p.id] ?? 0 }))
+    );
     setCargando(false);
   }
 
-  useEffect(() => { cargar(); }, []);
+  async function cargarMiId() {
+    const u = await getCurrentUser();
+    setMiId(u?.id ?? null);
+  }
+
+  useEffect(() => { cargar(); cargarMiId(); }, []);
 
   const directiva = users.filter((u) => ROLES_DIRECTIVA.includes(u.rol));
   const benefactores = users.filter((u) => u.rol === 'socio_benefactor');
@@ -227,15 +248,42 @@ export default function AdminUsuariosPage() {
                   <p className="truncate text-xs text-dim" title={u.correo}>{u.correo}</p>
                 </div>
 
+                {!u.email_verificado && (
+                  <StatusPill tone="warn" title="No confirmó su email: no puede entrar al sistema">
+                    <MailWarning className="h-3 w-3" />Sin verificar
+                  </StatusPill>
+                )}
+
                 <div className="hidden shrink-0 text-right sm:block">
                   <p className="text-xs text-dim">Alta</p>
                   <p className="text-xs text-muted">{fecha(u.created_at)}</p>
                 </div>
+
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-dim hover:text-main"
+                  onClick={() => setEditando(u)}
+                  aria-label={`Editar a ${u.nombre} ${u.apellido}`}
+                  title="Editar usuario"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
               </li>
             ))}
           </ul>
         )}
       </Panel>
+
+      {/* Edición */}
+      <DialogoEditarUsuario
+        usuario={editando}
+        abierto={!!editando}
+        onCerrar={() => setEditando(null)}
+        onGuardado={cargar}
+        soyYo={!!editando && editando.id === miId}
+        soyElUnicoAdmin={directiva.filter((d) => d.rol === 'admin').length <= 1}
+      />
 
       {/* Diálogo de alta */}
       <Dialog open={abierto} onOpenChange={(o) => !o && cerrarTodo()}>

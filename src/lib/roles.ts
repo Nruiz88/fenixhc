@@ -168,7 +168,12 @@ const PERMISOS_VOCAL: readonly Modulo[] = [
   'partidos',
 ];
 
-const SIN_PERMISOS: readonly Modulo[] = ['dashboard'];
+// Los socios no tienen NINGÚN módulo del panel, ni siquiera el dashboard: el
+// suyo está en su portal (/socio-benefactor/dashboard). Incluir 'dashboard'
+// acá no era un problema de seguridad — el proxy bloquea /admin antes de
+// llegar al chequeo de módulo — pero dejaba la matriz de permisos diciendo
+// una cosa y el comportamiento otra.
+const SIN_PERMISOS: readonly Modulo[] = [];
 
 export const PERMISOS: Record<Rol, readonly Modulo[]> = {
   admin: PERMISOS_PRESIDENTE,

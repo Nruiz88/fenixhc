@@ -143,8 +143,33 @@ Las URLs viejas `/padre/*` y `/deportista/*` redirigen con 308 a las nuevas.
 
 - El registro público (`/registro`) solo admite `socio_benefactor` y
   `socio_cadete`. Los cargos se dan de alta desde `/admin/usuarios`.
-- El menú lateral se filtra según el cargo, y el middleware bloquea por URL
+- **Editar usuarios y cambiar roles** se hace desde la misma pantalla, con el
+  lápiz en cada fila. Endpoint `PATCH /api/admin/update-user`.
+- El menú lateral se filtra según el cargo, y el proxy bloquea por URL
   las páginas sin permiso (no es solo cosmético).
+- Los socios no tienen ningún módulo del panel, ni siquiera el dashboard: el
+  suyo está en su portal.
+
+### Reglas del cambio de rol
+
+En `PATCH /api/admin/update-user`, que aplica sobre las **dos** columnas de rol
+(`usuarios.rol` y `perfiles.rol`; si se actualiza una sola, el login y el panel
+muestran roles distintos):
+
+- Nadie puede cambiar su propio rol. Un admin que se degrada a vocal por
+  error puede dejar el club sin nadie que administre los usuarios.
+- No se puede dejar el club sin administradores: hay que crear otro admin
+  antes de bajar el del último.
+- Al pasar a `socio_cadete` se crea la fila en `deportistas` si no existe
+  (el portal y las cuotas la necesitan). Al salir de ese rol la fila se
+  conserva: borrarla tiraría abajo el historial del jugador.
+- **Cambiar el email deja la cuenta sin verificar** y manda un token a la
+  dirección nueva. Sin esto, cualquiera podría poner el email de un tercero y
+  quedarse con la cuenta ya validada.
+- La contraseña se hashea en el endpoint; el genérico de queries nunca la
+  toca. `usuarios` está en su whitelist de columnas solo con `id`, `email`,
+  `rol`, `email_verificado` y fechas: `password_hash` y `verification_token`
+  están fuera a propósito.
 - Un JWT emitido antes de la migración 05 lleva el rol viejo y se rechaza:
   hay que volver a iniciar sesión.
 
@@ -227,7 +252,8 @@ La separación importa: si el acceso a la base estuviera en el archivo puro, el
 driver de MySQL se iría al bundle del navegador.
 
 Tests: `npm test` (vitest). Cubren los casos de fecha que fallan en silencio:
-cambio de año, meses cortos, límite del día del hito y redondeo.
+cambio de año, meses cortos, límite del día del hito y redondeo. También
+fijan la matriz de roles y permisos (`tests/roles.test.ts`).
 
 ## Proxy (antes middleware)
 El archivo se llama `src/proxy.ts` y exporta `proxy()`. En Next 16 la

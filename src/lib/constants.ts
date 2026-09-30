@@ -36,6 +36,10 @@ const TABLAS_ADMIN: string[] = [
   'notificaciones', 'notificaciones_usuarios',
   'fotos_galeria', 'canchas', 'reservas', 'push_subscriptions',
   'contacto_publico', 'partidos', 'comunicados', 'horarios_entrenamiento', 'sponsors',
+  // Solo para el estado de verificación de las cuentas. El acceso a columnas
+  // sensibles lo restringe la whitelist de /api/admin/query, y la escritura
+  // va por endpoints propios que hashean la contraseña.
+  'usuarios',
 ];
 
 // Los cargos de directiva Acceden al panel como el admin, pero cada uno con
