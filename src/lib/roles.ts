@@ -108,6 +108,13 @@ export const MODULOS = [
   // Suite contable: estado de resultados, balance, cuentas por cobrar.
   'contabilidad',
   'configuracion',
+  // Sección de junta directiva: comunicaciones internas, partes, legajos,
+  // seguros, recibos e inventario.
+  //
+  // Tener el módulo NO alcanza para entrar a todo: adentro se decide con
+  // capacidades (src/lib/capacidades.ts). El módulo es la puerta; la capacidad
+  // es qué se ve una vez adentro.
+  'junta',
 ] as const;
 
 export type Modulo = (typeof MODULOS)[number];
@@ -131,6 +138,7 @@ export const MODULO_RUTA: Record<Modulo, string> = {
   reportes: '/admin/reportes',
   contabilidad: '/admin/contabilidad',
   configuracion: '/admin/configuracion',
+  junta: '/admin/junta',
 };
 
 const TODOS = MODULOS;
@@ -148,6 +156,7 @@ const PERMISOS_SECRETARIO: readonly Modulo[] = [
   'comunicados',
   'partidos',
   'reservas',
+  'junta',
 ];
 
 const PERMISOS_TESORERO: readonly Modulo[] = [
@@ -158,6 +167,7 @@ const PERMISOS_TESORERO: readonly Modulo[] = [
   'finanzas',
   'reportes',
   'contabilidad',
+  'junta',
 ];
 
 const PERMISOS_VOCAL: readonly Modulo[] = [
@@ -166,6 +176,10 @@ const PERMISOS_VOCAL: readonly Modulo[] = [
   'jugadores',
   'legajos',
   'partidos',
+  // El vocal entra a la sección de junta, pero adentro solo ve fotos y
+  // comunicación interna. Eso lo resuelve la matriz de capacidades, no esta:
+  // acá se decide si puede entrar a la puerta.
+  'junta',
 ];
 
 // Los socios no tienen NINGÚN módulo del panel, ni siquiera el dashboard: el
