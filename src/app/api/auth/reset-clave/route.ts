@@ -17,22 +17,31 @@ import {
 // un secreto de 64 hex que solo tuvo quien pidió el cambio. Ocultarle el motivo
 // a esa persona solo la deja probando a ciegas.
 //
-// LO QUE ESTE ENDPOINT NO PUEDE HACER
+// ESTE ENDPOINT SÍ CIERRA LAS SESIONES ABIERTAS, Y CÓMO
 //
-// Cerrar las sesiones abiertas de esa cuenta. El token de sesión es un JWT sin
-// estado: no hay dónde anotar "esta sesión fue revocada". La clave nueva empieza
-// a valer para los próximos ingresos, pero un dispositivo que ya estaba
-// adentro sigue adentro hasta que su token expira (7 días).
+// El endpoint no hace nada especial para eso: alcanza con que
+// `cambiarClaveConToken` ponga `password_changed_at = NOW()`.
 //
-// Las dos salidas son malas por razones distintas: rotar el JWT_SECRET cierra las
-// sesiones de todo el club —una clave olvidada cerraría el portal del
-// tesorero—, y esperar los 7 días deja abierta la sesión de quien robó la
-// clave, que es justo el caso que motiva hacer esto.
+// El token de sesión lleva dentro el sello de la clave con la que se emitió, y
+// `getCurrentUser` lo compara contra el valor de la base antes de devolver un
+// dato. Token con sello viejo, base con sello nuevo: el token nació de una clave
+// que ya no existe y se descarta. La sesión cerrada dura un request.
 //
-// Queda anotado como limitación conocida. Cuando haga falta, la solución es una
-// tabla de sesiones revocadas por usuario con un chequeo en el login, y no en el
-// proxy: la verificación del JWT tiene que seguir siendo sin base de datos
-// porque corre en cada request.
+// LAS DOS SALIDAS QUE SE DESCARTARON
+//
+// Rotar el JWT_SECRET cierra las sesiones de todo el club: una clave olvidada
+// por una familia cerraría el portal del tesorero. Esperar los 7 días de
+// expiración deja abierta la sesión de quien robó la clave, que es justo el
+// caso que motiva hacer esto. El sello es per usuario, así que no tiene ninguna
+// de las dos consecuencias.
+//
+// DÓNDE ESTÁ LA COMPARACIÓN Y POR QUÉ NO EN EL PROXY
+//
+// En `getCurrentUser`, no en `verifyToken`. El proxy corre en cada request y
+// `verifyToken` es sincrónica: no puede consultar la base. La comparación va
+// entonces en la puerta de los DATOS, que es async. Si el proxy se queda con
+// un token viejo, lo único que pasa es que se renderiza el cascarón de la
+// página y las llamadas por API devuelven 401.
 
 /**
  * Revisa el token SIN consumirlo.

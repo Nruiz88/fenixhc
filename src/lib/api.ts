@@ -1,5 +1,7 @@
 // Unified API client for admin and user queries
 
+import { alLogin, ERROR_SESION_VENCIDA } from './sesion';
+
 interface QueryOptions {
   table: string;
   columns?: string;
@@ -25,7 +27,10 @@ async function apiQuery<T = any>(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (res.status === 401) return { data: null, error: 'No autenticado' };
+    if (res.status === 401) {
+      alLogin();
+      return { data: null, error: ERROR_SESION_VENCIDA };
+    }
     const json = await res.json();
     if (!res.ok) return { data: null, error: json.error };
     return { data: json.data ?? null, error: null };
@@ -47,7 +52,10 @@ async function apiMutate<T = any>(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ operation, table, data, filters }),
     });
-    if (res.status === 401) return { data: null, error: 'No autenticado' };
+    if (res.status === 401) {
+      alLogin();
+      return { data: null, error: ERROR_SESION_VENCIDA };
+    }
     const json = await res.json();
     if (!res.ok) return { data: null, error: json.error };
     return { data: json.data ?? null, error: null };

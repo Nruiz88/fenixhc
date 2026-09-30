@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await queryOne(
-      'SELECT id, email, password_hash, rol, email_verificado, verification_sent_at FROM usuarios WHERE email = ?',
+      'SELECT id, email, password_hash, rol, email_verificado, verification_sent_at, password_changed_at FROM usuarios WHERE email = ?',
       [emailLimpio]
     );
 
@@ -63,13 +63,19 @@ export async function POST(request: NextRequest) {
       [user.id]
     );
 
-    const token = createToken({
-      id: user.id,
-      rol: user.rol,
-      nombre: perfil?.nombre || '',
-      apellido: perfil?.apellido || '',
-      email: user.email,
-    });
+    const token = createToken(
+      {
+        id: user.id,
+        rol: user.rol,
+        nombre: perfil?.nombre || '',
+        apellido: perfil?.apellido || '',
+        email: user.email,
+      },
+      // El sello de clave. Sin esto, el token no lleva la marca de qué clave
+      // nació y no se puede revocar: cambiar la clave no cerraría las
+      // sesiones abiertas.
+      user.password_changed_at
+    );
 
     const response = NextResponse.json({
       success: true,

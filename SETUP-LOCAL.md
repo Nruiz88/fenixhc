@@ -126,14 +126,19 @@ npm run dev
 - El correo **nunca pide la clave**: el link abre una pantalla para escribir la
   nueva. Así el ataque de suplantación no tiene qué robar.
 
-> **Limitación conocida:** cambiar la clave **no cierra las sesiones abiertas**.
-> El JWT de sesión es sin estado y no hay dónde anotar "esta sesión fue
-> revocada", así que un dispositivo que ya estaba adentro sigue adentro hasta
-> que su token expira (7 días). Rotar el `JWT_SECRET` cerraría las sesiones de
-> todo el club, que para una clave olvidada es un mal canje. Cuando haga falta,
-> la solución es una tabla de sesiones revocadas con un chequeo **en el login**,
-> no en el proxy: la verificación del JWT tiene que seguir siendo sin base de
-> datos porque corre en cada request.
+- **Cambiar la clave cierra las sesiones abiertas de esa cuenta**, y solo de esa
+  cuenta. El JWT lleva dentro el sello de la clave con que se emitió (`pc`) y
+  `getCurrentUser` lo compara contra `usuarios.password_changed_at` antes de
+  devolver un dato. Token con sello viejo, base con sello nuevo: se descarta.
+  La sesión cerrada dura **un request**.
+- La comparación vive en `getCurrentUser`, no en el proxy, porque `verifyToken`
+  es sincrónica y corre en cada request: no puede consultar la base. Si el proxy
+  se queda con un token viejo, se renderiza el cascarón de la página y las
+  llamadas por API devuelven 401, que el cliente traduce a un reenvío al login.
+- **Un token sin sello se rechaza.** Los JWT emitidos antes de esto no lo
+  tienen, así que el primer despliegue cierra todas las sesiones abiertas y
+  hay que entrar de nuevo. Es el canje correcto: aceptar un token sin sello
+  dejaría abierta la puerta justo de los tokens más viejos.
 - Queries: `/api/admin/query` (admin), `/api/user/query` (sesión),
   `/api/public/query` (público: comunicados, galería, sponsors, horarios y contacto).
 

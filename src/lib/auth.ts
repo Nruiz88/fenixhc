@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
 import { isRol, esDirectiva, tieneModulo, type Rol, type Modulo } from './roles';
+import { queryOne } from './db';
 
 // El secreto es obligatorio: con uno fijo o débil cualquiera podría forjar tokens.
 const SECRET = (() => {
@@ -31,6 +32,17 @@ export interface AuthUser {
   nombre: string;
   apellido: string;
   email: string;
+  /**
+   * Momento del último cambio de clave, en segundos, según el token que se
+   * emitió. Es lo que hace revocables las sesiones sin tabla de sesiones.
+   *
+   * UN TOKEN SIN ESTE CAMPO SE RECHAZA. Nació de una clave que el sistema no
+   * puede confirmar que siga vigente, y aceptarlo dejaría abierta justo la
+   * puerta de los tokens más viejos — los que un ladrón viene teniendo desde
+   * antes de que existiera esta protección. Cuesta un cierre de sesión general
+   * al desplegar, y es el canje correcto.
+   */
+  pc?: number;
 }
 
 // Hash password
@@ -44,12 +56,37 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 // Create JWT token
-export function createToken(user: AuthUser): string {
+//
+// `passwordChangedAt` va DENTRO del token. Con eso, comparar contra la base
+// después permite descartar el token sin tocar la firma: si la clave cambió
+// después de que el token se emitió, el token nació de una clave que ya no
+// existe.
+export function createToken(user: AuthUser, passwordChangedAt?: Date | string | null): string {
+  const pc = aSegundos(passwordChangedAt);
   return jwt.sign(
-    { id: user.id, rol: user.rol, nombre: user.nombre, apellido: user.apellido, email: user.email },
+    { ...user, pc },
     SECRET,
     { expiresIn: EXPIRES_IN }
   );
+}
+
+/**
+ * Cualquier cosa que venga de la base a epoch en segundos.
+ *
+ * El driver devuelve las DATE y los TIMESTAMP como objeto Date, así que esto
+ * tiene que aceptar los tres: Date, texto ISO y número. Un `new Date(valor)`
+ * a secas con `undefined` da `Invalid Date`, y un token con `pc: NaN` pasa
+ * cualquier comparación — o sea, ningún token se revocaría nunca.
+ */
+export function aSegundos(valor: Date | string | number | null | undefined): number {
+  if (valor == null) return 0;
+  if (typeof valor === 'number') return Math.floor(valor);
+  if (valor instanceof Date) {
+    const t = valor.getTime();
+    return Number.isNaN(t) ? 0 : Math.floor(t / 1000);
+  }
+  const t = new Date(valor).getTime();
+  return Number.isNaN(t) ? 0 : Math.floor(t / 1000);
 }
 
 // Verify JWT token
@@ -57,10 +94,22 @@ export function createToken(user: AuthUser): string {
 // Se valida que el rol siga siendo uno del catalogo actual: los JWT emitidos
 // antes de la migracion 05 llevan 'padre'/'deportista' y se rechazan, lo que
 // obliga a volver a iniciar sesion (que era el costo de renombrar el ENUM).
+//
+// Y se exige el sello de clave, por lo antes explicado en AuthUser.pc.
+//
+// ESTA FUNCIÓN ES SINCRÓNICA A PROPÓSITO. Corre en el proxy, en cada request,
+// y no puede consultar la base. Por eso solo hace la comprobación barata —
+// firma, expiración, rol, presencia del sello—. La comparación con la clave
+// actual va en getCurrentUser(), que es async y es la puerta de los DATOS.
+// La diferencia: si el proxy se equivoca, se ve un cascarón de página vacío;
+// ningún dato sale.
 export function verifyToken(token: string): AuthUser | null {
   try {
     const payload = jwt.verify(token, SECRET) as AuthUser;
     if (!payload || typeof payload.id !== 'string' || !isRol(payload.rol)) {
+      return null;
+    }
+    if (typeof payload.pc !== 'number' || !Number.isFinite(payload.pc)) {
       return null;
     }
     return payload;
@@ -107,7 +156,48 @@ export async function getCurrentUser(request?: NextRequest): Promise<AuthUser | 
   }
 
   if (!token) return null;
-  return verifyToken(token);
+
+  const user = verifyToken(token);
+  if (!user) return null;
+
+  // Acá va la comprobación cara, y es la que hace TODO el trabajo de la
+  // revocación.
+  //
+  // Se compara el sello que el token trae con la clave vigente en la base. Si
+  // la clave se cambió después de que el token se emitió, el token nació de una
+  // clave que ya no existe y se descarta acá.
+  //
+  // POR QUÉ ACA Y NO EN EL PROXY
+  //
+  // Porque el proxy no puede: `verifyToken` es sincrónica y corre en cada
+  // request. Acá hay una consulta, sí, pero es un SELECT por clave primaria.
+  //
+  // Y si el proxy se queda con un token viejo, lo que pasa es que se renderiza
+  // el cascarón de la página y todas las llamadas por API.devuelven 401. No
+  // sale ningún dato. Un panel donde no se ven datos no es una brecha: es un
+  // error de permisos que se traduce en pantalla vacía.
+  //
+  // POR QUÉ NO SE CACHEA
+  //
+  // Un caché de 30 segundos abriría una ventana en la que la revocación no
+  // surte efecto: se cambia la clave y el ladrón entra treinta segundos más.
+  // Una consulta por primary key es sub-milimisegundo. Optimizar esto después
+  // vale, pero solo con la basura a la vista.
+  const actual = await queryOne<{ pc: string | Date | null }>(
+    'SELECT password_changed_at AS pc FROM usuarios WHERE id = ? LIMIT 1',
+    [user.id]
+  );
+
+  // Si el usuario no existe, el token no sirve: la baja anonimiza el perfil
+  // pero la cuenta desactivada puede seguir existiendo, y si desaparece el
+  // usuario tampoco puede autenticarse.
+  if (!actual) return null;
+
+  if (aSegundos(actual.pc) > user.pc!) {
+    return null;
+  }
+
+  return user;
 }
 
 // Require authentication - returns user or error

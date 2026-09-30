@@ -135,14 +135,23 @@ describe('las reglas del reset', () => {
   });
 });
 
-describe('lo que el reset NO puede hacer', () => {
-  it('la limitación está escrita, no escondida', () => {
-    // El JWT de sesión es sin estado: no hay dónde anotar "esta sesión fue
-    // revocada". Decirlo en el código evita que alguien asuma lo contrario y
-    // prometa al socio que el robo de clave cierra su sesión abierta.
-    expect(LIB).toMatch(/sin estado/);
-    // El texto está partido por el prefijo de comentario, así que el patrón
-    // tiene que tolerar el `//` en medio.
-    expect(CAMBIAR).toMatch(/JWT sin[\s\S]{0,12}estado/);
+describe('cerrar las sesiones abiertas al cambiar la clave', () => {
+  it('el reset renueva el sello de la clave', () => {
+    // `password_changed_at` es lo que invalida los tokens emitidos con la clave
+    // anterior. Si el reset no lo tocara, recuperar la clave dejaría abierta la
+    // sesión de quien la tenía.
+    expect(LIB).toMatch(/password_changed_at = NOW\(\)/);
+  });
+
+  it('el endpoint no promete que las sesiones siguen abiertas', () => {
+    // La limitación anterior estaba escrita en el código. Ahora la limitación
+    // es la inversa: si el texto dijera que no se cierran, el socio le estaría
+    // creyendo al club algo falso.
+    expect(CAMBIAR).not.toMatch(/NO PUEDE HACER/i);
+    expect(CAMBIAR).toMatch(/CIERRA LAS SESIONES ABIERTAS/);
+  });
+
+  it('el aviso de exito dice que las sesiones se cerraron', () => {
+    expect(LIB).toMatch(/Las sesiones que estaban abiertas en otros dispositivos ya se cerraron/);
   });
 });

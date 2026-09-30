@@ -23,12 +23,15 @@
 //     pide otro, el primero tiene que dejar de servir. Si no, el que robbed
 //     del mail viejo tiene una ventana que el usuario ya cerró.
 //
-// LO QUE ESTE ARCHIVO NO PUEDE HACER
+// LO QUE ESTE ARCHIVO NO HACE, Y DONDE ESTA HECHO
 //
-// Invalidar las sesiones abiertas de esa cuenta. El token de sesión es un JWT
-// sin estado: no hay tabla donde anotar "esta sesión fue revocada", y para
-// invalidarlo hay que tocar la clave del secreto o invalidar el token a mano.
-// Está anotado en SETUP-LOCAL.md como limitación conocida, no escondido.
+// Invalidar las sesiones abiertas de esa cuenta. NO lo hace acá, pero el
+// `password_changed_at = NOW()` de más abajo lo resuelve: el token de sesión
+// lleva dentro el sello de la clave con que se emitió, y `getCurrentUser` lo
+// compara contra la base. Cambiar la clave descarta los tokens viejos.
+//
+// Ver el detalle de por qué la comparación vive en `getCurrentUser` y no en el
+// proxy, en el comentario de esa función.
 
 import { randomBytes, createHash, timingSafeEqual } from 'crypto';
 import { execute, query } from './db';
@@ -221,7 +224,7 @@ export async function cambiarClaveConToken(params: {
   return {
     ok: true,
     mensaje:
-      'Cambiamos tu contraseña. Entrá con la nueva. Si tenías la sesión abierta en otro dispositivo, cerrala.',
+      'Cambiamos tu contraseña. Entrá con la nueva. Las sesiones que estaban abiertas en otros dispositivos ya se cerraron.',
   };
 }
 
