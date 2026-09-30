@@ -249,6 +249,24 @@ export interface AlertaConsentimiento {
  *  - SIN_VINCULO_VERIFICADO: datos de un menor cargados por alguien que no
  *    figura como representante.
  */
+/**
+ * Fecha legible.
+ *
+ * El driver devuelve las DATE como objetos Date. Interpolados directo salen
+ * como "Wed May 20 2026 00:00:00 GMT+0000", que no le sirve de mucho a una
+ * secretaria que tiene que llamar a una familia. Además la zona horaria
+ * puede correrse un día: 20 de mayo a la noche en Argentina es 21 en UTC.
+ */
+function formatearFecha(valor: unknown): string {
+  if (!valor) return '—';
+  if (valor instanceof Date) {
+    return valor.toLocaleDateString('es-AR', {
+      day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
+    });
+  }
+  return String(valor);
+}
+
 export async function alertasConsentimientos(): Promise<AlertaConsentimiento[]> {
   const alertas: AlertaConsentimiento[] = [];
 
@@ -323,7 +341,7 @@ export async function alertasConsentimientos(): Promise<AlertaConsentimiento[]> 
       nombre: r.nombre,
       apellido: r.apellido,
       dni: r.dni,
-      detalle: `Cumplió 18 el ${r.mayoria_al}. El consentimiento lo firmó su representante cuando era menor.`,
+      detalle: `Cumplió 18 el ${formatearFecha(r.mayoria_al)}. El consentimiento lo firmó su representante cuando era menor.`,
       accion:
         'Pedirle que confirme y renueve los consentimientos, o dar de baja lo que no renueve.',
       urgente: false,

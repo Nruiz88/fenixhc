@@ -57,6 +57,9 @@ mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/02_seed.sql
   agrega `resultado` y `canal`, y vuelve `perfil_id` nullable para los pedidos que llegan
   sin ficha asociada. **Sin ella el formulario `/solicitar-baja` y el panel de solicitudes
   devuelven error.**
+- `mariadb/10_menores_consentimientos.sql` → `deportistas.fecha_nacimiento`, la tabla
+  `consentimientos` (solo de alta), `revocaciones_consentimiento` y `opiciones_menor`.
+  **Sin ella el registro con consentimiento da error y no se puede subir el DNI.**
 
 Todas son idempotentes: se pueden volver a correr sin duplicar nada.
 
@@ -287,6 +290,61 @@ piezas y ninguna borra nada por sí sola:
 - Aprobar conserva pagos y contabilidad; solo anonimiza la identidad.
 - Rechazar exige motivo: se le comunica a quien pidió.
 - Módulo requerido: `configuracion` (admin y presidente).
+
+## Menores de edad y consentimientos
+El club no sabe si un jugador es menor si no tiene la fecha de nacimiento.
+Y no puede probar que alguien consentió si no guarda el consentimiento. Las
+dos cosas vivían solo en el papel antes de esto.
+
+**Estructura:**
+
+| Tabla | Qué guarda |
+| --- | --- |
+| `deportistas.fecha_nacimiento` | Lo que define si es menor, y cuándo cumple 18 |
+| `consentimientos` | Actos de consentimiento. **Solo altas: no se editan ni se borran** |
+| `revocaciones_consentimiento` | La oposición. Revocar no borra, agrega |
+| `opiones_menor` | Qué se le preguntó al menor y qué dijo |
+
+**Por qué el consentimiento es solo de alta.** Si el club puede modificarlo,
+deja de ser prueba. Con dos tablas se demuestra la secuencia completa —"el 3
+de marzo lo consintió, el 20 de agosto lo revocó"—; con una sola que se
+actualiza queda solo el último estado.
+
+**Catálogo de finalidades** (`src/lib/consentimientos.ts`), cada una con su
+base legal:
+
+- `inscripcion`, `contacto`, `comunicaciones` → ejecución del contrato
+- `documentacion_dni`, `datos_deportivos`, `imagenes` → **consentimiento
+  expreso**, casilla propia sin marcar, y opinión del menor
+- `cuotas_contabilidad` → **obligación legal**. No se puede revocar: si se
+  pudiera, el club quedaría sin contabilidad.
+
+**Reglas que no se negocian:**
+
+- El **"no" del menor veda la finalidad**, aunque el representante firme
+  (art. 124 inc. b del Código Civil). El registro lo rechaza y la pantalla de
+  autorización también.
+- **Decir que no NO bloquea el alta.** La puerta está en la operación: subir
+  la foto del DNI exige consentimiento vigente (`/api/user/query`, no la
+  pantalla, porque la pantalla se puede saltar).
+- La fecha de nacimiento es obligatoria en el alta de un jugador y el vínculo
+  se declara (antes el backend ponía `padre` fijo: una madre quedaba
+  asentada como padre).
+
+**La alerta que aparece sola:** `cumplo 18`. Cuando un jugador cumple 18, el
+consentimiento que firmó su representante deja de ser la base legal: a partir
+de ahí tiene que firmarlo el jugador. Es lo único que se dispara con el correr
+del tiempo sin que nadie haga nada.
+
+**Pendiente operativo:** los jugadores que ya estaban cargados **no tienen
+fecha de nacimiento ni consentimiento registrado**. Hay que recabar ambos
+(`/admin/configuracion` → "Consentimientos y menores"). Hasta entonces, el
+club no puede responder quién autorizó nada.
+
+> **Lo que esto NO es:** un criterio legal. Las referencias a la Ley 25.326 y
+> al Código Civil están para que un abogado rastree el fundamento. El texto
+> del aviso, el catálogo de finalidades y los plazos necesitan firma profesional
+> antes de operar con menores.
 
 ## Proxy (antes middleware)
 El archivo se llama `src/proxy.ts` y exporta `proxy()`. En Next 16 la
