@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Save, Upload, FileText } from 'lucide-react';
+import { OpinionDelMenor } from '@/components/OpinionDelMenor';
 
 export default function SocioCadetePerfil() {
   const [perfil, setPerfil] = useState<any>(null);
@@ -23,12 +24,41 @@ export default function SocioCadetePerfil() {
   }, []);
   const handleSave = async (e: React.FormEvent) => { e.preventDefault(); const { error } = await udb.update('perfiles', form, { id: perfil.id }); if (error) toast.error('Error'); else toast.success('Actualizado'); };
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (!file || !perfil) return; const url = await uploadAvatar(perfil.id, file); if (url) { await udb.update('perfiles', { foto_url: url }, { id: perfil.id }); setPerfil({ ...perfil, foto_url: url }); toast.success('Foto actualizada'); } };
-  const handleDni = async (e: React.ChangeEvent<HTMLInputElement>, side: 'frente' | 'fondo') => { const file = e.target.files?.[0]; if (!file || !perfil) return; const url = await uploadDni(perfil.id, file, side); if (url) { await udb.update('deportistas', { [side === 'frente' ? 'dni_frente_url' : 'dni_fondo_url']: url }, { perfil_id: perfil.id }); toast.success('DNI ' + side + ' subido'); } };
+  // El resultado del update importa. Antes se llamaba y se ignoraba la
+  // respuesta: el archivo se subía, la escritura podía ser rechazada y la
+  // pantalla decía "subido" igual. Con la puerta de consentimiento activa eso
+  // deja de ser un detalle: el club le diría a la familia que tiene la
+  // documentación cuando en realidad no la tiene guardada.
+  const handleDni = async (e: React.ChangeEvent<HTMLInputElement>, side: 'frente' | 'fondo') => {
+    const file = e.target.files?.[0];
+    if (!file || !perfil) return;
+
+    const url = await uploadDni(perfil.id, file, side);
+    if (!url) return;
+
+    const { error } = await udb.update(
+      'deportistas',
+      { [side === 'frente' ? 'dni_frente_url' : 'dni_fondo_url']: url },
+      { perfil_id: perfil.id }
+    );
+
+    if (error) {
+      toast.error('No pudimos guardar la documentación', { description: error, duration: 10000 });
+      return;
+    }
+
+    setDeportista({
+      ...deportista,
+      [side === 'frente' ? 'dni_frente_url' : 'dni_fondo_url']: url,
+    });
+    toast.success('DNI ' + side + ' guardado');
+  };
 
   if (!perfil) return <div className="flex items-center justify-center py-20"><div className="h-8 w-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" /></div>;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      <OpinionDelMenor />
       <div><h1 className="text-2xl font-bold text-white">Mi Perfil</h1><p className="text-gray-400 text-sm mt-1">Actualizá tu información</p></div>
       <Card className="bg-gray-900 border-gray-800">
         <CardContent className="p-6">
