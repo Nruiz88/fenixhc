@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute, uuid } from '@/lib/db';
+import { query, queryOne, execute, uuid } from '@/lib/db';
 import { requireAuth } from '@/lib/auth';
 import { rateLimit } from '@/lib/rateLimit';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
@@ -48,31 +48,35 @@ export async function POST(request: NextRequest) {
     let vinculo: string;
 
     if (esUnoMismo) {
-      const [mios] = await query<any>(
+      const mio = await queryOne<any>(
         "SELECT nombre, apellido, dni FROM perfiles WHERE id = ? AND apellido <> 'DADO DE BAJA'",
         [user.id]
       );
-      if (!mios?.[0]) {
+      if (!mio) {
         return NextResponse.json(
           { error: 'Tu ficha ya no está activa. Escribinos a la administración.' },
           { status: 404 }
         );
       }
-      nombreParaLaSolicitud = `${mios[0].nombre} ${mios[0].apellido}`;
-      documento = mios[0].dni;
+      nombreParaLaSolicitud = `${mio.nombre} ${mio.apellido}`;
+      documento = mio.dni;
       vinculo = 'El propio socio';
     } else {
       // Solo se puede pedir por un jugador realmente vinculado a esta
       // persona. Sin este chequeo, cualquier socio podría pedir la baja de
       // un niño que no es hijo suyo.
-      const [vinculados] = await query<any>(
+      //
+      // `query` devuelve las filas directamente: no es la tupla
+      // [rows, fields] de `conn.execute`. Ya se confundió una vez con eso y
+      // terminó llamándole `.find` a una fila suelta.
+      const vinculados = await query<any>(
         `SELECT p.id, p.nombre, p.apellido, p.dni
          FROM familias f
          JOIN perfiles p ON p.id = f.deportista_perfil_id
          WHERE f.padre_perfil_id = ?`,
         [user.id]
       );
-      const hijo = vinculados?.find((h: any) => h.id === perfil_id);
+      const hijo = vinculados.find((h: any) => h.id === perfil_id);
 
       if (!hijo) {
         return NextResponse.json(
@@ -86,12 +90,12 @@ export async function POST(request: NextRequest) {
     }
 
     // No se apila un pedido idéntico que ya está pendiente.
-    const [yaHay] = await query<any>(
+    const yaHay = await queryOne<any>(
       `SELECT id FROM solicitudes_baja
         WHERE perfil_id = ? AND estado IN ('pendiente','en_revision')`,
       [perfil_id]
     );
-    if (yaHay?.[0]) {
+    if (yaHay) {
       return NextResponse.json(
         { error: 'Ya hay un pedido de baja en curso para esta persona' },
         { status: 409 }
@@ -142,12 +146,12 @@ export async function GET() {
     }
     const { user } = auth;
 
-    const [propio] = await query<any>(
+    const propio = await queryOne<any>(
       "SELECT id, nombre, apellido, dni, rol FROM perfiles WHERE id = ? AND apellido <> 'DADO DE BAJA'",
       [user.id]
     );
 
-    const [hijos] = await query<any>(
+    const hijos = await query<any>(
       `SELECT p.id, p.nombre, p.apellido, p.dni, p.rol
        FROM familias f
        JOIN perfiles p ON p.id = f.deportista_perfil_id
@@ -156,7 +160,7 @@ export async function GET() {
     );
 
     return NextResponse.json({
-      data: { propio: propio?.[0] ?? null, hijos: hijos ?? [] },
+      data: { propio, hijos },
     });
   } catch (err: any) {
     console.error('Candidatos para baja (portal):', err);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute, uuid } from '@/lib/db';
+import { query, queryOne, execute, uuid } from '@/lib/db';
 import { requireModulo } from '@/lib/auth';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { ejecutarBaja, ErrorBaja } from '@/lib/baja';
@@ -81,11 +81,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Falta la solicitud o la acción' }, { status: 400 });
     }
 
-    const [solicitudes] = await query<any>(
+    // `query` devuelve las filas, no una tupla [rows, fields] como
+    // `conn.execute`. Desestructurar acá sacaba la primera fila del resultado
+    // y después buscarle un [0] dentro: siempre undefined, y toda solicitud
+    // daba "no existe".
+    const solicitud = await queryOne<any>(
       'SELECT id, solicitante_nombre, solicitante_email, motivo, estado FROM solicitudes_baja WHERE id = ?',
       [solicitud_id]
     );
-    const solicitud = solicitudes?.[0];
 
     if (!solicitud) {
       return NextResponse.json({ error: 'La solicitud no existe' }, { status: 404 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne, execute, insert, uuid } from '@/lib/db';
+import { queryOne, execute, insert, uuid } from '@/lib/db';
 import { requireModulo, hashPassword } from '@/lib/auth';
 import { reenviarVerificacion } from '@/lib/verification';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
@@ -84,7 +84,7 @@ export async function PATCH(request: NextRequest) {
 
         // Tiene que quedar al menos un admin en el club.
         if (usuario.rol === 'admin') {
-          const [otros] = await query<{ c: number }>(
+          const otros = await queryOne<{ c: number }>(
             "SELECT COUNT(*) AS c FROM usuarios WHERE rol = 'admin' AND id != ?",
             [id]
           );
