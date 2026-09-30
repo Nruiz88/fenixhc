@@ -131,23 +131,34 @@ export interface FilaCartera {
   tramo: string | null;
 }
 
+/**
+ * Tramo de antigüedad ya calculado.
+ *
+ * OJO: acá NO hay `test`, y es a propósito. Esta estructura cruza del
+ * Server Component al Client Component (`BarrasAntiguedad`), y Next no puede
+ * serializar funciones: la página entera devolvía 500 en producción con
+ * "Functions cannot be passed directly to Client Components".
+ *
+ * La clasificación se hace acá, en el servidor, y de acá sale solo el
+ * resultado. Si alguna vez hace falta filtrar en el cliente, se hace con
+ * `clave` o con `porcentajeRecargo`, que sí son datos.
+ */
 export interface BloqueAntiguedad {
   clave: string;
   etiqueta: string;
-  test: (dias: number, porcentaje: number) => boolean;
   cantidad: number;
   total: number;
 }
 
-// Los bloques se armar sobre el recargo y no sobre los días: lo que le
-// importa al tesorero de la cartera vencida es cuánto está costando cada
-// tramo, no quantos días lleva. Además evita tener que inventar días para
-// cuotas que no vencen por el paso del tiempo sino por un acuerdo.
-const BLOQUES: Omit<BloqueAntiguedad, 'cantidad' | 'total'>[] = [
-  { clave: 'al_dia', etiqueta: 'Al día', test: (_d, pct) => pct === 0 },
-  { clave: 'r1', etiqueta: 'Primer recargo', test: (_d, pct) => pct > 0 && pct <= 10 },
-  { clave: 'r2', etiqueta: 'Segundo recargo', test: (_d, pct) => pct > 10 && pct <= 20 },
-  { clave: 'r3', etiqueta: 'Tercer recargo o más', test: (_d, pct) => pct > 20 },
+// Se clasifica por porcentaje de recargo y no por días: lo que le importa al
+// tesorero de la cartera vencida es cuánto está costando cada tramo. Además
+// evita inventar días para cuotas que no vencen por el paso del tiempo sino
+// por un acuerdo puntual.
+const TRAMOS: { clave: string; etiqueta: string; entra: (pct: number) => boolean }[] = [
+  { clave: 'al_dia', etiqueta: 'Al día', entra: (pct) => pct === 0 },
+  { clave: 'r1', etiqueta: 'Primer recargo', entra: (pct) => pct > 0 && pct <= 10 },
+  { clave: 'r2', etiqueta: 'Segundo recargo', entra: (pct) => pct > 10 && pct <= 20 },
+  { clave: 'r3', etiqueta: 'Tercer recargo o más', entra: (pct) => pct > 20 },
 ];
 
 const ETIQUETA_TIPO_SOCIO: Record<string, string> = {
@@ -274,9 +285,14 @@ export async function calcularReporteContable(opts: {
     };
   });
 
-  const bloques = BLOQUES.map((b) => {
-    const items = filas.filter((f) => b.test(f.dias, f.porcentajeRecargo));
-    return { ...b, cantidad: items.length, total: items.reduce((s, f) => s + f.total, 0) };
+  const bloques = TRAMOS.map((t) => {
+    const items = filas.filter((f) => t.entra(f.porcentajeRecargo));
+    return {
+      clave: t.clave,
+      etiqueta: t.etiqueta,
+      cantidad: items.length,
+      total: items.reduce((s, f) => s + f.total, 0),
+    };
   });
 
   // El total a cobrar incluye el recargo vigente: es lo que el club puede
