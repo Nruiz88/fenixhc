@@ -204,6 +204,23 @@ export function moduloDeRuta(pathname: string): Modulo | null {
   return null;
 }
 
+// Rutas del panel que cuelgan de un módulo pero no son la ruta canónica de
+// ese módulo. Sin esta lista, /admin/privacidad no estaría protegida por el
+// proxy: caería en `null` y cualquiera de la directiva podría entrar, y la
+// pantalla que muestra quién abrió los DNI de los socios quedaría abierta a
+// los vocales.
+const RUTAS_ADICIONALES: Record<string, Modulo> = {
+  '/admin/privacidad': 'configuracion',
+};
+
+/** Módulo al que pertenece una ruta del panel, incluidas las no canónicas. */
+export function moduloDeRutaCompleto(pathname: string): Modulo | null {
+  for (const [ruta, modulo] of Object.entries(RUTAS_ADICIONALES)) {
+    if (pathname === ruta || pathname.startsWith(ruta + '/')) return modulo;
+  }
+  return moduloDeRuta(pathname);
+}
+
 /** Portal propio de cada tipo de socio (los cargos van a /admin). */
 export const PORTAL_POR_ROL: Record<Rol, string> = {
   admin: '/admin/dashboard',

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { authenticateFromRequest } from '@/lib/auth';
 import { isProtectedRoute } from '@/lib/constants';
-import { esDirectiva, moduloDeRuta, tieneModulo, PORTAL_POR_ROL } from '@/lib/roles';
+import { esDirectiva, moduloDeRutaCompleto, tieneModulo, PORTAL_POR_ROL } from '@/lib/roles';
 
 // URLs viejas -> nuevas. Se redirige con 308 para no romper links guardados
 // ni perder el metodo en un POST.
@@ -50,7 +50,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
     }
     // Recorte por modulo: un tesorero no entra a /admin/usuarios.
-    const modulo = moduloDeRuta(pathname);
+    const modulo = moduloDeRutaCompleto(pathname);
     if (modulo && !tieneModulo(user.rol, modulo)) {
       return NextResponse.redirect(new URL('/admin/dashboard?sinPermiso=1', request.url));
     }

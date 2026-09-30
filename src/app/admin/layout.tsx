@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Menu, LogOut, LayoutDashboard, Users, UserCheck, FileText, Link2,
   DollarSign, PieChart, Bell, Calendar, Home, ChevronRight, Settings,
-  Megaphone, Star, Clock, TrendingUp, BarChart3, Shield,
+  Megaphone, Star, Clock, TrendingUp, BarChart3, Shield, ShieldCheck,
 } from 'lucide-react';
 import { tieneModulo, ROL_LABEL, type Modulo, type Rol } from '@/lib/roles';
 import { iniciales } from '@/lib/format';
@@ -63,6 +63,7 @@ const SECCIONES: { titulo: string; items: NavItem[] }[] = [
     titulo: 'Sistema',
     items: [
       { label: 'Configuración', href: '/admin/configuracion', icon: Settings, modulo: 'configuracion' },
+      { label: 'Datos personales', href: '/admin/privacidad', icon: ShieldCheck, modulo: 'configuracion' },
     ],
   },
 ];
