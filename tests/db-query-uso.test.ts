@@ -25,6 +25,7 @@ import { join, relative } from 'node:path';
 // nadie va a mirar.
 
 const SRC = join(__dirname, '../src');
+const JUNTA_DB = readFileSync(join(__dirname, '../src/lib/junta-db.ts'), 'utf8');
 
 function archivos(dir: string = SRC, acc: string[] = []): string[] {
   for (const entrada of readdirSync(dir)) {
@@ -60,5 +61,32 @@ describe('uso de la capa de base de datos', () => {
       culpables,
       `query() devuelve las filas, no [rows, fields]. Para una sola fila usá queryOne():\n  ${culpables.join('\n  ')}`
     ).toEqual([]);
+  });
+});
+
+describe('conn.execute() devuelve una tupla y eso se olvida', () => {
+  // La misma trampa, del otro lado. `conn.execute` SÍ devuelve [rows, fields],
+  // así que `const [filas] = await conn.execute(...)` da el array de filas.
+  // Después, `if (filas && filas[0].columna)` funciona con filas pero revienta
+  // con las vacías, porque un array vacío es truthy en JavaScript.
+  //
+  // Pasó dos veces en el mismo archivo: al guardar el seguro por primera vez
+  // (no hay fila anterior) y, en el Receipt de esa fecha, con la forma
+  // equivalente. Ninguna de las dos da error de compilación.
+
+  it('no se desarma un execute dentro de una transaccion', () => {
+    const culpable = [...JUNTA_DB.matchAll(/const\s*\[(\w+)\]\s*=\s*await\s+conn\.execute/g)].map(
+      (m) => m[1]! // el nombre de la variable, sin los corchetes
+    );
+
+    expect(culpable.length, 'no se encontró ningún execute: el patrón cambió').toBeGreaterThan(0);
+    return culpable;
+  });
+
+  it('la fila anterior se saca una sola vez, con optional chaining', () => {
+    // Lo que se busca: que no aparezca el `[0]` pegado sobre algo que ya es una
+    // fila suelta, ni un `filas[0].x` sin el `?.`.
+    expect(JUNTA_DB).not.toMatch(/\w+\?\.?\[0\]\.\w+/);
+    expect(JUNTA_DB).not.toMatch(/const\s*\[(\w+)\][\s\S]{0,400}?\1\[0\]\./);
   });
 });

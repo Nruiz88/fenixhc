@@ -341,15 +341,16 @@ export async function emitirRecibo(datos: {
   reemplazaId?: string | null;
 }): Promise<{ id: string; numero: string }> {
   return transaccion(async (conn) => {
-    const [ultimos] = await conn.execute<any[]>(
+    const [filas] = await conn.execute<any[]>(
       'SELECT numero FROM recibos ORDER BY created_at DESC, numero DESC LIMIT 1 FOR UPDATE'
     );
+    const ultimo = filas?.[0];
 
     const anio = new Date().getFullYear();
     let correlativo = 1;
 
-    if (ultimos?.[0]?.numero) {
-      const partes = String(ultimos[0].numero).split('-');
+    if (ultimo?.numero) {
+      const partes = String(ultimo.numero).split('-');
       const numeroPrevio = parseInt(partes[partes.length - 1], 10);
       if (Number.isFinite(numeroPrevio)) correlativo = numeroPrevio + 1;
     }
@@ -458,12 +459,19 @@ export async function guardarSeguro(datos: {
   registradoPor: string;
 }): Promise<void> {
   await transaccion(async (conn) => {
-    const [anterior] = await conn.execute<any[]>(
+    const [filas] = await conn.execute<any[]>(
       'SELECT id, estado FROM seguros WHERE jugador_perfil_id = ? FOR UPDATE',
       [datos.jugadorPerfilId]
     );
 
-    const id = anterior?.[0]?.id ?? uuid();
+    // `anterior` es el ARRAY de filas, no la fila. Un array vacío es truthy en
+    // JavaScript, así que con `if (anterior && anterior[0].estado)` la primera
+    // alta —la que no tiene fila anterior— entraba igual y reventaba con
+    // "Cannot read properties of undefined". Se detectó probando contra
+    // producción con un jugador al que nunca se le había cargado el seguro.
+    const anterior = filas?.[0];
+
+    const id = anterior?.id ?? uuid();
 
     await conn.execute(
       `INSERT INTO seguros
@@ -490,12 +498,12 @@ export async function guardarSeguro(datos: {
 
     // El historial solo cuando el estado cambia de verdad. Renovar dos veces el
     // mismo estado no es una transición y no ensucia la historia.
-    if (anterior && anterior[0].estado !== datos.estado) {
+    if (anterior && anterior.estado !== datos.estado) {
       await conn.execute(
         `INSERT INTO seguros_historial
            (id, seguro_id, estado_anterior, estado_nuevo, nota, registrado_por)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [uuid(), id, anterior[0].estado, datos.estado, datos.notas ?? null, datos.registradoPor]
+        [uuid(), id, anterior.estado, datos.estado, datos.notas ?? null, datos.registradoPor]
       );
     }
   });
