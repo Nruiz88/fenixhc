@@ -180,25 +180,44 @@ export async function ejecutarBaja(params: {
         : 'Origen: alta directa desde el panel.',
     ].join(' ');
 
-    const canal = solicitud ? 'solicitud' : 'panel';
+    const resultado =
+      'Datos personales anonimizados. La documentación fue eliminada. Los registros de pago y la contabilidad se conservan.';
 
-    await conn.execute(
-      `INSERT INTO solicitudes_baja
-         (id, perfil_id, solicitante_nombre, solicitante_email, motivo, estado,
-          notas, resultado, canal, created_at, resuelta_at, resuelta_por)
-       VALUES (?, ?, ?, ?, ?, 'resuelta', ?, ?, ?, NOW(), NOW(), ?)`,
-      [
-        solicitud?.id ?? uuid(),
-        persona.id,
-        solicitud?.solicitanteNombre ?? `${autorizadaPorNombre} (administración)`,
-        solicitud?.solicitanteEmail ?? autorizadaPorEmail,
-        motivo ?? null,
-        nota,
-        'Datos personales anonimizados. La documentación fue eliminada. Los registros de pago y la contabilidad se conservan.',
-        canal,
-        autorizadaPorId,
-      ]
-    );
+    // Si la baja viene de un pedido, el registro YA EXISTE: hay que cerrarlo,
+    // no crear otro. Insertar con el id del pedido choca contra la clave
+    // primaria y —peor— si algún día esa restricción se relajara, quedaría
+    // duplicada la constancia de un mismo reclamo.
+    //
+    // Y no es solo una cuestión de clave: actualizar la fila original deja
+    // intactos `created_at` y los datos del solicitante, que son la prueba de
+    // cuándo llegó el pedido y quién lo hizo. Una fila nueva pierde eso.
+    if (solicitud) {
+      await conn.execute(
+        `UPDATE solicitudes_baja
+            SET perfil_id = ?, estado = 'resuelta',
+                notas = CONCAT(COALESCE(notas, ''), '\\n', ?),
+                resultado = ?, resuelta_at = NOW(), resuelta_por = ?
+          WHERE id = ?`,
+        [persona.id, nota, resultado, autorizadaPorId, solicitud.id]
+      );
+    } else {
+      await conn.execute(
+        `INSERT INTO solicitudes_baja
+           (id, perfil_id, solicitante_nombre, solicitante_email, motivo, estado,
+            notas, resultado, canal, created_at, resuelta_at, resuelta_por)
+         VALUES (?, ?, ?, ?, ?, 'resuelta', ?, ?, 'panel', NOW(), NOW(), ?)`,
+        [
+          uuid(),
+          persona.id,
+          `${autorizadaPorNombre} (administración)`,
+          autorizadaPorEmail,
+          motivo ?? null,
+          nota,
+          resultado,
+          autorizadaPorId,
+        ]
+      );
+    }
 
     return { codigo, familiasDesvinculadas: familias.length };
   });
