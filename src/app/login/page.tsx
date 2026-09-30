@@ -133,6 +133,14 @@ function LoginForm() {
           <div className="mt-4 text-center">
             <a href="/" className="text-gray-600 hover:text-gray-400 text-sm">← Volver al sitio</a>
           </div>
+
+          {/* El aviso se ofrece también en el login: la persona que ya tenía
+              cuenta igual tiene que poder leer de qué se trata el club. */}
+          <div className="mt-2 text-center">
+            <a href="/privacidad" className="text-gray-600 hover:text-gray-400 text-xs">
+              Aviso de privacidad
+            </a>
+          </div>
         </div>
       </div>
     </div>

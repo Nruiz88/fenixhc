@@ -14,7 +14,7 @@ const TABLE_COLUMNS: Record<string, string[]> = {
   perfiles: ['id', 'usuario_id', 'rol', 'nombre', 'apellido', 'dni', 'cuil', 'correo', 'telefono', 'direccion', 'foto_url', 'created_at', 'updated_at'],
   deportistas: ['id', 'perfil_id', 'dni_frente_url', 'dni_fondo_url', 'club_activo', 'fecha_inscripcion', 'observaciones', 'created_at'],
   familias: ['id', 'padre_perfil_id', 'deportista_perfil_id', 'tipo_vinculo', 'created_at'],
-  cuotas: ['id', 'familia_id', 'tipo_socio', 'monto', 'mes', 'anio', 'estado', 'metodo_pago', 'comprobante_url', 'fecha_pago', 'created_at'],
+  cuotas: ['id', 'familia_id', 'tipo_socio', 'monto', 'monto_pagado', 'mes', 'anio', 'estado', 'metodo_pago', 'comprobante_url', 'fecha_pago', 'created_at'],
   finanzas: ['id', 'tipo', 'concepto', 'monto', 'fecha', 'categoria', 'metodo_pago', 'descripcion', 'comprobante_url', 'created_by', 'created_at'],
   notificaciones: ['id', 'titulo', 'mensaje', 'tipo', 'destinatario_rol', 'enviada_email', 'created_by', 'created_at'],
   notificaciones_usuarios: ['id', 'notificacion_id', 'usuario_id', 'leida', 'created_at'],
@@ -82,7 +82,11 @@ const WRITE_BLOCKED_POR_SOCIO: Record<string, string[]> = {
 
 // Columnas que un SOCIO puede modificar en tablas sensibles
 const UPDATABLE_POR_SOCIO: Record<string, string[]> = {
-  cuotas: ['comprobante_url', 'metodo_pago'], // el padre solo sube comprobante
+  // El padre solo sube el comprobante. `monto_pagado` NO puede estar acá: si
+  // lo estuviera, un socio podría marcar su propia cuota como pagada por el
+  // monto que quiera y salirse del recargo. Lo escribe la tesorería al
+  // aprobar, desde el panel.
+  cuotas: ['comprobante_url', 'metodo_pago'],
   perfiles: ['nombre', 'apellido', 'telefono', 'direccion', 'foto_url'],
   reservas: ['estado', 'notas'],
   familias: ['tipo_vinculo'],

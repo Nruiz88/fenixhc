@@ -31,6 +31,9 @@ export default function RegistroPage() {
     hijo_password: '',
   });
   const [loading, setLoading] = useState(false);
+  // Consentimiento del aviso de privacidad. Sin esto el club no puede
+  // demostrar que la persona fue informada antes de entregar sus datos.
+  const [aceptaPrivacidad, setAceptaPrivacidad] = useState(false);
   const [pendingVerify, setPendingVerify] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [devUrl, setDevUrl] = useState('');
@@ -49,6 +52,8 @@ export default function RegistroPage() {
       password: form.password,
       telefono: form.telefono,
       direccion: form.direccion,
+      // El backend lo exige: sin el consentimiento no se crea la cuenta.
+      privacidad: aceptaPrivacidad,
     };
 
     // Si es padre y quiso crear hijo, lo enviamos junto con el registro.
@@ -246,7 +251,28 @@ export default function RegistroPage() {
                 </div>
               )}
 
-              <Button type="submit" className="w-full bg-[#DC2626] hover:bg-[#B91C1C] h-12 font-semibold" disabled={loading}>
+              {/* Consentimiento explícito. Sin esto el club no puede
+                  demostrar que la persona fue informada antes de entregar sus
+                  datos, que es lo que pide la Ley 25.326. El botón queda
+                  deshabilitado hasta que se marque. */}
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-gray-700 bg-gray-800/40 p-3">
+                <input
+                  type="checkbox"
+                  checked={aceptaPrivacidad}
+                  onChange={(e) => setAceptaPrivacidad(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[#DC2626]"
+                />
+                <span className="text-[11px] leading-relaxed text-gray-400">
+                  Leo y acepto el{' '}
+                  <Link href="/privacidad" target="_blank" className="text-[#DC2626] underline">
+                    aviso de privacidad
+                  </Link>{' '}
+                  y el tratamiento de mis datos personales y los del jugador
+                  que inscriba.
+                </span>
+              </label>
+
+              <Button type="submit" className="w-full bg-[#DC2626] hover:bg-[#B91C1C] h-12 font-semibold" disabled={loading || !aceptaPrivacidad}>
                 {loading ? 'Creando...' : <><span>Crear Cuenta</span><ArrowRight className="h-4 w-4 ml-1" /></>}
               </Button>
 

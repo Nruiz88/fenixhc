@@ -41,9 +41,21 @@ export async function POST(request: NextRequest) {
       nombre: nombreRaw, apellido: apellidoRaw, dni: dniRaw, cuil: cuilRaw,
       email: emailRaw, password: passwordRaw,
       telefono = '', direccion = '',
+      // Consentimiento del aviso de privacidad (Ley 25.326). El checkbox del
+      // form lo manda, pero se valida acá también: sin este chequeo, un POST a
+      // mano podría crear la cuenta sin que nadie haya informado a la persona
+      // del uso de sus datos, que es exactamente lo que hay que poder probar.
+      privacidad: privacidadRaw,
       // Optional child registration
       hijo_nombre, hijo_apellido, hijo_dni, hijo_email, hijo_password,
     } = body;
+
+    if (privacidadRaw !== true) {
+      return NextResponse.json(
+        { error: 'Tenés que aceptar el aviso de privacidad para registrarte.' },
+        { status: 400 }
+      );
+    }
 
     // El registro es público: nunca se acepta 'admin' desde el body, solo
     // 'padre' o 'deportista'. Sin esto cualquiera se auto-asignaba admin.

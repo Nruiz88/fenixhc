@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { esDirectiva as esDirectivaRol } from '@/lib/roles';
+import { registrarAcceso, tipoDeBucket } from '@/lib/bitacora';
 import { readFile } from 'fs/promises';
 import path from 'path';
 
@@ -70,6 +71,20 @@ export async function GET(
       const esDirectiva = DIRECTIVA_READ.has(bucket) && esDirectivaRol(user.rol);
       if (!esDueño && !esDirectiva) {
         return NextResponse.json({ error: 'Sin permiso sobre este archivo' }, { status: 403 });
+      }
+
+      // Bitácora: el acceso de un tercero a un documento ajeno queda
+      // registrado. Ver lib/bitacora.ts. Se hace ANTES de leer el archivo,
+      // porque si alguien abre un documento y el log falla, igual tiene que
+      // haber constancia de que se abrió.
+      const tipo = tipoDeBucket(bucket);
+      if (tipo && !esDueño) {
+        await registrarAcceso(request, {
+          usuarioId: user.id,
+          perfilDestinoId: segmentos[1],
+          tipo,
+          proposito: request.nextUrl.searchParams.get('motivo') ?? undefined,
+        });
       }
     }
 
