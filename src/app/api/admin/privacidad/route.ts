@@ -19,16 +19,20 @@ export async function GET(request: NextRequest) {
     const limite = Math.min(Number(p.get('limite')) || 200, 500);
 
     const [accesos, bajas] = await Promise.all([
+      // El nombre del autor NO está en `usuarios`: vive en `perfiles`.
+      // `usuarios` solo tiene email y rol. Por eso el autor se une a
+      // perfiles, igual que el destino.
       query<any>(
         `SELECT a.id, a.tipo_documento, a.proposito, a.ip, a.created_at,
                 a.perfil_destino_id,
                 ACC.nombre AS destino_nombre, ACC.apellido AS destino_apellido,
                 ACC.dni     AS destino_dni,
-                QUI.nombre  AS autor_nombre, QUI.apellido AS autor_apellido,
+                AUT.nombre  AS autor_nombre, AUT.apellido AS autor_apellido,
                 QUI.rol     AS autor_rol, QUI.email AS autor_email
          FROM accesos_datos_sensibles a
          LEFT JOIN perfiles ACC ON ACC.id = a.perfil_destino_id
-         LEFT JOIN usuarios  QUI ON QUI.id  = a.usuario_id
+         LEFT JOIN usuarios  QUI ON QUI.id = a.usuario_id
+         LEFT JOIN perfiles AUT ON AUT.usuario_id = QUI.id
          ORDER BY a.created_at DESC
          LIMIT ${Math.floor(limite)}`
       ),
