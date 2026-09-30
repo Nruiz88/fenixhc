@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Menu, LogOut, LayoutDashboard, Users, UserCheck, FileText, Link2,
   DollarSign, PieChart, Bell, Calendar, Home, ChevronRight, Settings,
-  Megaphone, Star, Clock, TrendingUp, BarChart3, Shield, ShieldCheck,
+  Megaphone, Star, Clock, TrendingUp, BarChart3, Shield, ShieldCheck, Landmark,
 } from 'lucide-react';
 import { tieneModulo, ROL_LABEL, type Modulo, type Rol } from '@/lib/roles';
 import { iniciales } from '@/lib/format';
@@ -57,6 +57,12 @@ const SECCIONES: { titulo: string; items: NavItem[] }[] = [
       { label: 'Comunicados', href: '/admin/comunicados', icon: Megaphone, modulo: 'comunicados' },
       { label: 'Notificaciones', href: '/admin/notificaciones', icon: Bell, modulo: 'notificaciones' },
       { label: 'Sponsors', href: '/admin/sponsors', icon: Star, modulo: 'sponsors' },
+    ],
+  },
+  {
+    titulo: 'Club',
+    items: [
+      { label: 'Junta directiva', href: '/admin/junta', icon: Landmark, modulo: 'junta' },
     ],
   },
   {
