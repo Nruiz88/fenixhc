@@ -35,6 +35,9 @@ export default function RegistroPage() {
     // Antes estaba fijo 'padre' en el backend: una madre quedaba asentada
     // como si fuera el padre. Ahora lo declara quien inscribe.
     vinculo: 'padre' as Vinculo,
+    // Jugador que se registra por su cuenta. La fecha va acá porque decide si
+    // puede: un menor de edad tiene que ser inscrito por su tutor.
+    fecha_nacimiento: '',
   });
   const [loading, setLoading] = useState(false);
   const [aceptaPrivacidad, setAceptaPrivacidad] = useState(false);
@@ -67,6 +70,7 @@ export default function RegistroPage() {
       privacidad: aceptaPrivacidad,
       consentimientos,
       vinculo: form.vinculo,
+      fecha_nacimiento: form.fecha_nacimiento,
     };
 
     // Si es padre y quiso crear hijo, lo enviamos junto con el registro.
@@ -208,6 +212,27 @@ export default function RegistroPage() {
                   <Input value={form.cuil} onChange={e => update('cuil', e.target.value)} placeholder="XX-XXXXXXXX-X" className="bg-gray-800 border-gray-700 text-white" />
                 </div>
               </div>
+
+              {/* Solo para la cuenta de jugador. La edad decide si puede
+                  registrarse por su cuenta: si es menor de 18, tiene que
+                  hacerlo alguien que pueda consentir en su nombre. */}
+              {form.rol === 'socio_cadete' && (
+                <div className="space-y-2">
+                  <Label className="text-gray-400 text-sm">Fecha de nacimiento *</Label>
+                  <Input
+                    type="date"
+                    value={form.fecha_nacimiento}
+                    onChange={e => update('fecha_nacimiento', e.target.value)}
+                    className="bg-gray-800 border-gray-700 text-white"
+                    required
+                  />
+                  <p className="text-[11px] text-gray-500">
+                    Si sos menor de 18, la inscripción la tiene que hacer tu
+                    madre, tu padre o tu tutor: el club no puede pedir
+                    consentimiento a alguien que legalmente no puede darlo.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

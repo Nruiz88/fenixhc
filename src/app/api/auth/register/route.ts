@@ -65,7 +65,13 @@ export async function POST(request: NextRequest) {
       hijo_nombre, hijo_apellido, hijo_dni, hijo_email, hijo_password,
       hijo_fecha_nacimiento = null,
       hijo_opinion = null,
+      // Fecha de nacimiento de quien se registra como jugador por su cuenta.
+      // Antes no se pedía en esa ruta, y por eso un menor podía abrirse su
+      // propia cuenta de cadete sin pasar por nadie.
+      fecha_nacimiento = null,
     } = body;
+
+    const fechaNacimientoPropia = fecha_nacimiento;
 
     const ip = clientIp(request);
     const userAgent = request.headers.get('user-agent') ?? null;
@@ -127,6 +133,43 @@ export async function POST(request: NextRequest) {
     let consHijo: ReturnType<typeof validarConsentimientos> | null = null;
     let edadHijo: number | null = null;
 
+    // Un jugador que se registra SOLO es un caso aparte del alta de un hijo,
+    // y era un agujero: la ruta de "socio_cadete" no pedía fecha de
+    // nacimiento ni vínculo, así que un menor podía crear su propia cuenta
+    // saltándose todo el régimen de menores, y su consentimiento quedaba
+    // registrado como si fuera un adulto consentiendo por sí mismo.
+    //
+    // Tampoco alcanzaba con cerrárselo al padre: se verificó funcionando. La
+    // cuenta quedaba creada, con rol de cadete, sin ficha de deportista y con
+    // consentimiento de documentación registrado.
+    //
+    // La regla que cierra el camino es la del mundo real: un menor no contrata
+    // con el club por su cuenta. Si al declarar la edad resulta ser menor, la
+    // inscripción la tiene que hacer madre, padre o tutor.
+    let edadPropio: number | null = null;
+
+    if (rol === 'socio_cadete') {
+      if (!fechaNacimientoValida(fechaNacimientoPropia)) {
+        return NextResponse.json(
+          { error: 'Necesitamos tu fecha de nacimiento para saber cómo hay que tratarte.' },
+          { status: 400 }
+        );
+      }
+
+      edadPropio = edadCumplida(fechaNacimientoPropia as string);
+
+      if (edadPropio !== null && edadPropio < 18) {
+        return NextResponse.json(
+          {
+            error:
+              'Para inscribirte como jugador menor de edad tiene que hacerlo tu madre, tu padre o tu tutor legal. Es la única forma de que el club pueda pedir el consentimiento de alguien que puede darlo.',
+            necesitaTutor: true,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     if (registraHijo) {
       hijoEmailVal = parseOr400(emailSchema, hijo_email);
       hijoPasswordVal = parseOr400(passwordSchema, hijo_password);
@@ -179,12 +222,30 @@ export async function POST(request: NextRequest) {
     //
     // Un adulto no necesita representante, así que se valida con
     // esAltaDeMenor: false y sin vínculo.
-    const consAdulto = validarConsentimientos({
+    const consBase = validarConsentimientos({
       consentimiento: { marcadas: Array.isArray(consentimientosRaw) ? consentimientosRaw : [] },
       menor: { nombre },
       vinculo: null,
       esAltaDeMenor: false,
     });
+    if (!consBase.ok) {
+      return NextResponse.json({ error: consBase.error }, { status: 400 });
+    }
+
+    // Un jugador adulto que se registra solo revalida con su propia fecha: el
+    // cálculo de edad es el que acaba de decidir que puede hacerlo por su
+    // cuenta, y conviene que el consentimiento se registre contra ese mismo
+    // dato y no contra un campo en blanco.
+    const consAdulto = rol === 'socio_cadete'
+      ? validarConsentimientos({
+          consentimiento: {
+            marcadas: Array.isArray(consentimientosRaw) ? consentimientosRaw : [],
+          },
+          menor: { nombre, fechaNacimiento: fechaNacimientoPropia as string },
+          vinculo: null,
+          esAltaDeMenor: false,
+        })
+      : consBase;
     if (!consAdulto.ok) {
       return NextResponse.json({ error: consAdulto.error }, { status: 400 });
     }
@@ -222,6 +283,17 @@ export async function POST(request: NextRequest) {
       userAgent,
       canal: 'registro',
     });
+
+    // Un jugador que se registra por su cuenta también necesita ficha de
+    // deportista. Antes no se creaba, y el resultado era una cuenta con rol
+    // de cadete que no estaba en ninguna lista: invisible para el panel de
+    // jugadores y sin lugar donde guardar nada.
+    if (rol === 'socio_cadete') {
+      await insert(
+        'INSERT INTO deportistas (id, perfil_id, fecha_nacimiento) VALUES (?, ?, ?)',
+        [uuid(), perfilId, fechaNacimientoPropia]
+      );
+    }
 
     // If padre and child data provided
     let childId = null;

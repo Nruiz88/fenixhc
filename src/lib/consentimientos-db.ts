@@ -170,23 +170,54 @@ export async function registrarOpinionMenor(params: {
 }
 
 /**
- * La última opinión del menor sobre una finalidad.
+ * La opinión que RIGE para una finalidad.
  *
- * Se mira la de la NECESITARIA para poder guardar evidencia del disenso: una
- * opinión favorable de 2019 no habilita una foto que se sube mañana.
+ * LA REGLA QUE HIZO FALTA, Y CÓMO SE DESCUBRIÓ
+ *
+ * La primera versión tomaba la última fila, sin mirar QUIÉN la había escrito.
+ * Con eso el veto del menor era decorativo: un admin entraba a
+ * "Consentimientos y menores", tocaba "No preguntado", y la oposición de un
+ * pibe de 12 años desaparecía. Después el padre subía el DNI y el sistema
+ * respondía que estaba todo en orden.
+ *
+ * Se comprobó funcionando contra producción, con el flujo completo. Un control
+ * que se puede desactivar desde la misma pantalla que lo muestra no es un
+ * control: es un campo.
+ *
+ * POR QUÉ "LA PROPIA MANDA SIEMPRE"
+ *
+ *  - `propia` es la voz del menor. Nadie más escribe con ese origen, y solo
+ *    él puede cambiarla: entra por su portal.
+ *  - `transmitida_por_representante` es lo que dice un adulto. Vale cuando el
+ *    menor todavía no habló, que es lo normal en un Chico de 6 años.
+ *
+ * En cuanto existe una opinión propia, ESA manda para siempre, hasta que el
+ * menor registre otra. Un adulto no la puede pisar. Esa es toda la diferencia
+ * entre un veto y un campo de texto.
  */
 export async function opinionVigente(
   menorPerfilId: string,
   consulta: Finalidad
 ): Promise<Opinion | null> {
-  const filas = await query<{ opinion: Opinion }>(
+  // Primero, la voz del menor. Si habló, su palabra es la que rige.
+  const propias = await query<{ opinion: Opinion }>(
     `SELECT opinion FROM opiniones_menor
-      WHERE menor_perfil_id = ? AND consulta = ?
+      WHERE menor_perfil_id = ? AND consulta = ? AND origen = 'propia'
       ORDER BY registrada_en DESC
       LIMIT 1`,
     [menorPerfilId, consulta]
   );
-  return filas[0]?.opinion ?? null;
+  if (propias[0]) return propias[0].opinion;
+
+  // No habló nunca: vale lo que transmita el representante.
+  const trasmitidas = await query<{ opinion: Opinion }>(
+    `SELECT opinion FROM opiniones_menor
+      WHERE menor_perfil_id = ? AND consulta = ? AND origen = 'transmitida_por_representante'
+      ORDER BY registrada_en DESC
+      LIMIT 1`,
+    [menorPerfilId, consulta]
+  );
+  return trasmitidas[0]?.opinion ?? null;
 }
 
 /** Revoca. No borra: agrega el registro de la oposición. */

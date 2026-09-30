@@ -120,16 +120,43 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Registrar la opinión del menor ------------------------------------
-    // Va antes de autorizar. Si el menor se opone, la operación tiene que
-    // quedar bloqueada, y eso se decide mirando la opinión más reciente, no
-    // la más antigua.
     if (accion === 'opinion') {
       if (!opinion) {
         return NextResponse.json({ error: 'Falta la opinión' }, { status: 400 });
       }
+
+      const consultaOpinion = (finalidad ?? 'documentacion_dni') as Finalidad;
+
+      // Mientras el menor no haya hablado por sí mismo, lo que anota un
+      // adulto es lo único que hay.
+      const propia = await queryOne<{ opinion: string }>(
+        `SELECT opinion FROM opiniones_menor
+          WHERE menor_perfil_id = ? AND consulta = ? AND origen = 'propia'
+          ORDER BY registrada_en DESC LIMIT 1`,
+        [perfil_id, consultaOpinion]
+      );
+
+      // Y una vez que habló, su palabra no se toca desde acá.
+      //
+      // Se comprobó contra producción: con esta comprobación ausente, un
+      // admin anotaba "no se le preguntó" encima del "no" de un pibe, la
+      // oposición salía del cómputo y el padre subía el DNI con el sistema
+      // respondiendo que estaba todo bien. Un veto que se desactiva desde la
+      // misma pantalla que lo muestra no es un veto.
+      if (propia) {
+        return NextResponse.json(
+          {
+            error:
+              'El jugador ya expresó su opinión personalmente. Solo él puede cambiarla, desde su portal.',
+            opinionDelMenor: propia.opinion,
+          },
+          { status: 409 }
+        );
+      }
+
       await registrarOpinionMenor({
         menorPerfilId: perfil_id,
-        consulta: (finalidad ?? 'documentacion_dni') as Finalidad,
+        consulta: consultaOpinion,
         opinion,
         // Lo recoge alguien del club, no el menor: por eso `propia` no aplica.
         origen: 'transmitida_por_representante',

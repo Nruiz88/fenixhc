@@ -174,6 +174,10 @@ export default function ConsentimientosPage() {
     }
   }
 
+  /** El menor habló por sí mismo: su palabra ya no se edita desde acá. */
+  const habloEl = (consulta: Finalidad) =>
+    detalle?.opiniones?.some((o: any) => o.consulta === consulta && o.origen === 'propia');
+
   const filtradas = personas.filter((p) => {
     if (!busqueda.trim()) return true;
     const t = busqueda.toLowerCase();
@@ -369,19 +373,32 @@ export default function ConsentimientosPage() {
                               Mientras diga que no, esta finalidad no se puede autorizar aunque la familia firme.
                             </p>
                           )}
-                          <div className="mt-2 flex gap-1.5">
-                            {(['a_favor', 'en_contra', 'no_consultado'] as const).map((o) => (
-                              <button
-                                key={o}
-                                type="button"
-                                disabled={ocupado}
-                                onClick={() => registrarOpinion(e.finalidad, o)}
-                                className="rounded border border-amber-900/70 px-2 py-1 text-[10px] text-amber-100/70 transition-colors hover:border-amber-600 disabled:opacity-40"
-                              >
-                                {o === 'a_favor' ? 'Sí acepta' : o === 'en_contra' ? 'No acepta' : 'No preguntado'}
-                              </button>
-                            ))}
-                          </div>
+
+                          {/* Si el menor ya habló por sí mismo, los botones
+                              desaparecen. Mostrarlos era el agujero: el veto
+                              del menor se desactivaba desde esta misma
+                              pantalla, anotando "no preguntado" encima de su
+                              "no". */}
+                          {habloEl(e.finalidad) ? (
+                            <p className="mt-2 text-[11px] text-dim">
+                              La opinión la expresó el jugador por su cuenta.
+                              Solo él puede cambiarla, desde su portal.
+                            </p>
+                          ) : (
+                            <div className="mt-2 flex gap-1.5">
+                              {(['a_favor', 'en_contra', 'no_consultado'] as const).map((o) => (
+                                <button
+                                  key={o}
+                                  type="button"
+                                  disabled={ocupado}
+                                  onClick={() => registrarOpinion(e.finalidad, o)}
+                                  className="rounded border border-amber-900/70 px-2 py-1 text-[10px] text-amber-100/70 transition-colors hover:border-amber-600 disabled:opacity-40"
+                                >
+                                  {o === 'a_favor' ? 'Sí acepta' : o === 'en_contra' ? 'No acepta' : 'No preguntado'}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
 
