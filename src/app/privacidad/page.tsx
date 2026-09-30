@@ -203,14 +203,79 @@ export default function PrivacidadPage() {
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-main">
+            Para qué y con qué permiso usamos cada dato
+          </h2>
+          <p>
+            No guardamos nada «porque sí». Cada tipo de dato tiene una
+            finalidad declarada, y el club solo la usa si vos lo autorizaste.
+            Hay tres bloques distintos, y la diferencia importa:
+          </p>
+          <ul className="ml-5 list-disc space-y-2">
+            <li>
+              <strong className="text-main">Gestionar la inscripción y contactarte.</strong>{' '}
+              Se basa en la relación que tenés con el club. Si no autorizás el
+              contacto, no vas a enterarte de los vencimientos por correo.
+            </li>
+            <li>
+              <strong className="text-main">Fotos del DNI, datos deportivos y
+              fotos o videos.</strong> Cada uno se pide{' '}
+              <strong className="text-main">por separado</strong>, con una
+              casilla propia que viene sin marcar, y además de que no{' '}
+              <strong className="text-main">no te impide inscribirte</strong>.
+              El club simplemente no guarda ese dato.
+            </li>
+            <li>
+              <strong className="text-main">Cuotas, pagos y contabilidad.</strong>{' '}
+              No dependen de que autorices nada: el club tiene obligación legal
+              de llevar su contabilidad, así que esos registros se conservan
+              aunque no marques ninguna casilla.
+            </li>
+          </ul>
+          <p>
+            Guardamos también <strong className="text-main">qué autorizaste y
+            cuándo</strong>, para poder responderte si algún día preguntás por
+            qué el club tiene ese dato. Ese registro no se modifica ni se
+            borra: si te arrepentís, se anota la revocación y queda constancia
+            de cuándo la pediste.
+          </p>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-main">
             Sobre los menores de edad
           </h2>
           <p>
-            La mayoría de los jugadores del club son menores. Para los menores,
-            el ejercicio de esos derechos lo hace la madre, el padre o el tutor a
-            cargo, Demostrando el vínculo con el jugador. El club guarda el
-            documento del jugador y ese vínculo precisamente por el mismo motivo:
-            para poder responder ante la familia.
+            La mayoría de los jugadores del club son menores. Por eso el
+            consentimiento se pide en dos pasos distintos, y no son
+            intercambiables:
+          </p>
+          <ul className="ml-5 list-disc space-y-2">
+            <li>
+              <strong className="text-main">Autoriza la madre, el padre o la
+              persona tutora legal.</strong> Necesitamos dejar asentado quién
+              es y cuál es el vínculo con el jugador. Si inscribe una madre, el
+              vínculo queda registrado como tal: no como «padre».
+            </li>
+            <li>
+              <strong className="text-main">Y opiniona el jugador.</strong> La
+              ley obliga al club a tener en cuenta la opinión del menor, no solo
+              la del adulto. Si el jugador no está de acuerdo con algo —por
+              ejemplo, guardar la foto de su DNI—{' '}
+              <strong className="text-main">el club no lo va a hacer aunque su
+              madre o su padre lo autoricen</strong>.
+            </li>
+          </ul>
+          <p>
+            Para poder aplicar esto, el club guarda la fecha de nacimiento del
+            jugador. Con ella sabe si tiene que tratar los datos como de menor,
+            y también{' '}
+            <strong className="text-main">la fecha en que cumple 18 años</strong>.
+            Cuando llega ese momento te avisamos: a partir de ahí, el
+            consentimiento lo tiene que dar el jugador, no su madre.
+          </p>
+          <p>
+            Un jugador de 14 años o más puede expresar su opinión por sí mismo,
+            desde su propio portal, sin que nadie se la pida en su nombre.
           </p>
         </section>
 

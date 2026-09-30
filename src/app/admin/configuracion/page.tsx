@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { ConfiguracionCuenta } from '@/components/ConfiguracionCuenta';
 import AdminConfiguracionCuotas from './cuotas/page';
 import SolicitudesBaja from '@/app/admin/privacidad/solicitudes/page';
+import Consentimientos from '@/app/admin/privacidad/consentimientos/page';
 import { PageHeader } from '@/components/admin/ui';
-import { User, Coins, Inbox } from 'lucide-react';
+import { User, Coins, Inbox, ShieldCheck } from 'lucide-react';
 
 // Configuración del panel con pestañas en vez de una sola pantalla larga.
 //
@@ -17,6 +18,7 @@ import { User, Coins, Inbox } from 'lucide-react';
 // tenga que acordarse de mirarla.
 
 const PESTANAS = [
+  { clave: 'consentimientos', etiqueta: 'Consentimientos y menores', icono: ShieldCheck },
   { clave: 'solicitudes', etiqueta: 'Solicitudes de baja', icono: Inbox },
   { clave: 'cuotas', etiqueta: 'Cuotas y vencimientos', icono: Coins },
   { clave: 'cuenta', etiqueta: 'Mi cuenta', icono: User },
@@ -25,13 +27,13 @@ const PESTANAS = [
 type Clave = (typeof PESTANAS)[number]['clave'];
 
 export default function AdminConfiguracion() {
-  const [pestana, setPestana] = useState<Clave>('solicitudes');
+  const [pestana, setPestana] = useState<Clave>('consentimientos');
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Configuración"
-        description="Pedidos de baja, precios de la cuota y tus datos de acceso."
+        description="Consentimientos, pedidos de baja, precios de la cuota y tus datos de acceso."
       />
 
       <div className="inline-flex rounded-lg border border-line bg-surface p-0.5">
@@ -54,9 +56,8 @@ export default function AdminConfiguracion() {
 
       {pestana === 'cuotas' && <AdminConfiguracionCuotas />}
       {pestana === 'cuenta' && <ConfiguracionCuenta />}
-      {pestana === 'solicitudes' && (
-        <SolicitudesBaja />
-      )}
+      {pestana === 'consentimientos' && <Consentimientos />}
+      {pestana === 'solicitudes' && <SolicitudesBaja />}
     </div>
   );
 }
