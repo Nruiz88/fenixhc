@@ -153,12 +153,13 @@ export function BarrasAntiguedad({
 }) {
   const max = Math.max(1, ...bloques.map((b) => b.total));
 
+  // Un tono por tramo, de verde a rojo. Un color siempre significa lo mismo:
+  // el rojo es el tramo más caro, en cualquier pantalla donde aparezca.
   const TONO: Record<string, string> = {
     al_dia: 'bg-ok',
-    '1_30': 'bg-warn',
-    '31_60': 'bg-orange-500',
-    '61_90': 'bg-danger',
-    mas_90: 'bg-danger',
+    r1: 'bg-warn',
+    r2: 'bg-orange-500',
+    r3: 'bg-danger',
   };
 
   return (

@@ -93,8 +93,10 @@ const ADMIN_DEPORTISTAS: ViewDef = {
 const ADMIN_CUOTAS: ViewDef = {
   allowed: (u) => esDirectiva(u.rol),
   sql: `
-    SELECT c.id, c.familia_id, c.tipo_socio, c.monto, c.mes, c.anio, c.estado,
+    SELECT c.id, c.familia_id, c.tipo_socio, c.monto,
+           COALESCE(c.monto_pagado, 0) AS monto_pagado, c.mes, c.anio, c.estado,
            c.metodo_pago, c.comprobante_url, c.fecha_pago, c.created_at,
+           c.vencimiento_override,
            f.id AS f_id,
            pp.id AS padre_id, pp.nombre AS padre_nombre, pp.apellido AS padre_apellido,
            pp.dni AS padre_dni, pp.correo AS padre_correo, pp.telefono AS padre_telefono,
@@ -194,8 +196,10 @@ const PADRE_HIJOS: ViewDef = {
 const PADRE_CUOTAS: ViewDef = {
   allowed: (u) => u.rol === 'socio_benefactor' || esDirectiva(u.rol),
   sql: `
-    SELECT c.id, c.familia_id, c.tipo_socio, c.monto, c.mes, c.anio, c.estado,
+    SELECT c.id, c.familia_id, c.tipo_socio, c.monto,
+           COALESCE(c.monto_pagado, 0) AS monto_pagado, c.mes, c.anio, c.estado,
            c.metodo_pago, c.comprobante_url, c.fecha_pago, c.created_at,
+           c.vencimiento_override,
            f.id AS f_id,
            dp.id AS hijo_id, dp.nombre AS hijo_nombre, dp.apellido AS hijo_apellido,
            dp.dni AS hijo_dni, dp.correo AS hijo_correo

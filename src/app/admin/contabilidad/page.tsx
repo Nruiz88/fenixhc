@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireModulo } from '@/lib/auth';
 import { calcularReporteContable, fechaValida } from '@/lib/contabilidad';
-import { money, percent, fecha, antiguedad, periodo as fmtPeriodo, mesNombre } from '@/lib/format';
+import { leerConfigCuotasSegura } from '@/lib/cuotas-db';
+import { calcularRecargo } from '@/lib/cuotas';
+import { money, percent, fecha, periodo as fmtPeriodo, mesNombre } from '@/lib/format';
 import { todayISO, monthStartISO, monthEndISO } from '@/lib/dates';
 import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Toolbar, Hint } from '@/components/admin/ui';
 import { BarrasComposicion, BarrasAntiguedad, GraficoMensual } from '@/components/admin/charts';
@@ -142,17 +144,29 @@ export default async function ContabilidadPage({
           <GraficoMensual datos={r.serie} />
         </Panel>
 
-        <Panel title="Cuotas por cobrar" description="Distribución por antigüedad" className="xl:col-span-2">
+        <Panel title="Cuotas por cobrar" description="Distribución por tramo de recargo" className="xl:col-span-2">
           <BarrasAntiguedad bloques={r.cartera.bloques} />
           <div className="mt-4 space-y-1 border-t border-line pt-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted">Total pendiente</span>
-              <span className="font-semibold tabular text-main">{money(r.cartera.total)}</span>
+            {r.cartera.recargo > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-dim">Cuotas base</span>
+                <span className="tabular text-muted">{money(r.cartera.montoBase)}</span>
+              </div>
+            )}
+            {r.cartera.recargo > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-dim">Recargos acumulados</span>
+                <span className="tabular text-warn">{money(r.cartera.recargo)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between border-t border-line pt-1.5">
+              <span className="font-medium text-main">Total a cobrar</span>
+              <span className="text-base font-bold tabular text-main">{money(r.cartera.total)}</span>
             </div>
             {r.cartera.vencido > 0 && (
               <div className="flex items-center justify-between">
-                <span className="text-warn">De eso, ya vencido</span>
-                <span className="font-semibold tabular text-warn">{money(r.cartera.vencido)}</span>
+                <span className="text-warn">De eso, ya con recargo</span>
+                <span className="tabular text-warn">{money(r.cartera.vencido)}</span>
               </div>
             )}
           </div>
@@ -230,10 +244,17 @@ export default async function ContabilidadPage({
                         {f.jugador ? <span className="truncate">{f.jugador}</span> : <span className="text-dim">—</span>}
                       </td>
                       <td className="px-4 py-2.5 text-muted">{fmtPeriodo(f.mes, f.anio)}</td>
-                      <td className="px-4 py-2.5 text-right font-medium tabular text-main">{money(f.monto)}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <p className="font-medium tabular text-main">{money(f.total)}</p>
+                        {f.recargo > 0 && (
+                          <p className="text-[11px] tabular text-warn">
+                            {money(f.monto)} + {percent(f.porcentajeRecargo / 100, 0)}
+                          </p>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5">
                         {f.vencido
-                          ? <StatusPill tone="danger">{antiguedad(f.vencimiento)}</StatusPill>
+                          ? <StatusPill tone="danger" title={f.tramo ?? undefined}>{f.tramo ?? 'Vencida'}</StatusPill>
                           : <StatusPill tone="ok">Al día</StatusPill>}
                       </td>
                     </tr>
@@ -251,11 +272,18 @@ export default async function ContabilidadPage({
                       <p className="truncate font-medium text-main">{f.socio}</p>
                       {f.jugador && <p className="truncate text-xs text-dim">{f.jugador}</p>}
                     </div>
-                    <span className="shrink-0 font-semibold tabular text-main">{money(f.monto)}</span>
+                    <div className="shrink-0 text-right">
+                      <p className="font-semibold tabular text-main">{money(f.total)}</p>
+                      {f.recargo > 0 && (
+                        <p className="text-[11px] tabular text-warn">
+                          {money(f.monto)} + {percent(f.porcentajeRecargo / 100, 0)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <StatusPill tone={f.vencido ? 'danger' : 'ok'}>
-                      {f.vencido ? antiguedad(f.vencimiento) : 'Al día'}
+                      {f.vencido ? f.tramo ?? 'Vencida' : 'Al día'}
                     </StatusPill>
                     <span className="text-xs text-dim">{fmtPeriodo(f.mes, f.anio)}</span>
                   </div>

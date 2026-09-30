@@ -46,31 +46,6 @@ export function fechaHora(v: string | Date | null | undefined): string {
   });
 }
 
-/**
- * Antigüedad de una cuota pendiente, en palabras.
- * El contador no piensa en días: necesita "hace 3 meses".
- */
-export function antiguedad(fechaVenc: string | Date | null | undefined): string {
-  if (!fechaVenc) return 'sin fecha';
-  const d = new Date(fechaVenc);
-  if (Number.isNaN(d.getTime())) return 'sin fecha';
-
-  const dias = Math.floor((Date.now() - d.getTime()) / 86400000);
-  if (dias < 0) return 'a vencer';
-  if (dias === 0) return 'vence hoy';
-  if (dias === 1) return 'venció ayer';
-  if (dias < 31) return `hace ${dias} días`;
-
-  const meses = Math.floor(dias / 30);
-  if (meses < 12) return `hace ${meses} ${meses === 1 ? 'mes' : 'meses'}`;
-
-  const anios = Math.floor(meses / 12);
-  const resto = meses % 12;
-  return resto === 0
-    ? `hace ${anios} ${anios === 1 ? 'año' : 'años'}`
-    : `hace ${anios} ${anios === 1 ? 'año' : 'años'} y ${resto} ${resto === 1 ? 'mes' : 'meses'}`;
-}
-
 /** Etiqueta legible de un rol de socio/directiva. */
 export function mesNombre(n: number | string | null | undefined): string {
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',

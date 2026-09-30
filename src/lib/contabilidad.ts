@@ -20,6 +20,8 @@
 //    5 de abril o el 30.
 
 import { query } from './db';
+import { calcularRecargo } from './cuotas';
+import { leerConfigCuotasSegura } from './cuotas-db';
 
 const n = (v: unknown): number => {
   const x = Number(v ?? 0);
@@ -98,6 +100,8 @@ export interface ReporteContable {
     total: number;
     vencido: number;
     vigente: number;
+    montoBase: number;
+    recargo: number;
     filas: FilaCartera[];
     bloques: BloqueAntiguedad[];
   };
@@ -109,28 +113,41 @@ export interface FilaCartera {
   monto: number;
   mes: number;
   anio: number;
-  vencimiento: Date;
+  /** Fecha del hito de vencimiento que rige hoy, o la primera si aún no venció. */
+  vencimiento: Date | null;
   socio: string;
   jugador: string | null;
   contacto: string | null;
+  /** Días desde que se cumplió el hito vigente. 0 si la cuota está al día. */
   dias: number;
   vencido: boolean;
+  /** Porcentaje de recargo que aplica hoy. */
+  porcentajeRecargo: number;
+  /** Monto del recargo en pesos. */
+  recargo: number;
+  /** Lo que se puede cobrar hoy: base + recargo. */
+  total: number;
+  /** Etiqueta del tramo, para explicar en pantalla por qué hay recargo. */
+  tramo: string | null;
 }
 
 export interface BloqueAntiguedad {
   clave: string;
   etiqueta: string;
-  test: (dias: number) => boolean;
+  test: (dias: number, porcentaje: number) => boolean;
   cantidad: number;
   total: number;
 }
 
+// Los bloques se armar sobre el recargo y no sobre los días: lo que le
+// importa al tesorero de la cartera vencida es cuánto está costando cada
+// tramo, no quantos días lleva. Además evita tener que inventar días para
+// cuotas que no vencen por el paso del tiempo sino por un acuerdo.
 const BLOQUES: Omit<BloqueAntiguedad, 'cantidad' | 'total'>[] = [
-  { clave: 'al_dia', etiqueta: 'Al día', test: (d) => d === 0 },
-  { clave: '1_30', etiqueta: '1 a 30 días', test: (d) => d >= 1 && d <= 30 },
-  { clave: '31_60', etiqueta: '31 a 60 días', test: (d) => d > 30 && d <= 60 },
-  { clave: '61_90', etiqueta: '61 a 90 días', test: (d) => d > 60 && d <= 90 },
-  { clave: 'mas_90', etiqueta: 'Más de 90 días', test: (d) => d > 90 },
+  { clave: 'al_dia', etiqueta: 'Al día', test: (_d, pct) => pct === 0 },
+  { clave: 'r1', etiqueta: 'Primer recargo', test: (_d, pct) => pct > 0 && pct <= 10 },
+  { clave: 'r2', etiqueta: 'Segundo recargo', test: (_d, pct) => pct > 10 && pct <= 20 },
+  { clave: 'r3', etiqueta: 'Tercer recargo o más', test: (_d, pct) => pct > 20 },
 ];
 
 const ETIQUETA_TIPO_SOCIO: Record<string, string> = {
@@ -151,7 +168,7 @@ export async function calcularReporteContable(opts: {
 }): Promise<ReporteContable> {
   const { desde, hasta, anio, mes } = opts;
 
-  const [movs, cuotaMes, hist, serie, cartera] = await Promise.all([
+  const [movs, cuotaMes, hist, serie, cartera, config] = await Promise.all([
     query<any>(
       `SELECT tipo, categoria, metodo_pago, COUNT(*) AS movimientos, SUM(monto) AS total
        FROM finanzas
@@ -198,6 +215,7 @@ export async function calcularReporteContable(opts: {
        ORDER BY c.anio, c.mes
        LIMIT 1000`
     ),
+    leerConfigCuotasSegura(),
   ]);
 
   const ingresos = movs.filter((m) => m.tipo === 'ingreso').reduce((s, m) => s + n(m.total), 0);
@@ -220,32 +238,53 @@ export async function calcularReporteContable(opts: {
 
   const hoy = new Date();
   const filas: FilaCartera[] = cartera.map((r) => {
-    const mesesAtraso = (hoy.getFullYear() - n(r.anio)) * 12 + (hoy.getMonth() + 1 - n(r.mes));
-    const dias = Math.max(0, Math.round(mesesAtraso * 30.44));
+    // El recargo se calcula con las fechas reales de vencimiento configuradas
+    // por el club, no con una aproximación por meses. Una cuenta de esta se
+    // puede defended sin que el total de la cartera coincida con la suma de
+    // las filas.
+    const rec = calcularRecargo(
+      n(r.monto),
+      n(r.mes),
+      n(r.anio),
+      config.vencimientos,
+      hoy,
+      r.vencimiento_override
+    );
     const padre = [r.pn, r.pa].filter(Boolean).join(' ');
     const hijo = [r.hn, r.ha].filter(Boolean).join(' ');
+
     return {
       id: r.id,
       monto: n(r.monto),
       mes: n(r.mes),
       anio: n(r.anio),
-      // La cuota de un mes se entiende vencida al día siguiente de cerrar
-      // ese mes; se usa el día 1 del mes siguiente como referencia de cálculo.
-      vencimiento: new Date(n(r.anio) || hoy.getFullYear(), n(r.mes) || 1, 1),
+      // Si la cuota todavía no venció ningún hito, se muestra la fecha del
+      // primer hito como "cuándo vence", no null: la pantalla necesita
+      // sayingle al socio algo concreto.
+      vencimiento: rec.fechaHito ?? (rec.proximo ? rec.proximo.fecha : null),
       socio: padre || hijo || 'Sin nombre',
       jugador: hijo && hijo !== padre ? hijo : null,
       contacto: r.pc || r.pt || null,
-      dias,
-      vencido: dias > 0,
+      dias: rec.diasVencida,
+      vencido: rec.porcentaje > 0,
+      porcentajeRecargo: rec.porcentaje,
+      recargo: rec.recargo,
+      total: rec.total,
+      tramo: rec.hito?.etiqueta ?? null,
     };
   });
 
   const bloques = BLOQUES.map((b) => {
-    const items = filas.filter((f) => b.test(f.dias));
-    return { ...b, cantidad: items.length, total: items.reduce((s, f) => s + f.monto, 0) };
+    const items = filas.filter((f) => b.test(f.dias, f.porcentajeRecargo));
+    return { ...b, cantidad: items.length, total: items.reduce((s, f) => s + f.total, 0) };
   });
 
-  const totalCobrar = filas.reduce((s, f) => s + f.monto, 0);
+  // El total a cobrar incluye el recargo vigente: es lo que el club puede
+  // exigir hoy. Mostrar sólo la suma de los montos base haría que la cartera
+  // pareciera menor de lo que es, y que "deuda vencida" no cuadre con la
+  // suma de los tramos de arriba.
+  const totalCobrar = filas.reduce((s, f) => s + f.total, 0);
+  const recargoPorCobrar = filas.reduce((s, f) => s + f.recargo, 0);
   const vencido = bloques.filter((b) => b.clave !== 'al_dia').reduce((s, b) => s + b.total, 0);
 
   const cs = cuotaMes[0] ?? {};
@@ -278,6 +317,10 @@ export async function calcularReporteContable(opts: {
       total: totalCobrar,
       vencido,
       vigente: totalCobrar - vencido,
+      // Reparto: total = base + recargo. Se muestra para que el tesorero
+      // pueda decir "de los $X que tenemos que cobrar, $Y son recargos".
+      montoBase: filas.reduce((s, f) => s + f.monto, 0),
+      recargo: recargoPorCobrar,
       filas,
       bloques,
     },

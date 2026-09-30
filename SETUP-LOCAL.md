@@ -30,6 +30,8 @@ JWT_SECRET=un-secreto-largo-para-produccion
 # UPLOAD_DIR=/var/fenix-uploads   (opcional)
 ```
 
+### Opción B - MariaDB instalada
+
 ## 3. Crear las tablas y datos de prueba
 Ejecutá en orden (con `mariadb` o `mysql` client):
 
@@ -43,6 +45,10 @@ mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/02_seed.sql
 - `mariadb/03_drop_chat.sql` → solo si venís de una versión con el chat: elimina `mensajes_chat`.
 - `mariadb/04_email_verificacion.sql` → solo si la base ya existía: agrega las columnas de
   verificación y **marca verificadas las cuentas anteriores** (si no, nadie podría entrar).
+- `mariadb/05_roles_directiva.sql` → migra los roles de directiva y renombra los socios.
+- `mariadb/06_configuracion_cuota.sql` → monto base de la cuota y tramos de recargo.
+  **Necesaria para que los recargos funcionen**; sin ella el panel sigue andando con los
+  valores por defecto, pero no se pueden editar.
 
 > En Coolify el mismo proceso se hace con un solo comando SSH/consola (ver README).
 
@@ -183,6 +189,45 @@ Regla para pantallas nuevas: todo importe con `money()`, toda fecha con
 `fecha()`, y confirmación con `Confirmar` antes de cualquier borrado. Nunca
 `window.confirm`: el texto del navegador está en inglés y no dice qué se está
 borrando.
+
+## Cuotas y recargos
+Migración `mariadb/06_configuracion_cuota.sql`. Se edita en
+`/admin/configuracion` → pestaña "Cuotas y vencimientos" (admin y presidente).
+
+Antes el monto estaba fijo en $75.000, hardcodeado en `admin/pagos/page.tsx`.
+Ahora:
+
+- `configuracion_club` guarda el monto base (`cuota_monto_base`).
+- `vencimientos_cuota` guarda los tramos: día del mes y porcentaje.
+  Vienen tres por defecto: día 10 → +5%, día 20 → +10%, día 30 → +20%.
+- `cuotas.monto_pagado` guarda lo que efectivamente entró en caja. Es NULL
+  mientras la cuota está pendiente.
+
+Cuatro decisiones que no conviene revertir:
+
+1. **El recargo se calcula al vuelo, no se guarda.** `cuotas.monto` es siempre
+   el monto base. Cambiar un porcentaje recalcula las cuotas pendientes al
+   instante y las ya cobradas no se tocan. Por eso los vencimientos son una
+   tabla y no columnas en `cuotas`.
+2. **El hito se toma del mes siguiente al de la cuota.** La cuota de marzo
+   vence el 10 de abril. Así una cuota del mes en curso nunca tiene recargo.
+3. **El recargo arranca al día siguiente del hito.** El día del hito todavía
+   se puede pagar sin recargo, que es lo que entiende alguien que lee
+   "vence el día 10".
+4. **Un día inexistente se clampea al último del mes.** El hito del día 30 de
+   la cuota de enero cae el 28 de febrero, no el 2 de marzo. `new Date(anio,
+   mes, 30)` desborda al mes siguiente y corría el vencimiento dos días tarde.
+
+`cuotas.vencimiento_override` permite pactar una fecha puntual con una familia:
+mueve toda la escala de hitos, no deja los otros dos clavados.
+
+Cálculo en `src/lib/cuotas.ts` (lógica pura, la importan el servidor y el
+cliente); lectura y escritura de la configuración en `src/lib/cuotas-db.ts`.
+La separación importa: si el acceso a la base estuviera en el archivo puro, el
+driver de MySQL se iría al bundle del navegador.
+
+Tests: `npm test` (vitest). Cubren los casos de fecha que fallan en silencio:
+cambio de año, meses cortos, límite del día del hito y redondeo.
 
 ## Proxy (antes middleware)
 El archivo se llama `src/proxy.ts` y exporta `proxy()`. En Next 16 la

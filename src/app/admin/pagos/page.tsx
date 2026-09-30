@@ -4,8 +4,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/adminQuery';
 import { toast } from 'sonner';
 import { money, mesNombre, fecha, periodo as fmtPeriodo } from '@/lib/format';
+import { useConfigCuotas } from '@/lib/useConfigCuotas';
 import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Toolbar, Hint, tonoEstadoCuota } from '@/components/admin/ui';
 import { Confirmar } from '@/components/admin/confirmar';
+import { DesgloseCuota, PillRecargo } from '@/components/admin/cuota';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,17 +21,17 @@ import {
 type Filtro = 'todas' | 'pendiente' | 'pagada' | 'rechazada';
 
 const SIN_SEL = '__sin_seleccion__';
-const MONTO_SUGERIDO = '75000';
 
 const FORM_VACIO = {
   familia_id: '',
   mes: String(new Date().getMonth() + 1),
   anio: String(new Date().getFullYear()),
-  monto: MONTO_SUGERIDO,
+  monto: '',
   metodo: 'transferencia',
 };
 
 export default function AdminPagos() {
+  const { calcular, listo: configLista, config } = useConfigCuotas();
   const [cuotas, setCuotas] = useState<any[]>([]);
   const [familias, setFamilias] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -87,27 +89,55 @@ export default function AdminPagos() {
   const resumen = useMemo(() => {
     const pagadas = filtradas.filter((c) => c.estado === 'pagada');
     const pendientes = filtradas.filter((c) => c.estado === 'pendiente');
+
+    // Lo cobrado usa `monto_pagado` (lo que entró de verdad, con recargo) y
+    // cae al monto base en las cuotas pagadas antes de que existiera esa
+    // columna. Lo pendiente suma el total con recargo vigente, que es lo que
+    // el club tiene derecho a cobrar hoy, no lo que figura en el catálogo.
+    const cobradoDe = (c: any) => Number(c.monto_pagado) > 0 ? Number(c.monto_pagado) : Number(c.monto);
+    const aCobrarDe = (c: any) =>
+      calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override).total;
+
     return {
       cobradas: pagadas.length,
-      montoCobrado: pagadas.reduce((s, c) => s + Number(c.monto), 0),
+      montoCobrado: pagadas.reduce((s, c) => s + cobradoDe(c), 0),
       pendientes: pendientes.length,
-      montoPendiente: pendientes.reduce((s, c) => s + Number(c.monto), 0),
+      montoPendiente: pendientes.reduce((s, c) => s + aCobrarDe(c), 0),
+      recargoPorCobrar: pendientes.reduce(
+        (s, c) => s + (aCobrarDe(c) - Number(c.monto)),
+        0
+      ),
       conComprobante: pendientes.filter((c) => c.comprobante_url).length,
     };
-  }, [filtradas]);
+  }, [filtradas, calcular, configLista]);
 
   async function aprobar(c: any) {
     setProcesando(c.id);
+
+    // Lo que entra en caja se calcula con el recargo vigente y se guarda en
+    // `monto_pagado`. Sin esto, el recargo que efectivamente pagó el socio
+    // desaparecía: la cuota decía $75.000, entró $78.750, y la contabilidad
+    // reportaba $75.000.
+    const r = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override);
+
     const { error } = await db.update(
       'cuotas',
-      { estado: 'pagada', fecha_pago: new Date().toISOString() },
+      {
+        estado: 'pagada',
+        fecha_pago: new Date().toISOString(),
+        monto_pagado: r.total,
+      },
       { id: c.id }
     );
     setProcesando(null);
 
     if (error) { toast.error(error); return; }
+
     toast.success(`Cuota de ${fmtPeriodo(c.mes, c.anio)} marcada como pagada`, {
-      description: `${c.familias?.padre?.nombre} ${c.familias?.padre?.apellido} · ${money(c.monto)}`,
+      description:
+        r.porcentaje > 0
+          ? `${c.familias?.padre?.nombre} ${c.familias?.padre?.apellido} · ${money(r.total)} (incluye ${money(r.recargo)} de recargo)`
+          : `${c.familias?.padre?.nombre} ${c.familias?.padre?.apellido} · ${money(r.total)}`,
     });
     setAVer(null);
     await cargar();
@@ -117,7 +147,7 @@ export default function AdminPagos() {
     if (!aRechazar) return;
     const { error } = await db.update(
       'cuotas',
-      { estado: 'pendiente', comprobante_url: null, fecha_pago: null },
+      { estado: 'pendiente', comprobante_url: null, fecha_pago: null, monto_pagado: null },
       { id: aRechazar.id }
     );
     if (error) { toast.error(error); return; }
@@ -125,6 +155,12 @@ export default function AdminPagos() {
     setARechazar(null);
     setAVer(null);
     await cargar();
+  }
+
+  /** Abre el alta de pago con el monto base que definió la administración. */
+  function abrirAlta() {
+    setForm({ ...FORM_VACIO, monto: config ? String(config.montoBase) : '' });
+    setAsignarAbierto(true);
   }
 
   async function asignar(e: React.FormEvent) {
@@ -171,13 +207,19 @@ export default function AdminPagos() {
 
   const hayFiltros = filtro !== 'todas' || anioFiltro !== 'todos' || mesFiltro !== 'todos' || !!busqueda;
 
+  // Recargo de la cuota abierta en el modal, para comparar el importe del
+  // comprobante contra el total que corresponde.
+  const recModal = aVer
+    ? calcular(Number(aVer.monto), Number(aVer.mes), Number(aVer.anio), aVer.vencimiento_override)
+    : { montoBase: 0, porcentaje: 0, recargo: 0, total: 0, diasVencida: 0, fechaHito: null, diasParaProximo: null };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Pagos de cuotas"
         description="Aprobar comprobantes y registrar pagos que llegan por otros canales."
         actions={
-          <Button onClick={() => setAsignarAbierto(true)}>
+          <Button onClick={abrirAlta}>
             <Plus className="h-4 w-4" />Registrar pago
           </Button>
         }
@@ -208,8 +250,14 @@ export default function AdminPagos() {
           hint={`${resumen.cobradas} cuotas`} tone="ok" icon={<CheckCircle2 className="h-4 w-4" />}
         />
         <StatCard
-          label="Pendiente de cobro" value={money(resumen.montoPendiente)}
-          hint={`${resumen.pendientes} cuotas`} tone="warn" icon={<Clock className="h-4 w-4" />}
+          label="Pendiente de cobro"
+          value={money(resumen.montoPendiente)}
+          hint={
+            resumen.recargoPorCobrar > 0
+              ? `Incluye ${money(resumen.recargoPorCobrar)} de recargo`
+              : `${resumen.pendientes} cuotas`
+          }
+          tone="warn" icon={<Clock className="h-4 w-4" />}
         />
         <StatCard
           label="Para revisar" value={resumen.conComprobante}
@@ -305,7 +353,7 @@ export default function AdminPagos() {
                 : 'Probá con otro nombre, otro mes o quitá los filtros.'
             }
             action={
-              <Button onClick={() => setAsignarAbierto(true)}>
+              <Button onClick={abrirAlta}>
                 <Plus className="h-4 w-4" />Registrar el primero
               </Button>
             }
@@ -317,6 +365,7 @@ export default function AdminPagos() {
               const hijo = c.familias?.hijo;
               const tono = tonoEstadoCuota(c.estado);
               const comprobante = c.estado === 'pendiente' && c.comprobante_url;
+              const rec = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override);
               return (
                 <li key={c.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2">
                   <span
@@ -338,6 +387,9 @@ export default function AdminPagos() {
                       </p>
                       <StatusPill tone={tono.tone}>{tono.label}</StatusPill>
                       {comprobante && <StatusPill tone="info"><Paperclip className="h-3 w-3" />Para revisar</StatusPill>}
+                      {c.estado === 'pendiente' && rec.porcentaje > 0 && (
+                        <PillRecargo porcentaje={rec.porcentaje} />
+                      )}
                     </div>
                     <p className="truncate text-xs text-dim">
                       {fmtPeriodo(c.mes, c.anio)}
@@ -346,7 +398,29 @@ export default function AdminPagos() {
                     </p>
                   </div>
 
-                  <span className="shrink-0 text-sm font-semibold tabular text-main">{money(c.monto)}</span>
+                  {/* Pagada muestra lo que entró; pendiente muestra lo que
+                      hay que cobrar hoy, base más recargo. Son dos números
+                      distintos a propósito y no se deben unificar. */}
+                  {c.estado === 'pagada' && Number(c.monto_pagado) > 0 ? (
+                    <span className="shrink-0 text-right">
+                      <span className="block text-sm font-semibold tabular text-ok">
+                        {money(Number(c.monto_pagado))}
+                      </span>
+                      {Number(c.monto_pagado) > Number(c.monto) && (
+                        <span className="block text-[11px] tabular text-dim">
+                          base {money(c.monto)}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <DesgloseCuota
+                      compacto
+                      montoBase={rec.montoBase}
+                      porcentaje={rec.porcentaje}
+                      recargo={rec.recargo}
+                      total={rec.total}
+                    />
+                  )}
 
                   <div className="flex shrink-0 items-center gap-1.5">
                     {c.comprobante_url && (
@@ -387,7 +461,7 @@ export default function AdminPagos() {
                 <DialogTitle>Comprobante de pago</DialogTitle>
                 <DialogDescription>
                   {aVer.familias?.padre?.nombre} {aVer.familias?.padre?.apellido} ·{' '}
-                  {mesNombre(aVer.mes)} {aVer.anio} · {money(aVer.monto)}
+                  {mesNombre(aVer.mes)} {aVer.anio}
                 </DialogDescription>
               </DialogHeader>
 
@@ -406,9 +480,19 @@ export default function AdminPagos() {
 
               <Hint>
                 Verificá que el importe del comprobante sea el mismo que figura
-                arriba antes de aprobar. Si no coincide, rechazalo para que la
+                abajo antes de aprobar. Si no coincide, rechazalo para que la
                 persona lo vuelva a subir.
               </Hint>
+
+              <DesgloseCuota
+                montoBase={recModal.montoBase}
+                porcentaje={recModal.porcentaje}
+                recargo={recModal.recargo}
+                total={recModal.total}
+                diasVencida={recModal.diasVencida}
+                fechaHito={recModal.fechaHito}
+                diasParaProximo={recModal.diasParaProximo}
+              />
 
               {aVer.estado === 'pendiente' && (
                 <DialogFooter className="!mx-0 !mb-0 !rounded-none !border-0 !bg-transparent !p-0">
