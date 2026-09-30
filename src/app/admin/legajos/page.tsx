@@ -32,17 +32,24 @@ export default function AdminLegajos() {
     setCargandoDetalle(true);
     setSeleccionado(j);
 
-    // Las familias y las cuotas se piden al abrir el legajo, no al cargar
-    // la lista: son 1000 filas de cuotas para ver una sola ficha.
-    const { data: familias } = await db.view<any>('admin_familias');
-    const suyas = (familias ?? []).filter((f: any) => f.deportista_perfil_id === j.perfil_id);
-    const ids = suyas.map((f: any) => f.id);
-    const { data: cuotas } = ids.length
-      ? await db.select<any>('cuotas', '*', { familia_id: { op: 'in', val: ids } }, { limit: 500 })
-      : { data: [] };
+    try {
+      // Las familias y las cuotas se piden al abrir el legajo, no al cargar
+      // la lista: son 1000 filas de cuotas para ver una sola ficha.
+      const { data: familias } = await db.view<any>('admin_familias');
+      const suyas = (familias ?? []).filter((f: any) => f.deportista_perfil_id === j.perfil_id);
+      const ids = suyas.map((f: any) => f.id);
+      const { data: cuotas } = ids.length
+        ? await db.select<any>('cuotas', '*', { familia_id: { op: 'in', val: ids } }, { limit: 500 })
+        : { data: [] };
 
-    setSeleccionado({ ...j, familias: suyas, cuotas: cuotas ?? [] });
-    setCargandoDetalle(false);
+      setSeleccionado({ ...j, familias: suyas, cuotas: cuotas ?? [] });
+    } catch (err) {
+      // Sin esto, un corte de conexión dejaba el esqueleto girando para
+      // siempre: `cargandoDetalle` solo se apagaba si las consultas terminaban.
+      setSeleccionado({ ...j, familias: [], cuotas: [], error: 'No pudimos cargar la familia y las cuotas de este jugador.' });
+    } finally {
+      setCargandoDetalle(false);
+    }
   }
 
   const filtrados = useMemo(() => {
@@ -58,6 +65,14 @@ export default function AdminLegajos() {
   if (seleccionado) {
     const p = seleccionado.perfiles;
     const cuotas = seleccionado.cuotas ?? [];
+    // `?? []` en los dos, y no solo en las cuotas.
+    //
+    // El primer render pasa por acá con la fila cruda de la lista, que no trae
+    // `familias`: `abrir` lo pone en pantalla antes de ir a buscar los datos.
+    // Leer `.familias.length` ahí es leer la longitud de `undefined`, y eso
+    // tira la excepción que dejaba la pantalla en blanco. El detalle tiene que
+    // poder renderizarse con los datos que todavía no llegaron.
+    const familias = seleccionado.familias ?? [];
     const total = cuotas.reduce((s: number, c: any) => s + Number(c.monto), 0);
     const pagado = cuotas
       .filter((c: any) => c.estado === 'pagada')
@@ -87,6 +102,12 @@ export default function AdminLegajos() {
             <p className="truncate text-sm text-dim">DNI {p?.dni} · Legajo del jugador</p>
           </div>
         </div>
+
+        {seleccionado.error && (
+          <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+            {seleccionado.error}
+          </p>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-line bg-surface p-4">
@@ -126,7 +147,13 @@ export default function AdminLegajos() {
           title="Familia"
           description="Personas responsables de las cuotas"
         >
-          {seleccionado.familias.length === 0 ? (
+          {cargandoDetalle ? (
+            <div className="space-y-2">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="h-12 animate-pulse rounded-lg bg-surface-2" />
+              ))}
+            </div>
+          ) : familias.length === 0 ? (
             <EmptyState
               icon={<Users className="h-6 w-6" />}
               title="Sin familia vinculada"
@@ -134,7 +161,7 @@ export default function AdminLegajos() {
             />
           ) : (
             <ul className="space-y-2">
-              {seleccionado.familias.map((f: any) => (
+              {familias.map((f: any) => (
                 <li key={f.id} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-2 px-3 py-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-main">
