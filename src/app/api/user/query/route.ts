@@ -255,31 +255,49 @@ export async function POST(request: NextRequest) {
         // no en la pantalla, porque la pantalla se puede saltar y esta es la
         // única línea por la que pasa el dato.
         //
-        // Se exige consentimiento VIGENTE de esa finalidad, y además que el
-        // menor no se haya opuesto. Con las dos cosas el club puede responder
-        // "quién autorizó, cuándo y en nombre de quién".
+        // IMPORTANTE — se mira el consentimiento DEL TITULAR DEL DATO, no el
+        // de quien está escribiendo. Un padre que sube la foto de su hijo
+        // necesita un consentimiento OTORGADO sobre el hijo; el suyo propio no
+        // dice nada sobre la foto del chico. Con la regla al revés, el padre
+        // jamás podría habilitar la documentación de su hijo.
+        //
+        // Los perfiles destino se resuelven con la MISMA cláusula del UPDATE,
+        // que `ownerCondition` ya acotó a las filas propias o a los hijos
+        // vinculados. No se confía en un `perfil_id` que mande el cliente: se
+        // lee de la base.
         if (table === 'deportistas' && (keys.includes('dni_frente_url') || keys.includes('dni_fondo_url'))) {
-          const opinion = await opinionVigente(user.id, 'documentacion_dni');
-          if (opinionVeda(opinion)) {
-            return NextResponse.json(
-              {
-                error:
-                  'El jugador dijo que no autoriza guardar su documentación. Su opinión prevalece, aunque el representante la autorice.',
-              },
-              { status: 403 }
-            );
+          const objetivos = await query<{ perfil_id: string }>(
+            `SELECT DISTINCT perfil_id FROM deportistas${clause}`,
+            filterParams
+          );
+
+          if (objetivos.length === 0) {
+            return NextResponse.json({ error: 'No hay ninguna ficha que actualizar' }, { status: 404 });
           }
 
-          const vigente = await tieneConsentimiento(user.id, 'documentacion_dni');
-          if (!vigente) {
-            return NextResponse.json(
-              {
-                error:
-                  'Falta el consentimiento para guardar la documentación del DNI. Pedilo en el registro o en la secretaría del club.',
-                codigo: 'sin_consentimiento_documentacion',
-              },
-              { status: 403 }
-            );
+          for (const { perfil_id: titular } of objetivos) {
+            const opinion = await opinionVigente(titular, 'documentacion_dni');
+            if (opinionVeda(opinion)) {
+              return NextResponse.json(
+                {
+                  error:
+                    'El jugador dijo que no autoriza guardar su documentación. Su opinión prevalece, aunque el representante la autorice.',
+                },
+                { status: 403 }
+              );
+            }
+
+            const vigente = await tieneConsentimiento(titular, 'documentacion_dni');
+            if (!vigente) {
+              return NextResponse.json(
+                {
+                  error:
+                    'Falta el consentimiento para guardar la documentación del DNI. Pedilo en el registro o en la secretaría del club.',
+                  codigo: 'sin_consentimiento_documentacion',
+                },
+                { status: 403 }
+              );
+            }
           }
         }
 
