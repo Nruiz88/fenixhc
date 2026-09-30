@@ -99,3 +99,81 @@ export function verificacionEmail(opts: {
     </html>`;
   return { subject, html, text };
 }
+
+/**
+ * Plantilla de recuperación de clave.
+ *
+ * El texto importa tanto como el diseño. Este correo es el que decide si
+ * alguien hace clic en un link que no pidió. Por eso dice:
+ *
+ *  - que vence en una hora,
+ *  - que funciona UNA sola vez,
+ *  - que si nadie lo pidió no hay que hacer nada ni responder nada,
+ *  - que el club nunca pide la clave por correo.
+ *
+ * La última es la que evita el ataque. Si alguien se hace pasar por el club
+ * para pedir la clave, el correo no le pide ninguna clave: ni al socio ni al
+ * club. El link abre una pantalla donde se ESCRIBE la nueva clave, no un
+ * formulario donde se manda la vieja.
+ */
+export function recuperacionEmail(opts: {
+  nombre: string;
+  link: string;
+  minutos: number;
+}): { subject: string; html: string; text: string } {
+  const subject = 'Cambiá tu clave - Fenix Roller Hockey';
+
+  const text = [
+    `Hola ${opts.nombre},`,
+    '',
+    'Pediste cambiar la clave de tu cuenta. Entrá a este link para escribir una nueva:',
+    opts.link,
+    '',
+    `El link vence en ${opts.minutos} minutos y funciona una sola vez.`,
+    '',
+    'Si no lo pediste vos, no hagas nada: no pasa nada y no tenés que responder nada.',
+    'Nadie del club te va a pedir tu clave por correo.',
+  ].join('\n');
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="margin:0;padding:0;background:#0A0A0A;font-family:system-ui,-apple-system,sans-serif;">
+      <div style="max-width:600px;margin:0 auto;padding:40px 20px;">
+        <div style="text-align:center;margin-bottom:30px;">
+          <h1 style="color:#fff;font-size:24px;margin:0;">🏑 FENIX ROLLER HOCKEY</h1>
+        </div>
+        <div style="background:#1a1a1a;border-radius:16px;padding:32px;border:1px solid #333;">
+          <h2 style="color:#fff;font-size:20px;margin:0 0 12px;">Cambiar tu clave</h2>
+          <p style="color:#999;font-size:14px;margin:0 0 24px;line-height:1.6;">
+            Hola ${opts.nombre}, pediste cambiar la clave de tu cuenta del club.
+            Escribí una nueva y entrá con ella.
+          </p>
+          <a href="${opts.link}"
+             style="display:inline-block;background:#DC2626;color:#fff;text-decoration:none;
+                    padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px;">
+            Escribir mi nueva clave
+          </a>
+          <div style="margin:24px 0 0;padding:16px;background:#111;border-radius:10px;border:1px solid #2a2a2a;">
+            <p style="color:#bbb;font-size:13px;margin:0 0 8px;line-height:1.6;">
+              <strong style="color:#fff;">El link vence en ${opts.minutos} minutos</strong> y
+              funciona una sola vez.
+            </p>
+            <p style="color:#888;font-size:12px;margin:0;line-height:1.6;">
+              Si no lo pediste vos, no hagas nada. No pasa nada y no tenés que
+              responder nada. Nadie del club te va a pedir tu clave por
+              correo, nunca.
+            </p>
+          </div>
+          <p style="color:#666;font-size:12px;margin:24px 0 0;line-height:1.6;">
+            Si el botón no funciona, copiá esta URL en tu navegador:<br>
+            <span style="color:#888;word-break:break-all;">${opts.link}</span>
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>`;
+
+  return { subject, html, text };
+}

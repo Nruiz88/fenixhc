@@ -130,6 +130,17 @@ function LoginForm() {
             <a href="/registro" className="text-red-500 hover:text-red-400">Registrate</a>
           </div>
 
+          {/* Va acá y no abajo del todo, con el mismo peso visual que el
+              registro. La clave olvidada es el problema más común de una
+              pantalla de ingreso: esconderlo entre dos links grises hace que la
+              gente llame al club para que se la cambien desde el panel. */}
+          <div className="mt-3 text-center text-sm text-gray-500">
+            ¿Olvidaste tu clave?{' '}
+            <a href="/recuperar" className="text-red-500 hover:text-red-400">
+              Recuperarla
+            </a>
+          </div>
+
           <div className="mt-4 text-center">
             <a href="/" className="text-gray-600 hover:text-gray-400 text-sm">← Volver al sitio</a>
           </div>
