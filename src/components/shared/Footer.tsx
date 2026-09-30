@@ -75,6 +75,17 @@ export function Footer() {
               <Link href="/contacto" className="block text-sm text-gray-500 hover:text-white transition-colors">
                 Contacto
               </Link>
+
+              {/* Va en el pie de todas las páginas públicas, y no escondido
+                  en una sección interna: el que ya se dio de baja no tiene
+                  cuenta, y si el enlace no aparece a simple vista el derecho
+                  a pedir la supresión de sus datos queda solo en el papel. */}
+              <Link href="/privacidad" className="block text-sm text-gray-500 hover:text-white transition-colors">
+                Aviso de privacidad
+              </Link>
+              <Link href="/solicitar-baja" className="block text-sm text-gray-500 hover:text-white transition-colors">
+                Pedir la baja de mis datos
+              </Link>
             </div>
             <div className="mt-4">
               <a href={CLUB_INFO.whatsapp} target="_blank" rel="noopener noreferrer"
