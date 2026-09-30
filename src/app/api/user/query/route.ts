@@ -6,6 +6,8 @@ import { TABLES_BY_ROLE } from '@/lib/constants';
 import { getView, buildViewSql } from '@/lib/views';
 import { esDirectiva } from '@/lib/roles';
 import { aplicarFiltrosPublicos } from '@/lib/publico';
+import { opinionVeda } from '@/lib/consentimientos';
+import { opinionVigente, tieneConsentimiento } from '@/lib/consentimientos-db';
 
 const ALLOWED_OPERATIONS = ['select', 'insert', 'update', 'delete'] as const;
 const MAX_LIMIT = 1000;
@@ -246,6 +248,41 @@ export async function POST(request: NextRequest) {
         for (const [k, v] of Object.entries(data)) { if (cols.includes(k)) filteredData[k] = v; }
         const keys = Object.keys(filteredData);
         if (keys.length === 0) return NextResponse.json({ error: 'No podés modificar esas columnas' }, { status: 403 });
+
+        // --- La puerta del consentimiento ---------------------------------
+        // Guardar la foto del DNI no es guardar un archivo más: es el dato
+        // más sensible que maneja el club sobre un menor. Se comprueba acá y
+        // no en la pantalla, porque la pantalla se puede saltar y esta es la
+        // única línea por la que pasa el dato.
+        //
+        // Se exige consentimiento VIGENTE de esa finalidad, y además que el
+        // menor no se haya opuesto. Con las dos cosas el club puede responder
+        // "quién autorizó, cuándo y en nombre de quién".
+        if (table === 'deportistas' && (keys.includes('dni_frente_url') || keys.includes('dni_fondo_url'))) {
+          const opinion = await opinionVigente(user.id, 'documentacion_dni');
+          if (opinionVeda(opinion)) {
+            return NextResponse.json(
+              {
+                error:
+                  'El jugador dijo que no autoriza guardar su documentación. Su opinión prevalece, aunque el representante la autorice.',
+              },
+              { status: 403 }
+            );
+          }
+
+          const vigente = await tieneConsentimiento(user.id, 'documentacion_dni');
+          if (!vigente) {
+            return NextResponse.json(
+              {
+                error:
+                  'Falta el consentimiento para guardar la documentación del DNI. Pedilo en el registro o en la secretaría del club.',
+                codigo: 'sin_consentimiento_documentacion',
+              },
+              { status: 403 }
+            );
+          }
+        }
+
         const sets = keys.map(k => `${k} = ?`).join(', ');
         const result = await execute(`UPDATE ${table} SET ${sets}${clause}`, [...Object.values(filteredData), ...filterParams]);
         return NextResponse.json({ data: { affected: result.affectedRows } });

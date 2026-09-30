@@ -10,6 +10,18 @@ import {
   emailSchema, passwordSchema, dniSchema, nombreSchema, apellidoSchema,
   rolPublicoSchema, firstError,
 } from '@/lib/schemas';
+import {
+  validarConsentimientos,
+  edadCumplida,
+  fechaNacimientoValida,
+  VINCULOS,
+  type Vinculo,
+  type Opinion,
+} from '@/lib/consentimientos';
+import {
+  registrarConsentimientos,
+  registrarOpinionMenor,
+} from '@/lib/consentimientos-db';
 
 /** Valida con zod y devuelve un NextResponse 400 si no pasa. */
 function parseOr400<T extends z.ZodType>(schema: T, value: unknown): z.infer<T> {
@@ -41,21 +53,22 @@ export async function POST(request: NextRequest) {
       nombre: nombreRaw, apellido: apellidoRaw, dni: dniRaw, cuil: cuilRaw,
       email: emailRaw, password: passwordRaw,
       telefono = '', direccion = '',
-      // Consentimiento del aviso de privacidad (Ley 25.326). El checkbox del
-      // form lo manda, pero se valida acá también: sin este chequeo, un POST a
-      // mano podría crear la cuenta sin que nadie haya informado a la persona
-      // del uso de sus datos, que es exactamente lo que hay que poder probar.
-      privacidad: privacidadRaw,
+      // Finalidades consentidas, del catálogo de lib/consentimientos.
+      // Antes esto era un booleano: "acepta el aviso". Ahora es la lista de
+      // lo que efectivamente aceptó, porque es lo que se guarda como prueba
+      // y no se puede guardar "aceptó todo".
+      consentimientos: consentimientosRaw = [],
+      // Vínculo con el jugador que se inscribe. Antes el código ponía
+      // 'padre' fijo: una madre quedaba asentada como padre.
+      vinculo: vinculoRaw = null,
       // Optional child registration
       hijo_nombre, hijo_apellido, hijo_dni, hijo_email, hijo_password,
+      hijo_fecha_nacimiento = null,
+      hijo_opinion = null,
     } = body;
 
-    if (privacidadRaw !== true) {
-      return NextResponse.json(
-        { error: 'Tenés que aceptar el aviso de privacidad para registrarte.' },
-        { status: 400 }
-      );
-    }
+    const ip = clientIp(request);
+    const userAgent = request.headers.get('user-agent') ?? null;
 
     // El registro es público: nunca se acepta 'admin' desde el body, solo
     // 'padre' o 'deportista'. Sin esto cualquiera se auto-asignaba admin.
@@ -93,12 +106,40 @@ export async function POST(request: NextRequest) {
     let hijoNombreVal = '';
     let hijoApellidoVal = '';
     let hijoDniFinal = '';
+
+    // --- El vínculo ------------------------------------------------------
+    // Antes estaba fijo en 'padre'. Una madre que inscribe a su hija quedaba
+    // asentada como si fuera el padre, y ese campo es la evidencia de quién
+    // representa a quién: el acta de consentimiento se apoyaba en un dato
+    // falso.
+    const vinculo: Vinculo | null = (VINCULOS as string[]).includes(String(vinculoRaw))
+      ? (vinculoRaw as Vinculo)
+      : null;
+
+    if (registraHijo && !vinculo) {
+      return NextResponse.json(
+        { error: 'Indicá si sos la madre, el padre o la persona tutora legal del jugador.' },
+        { status: 400 }
+      );
+    }
+
+    // --- Consentimientos del jugador --------------------------------------
+    let consHijo: ReturnType<typeof validarConsentimientos> | null = null;
+    let edadHijo: number | null = null;
+
     if (registraHijo) {
       hijoEmailVal = parseOr400(emailSchema, hijo_email);
       hijoPasswordVal = parseOr400(passwordSchema, hijo_password);
       hijoNombreVal = parseOr400(nombreSchema, hijo_nombre);
       hijoApellidoVal = parseOr400(apellidoSchema, hijo_apellido);
       hijoDniFinal = parseOr400(dniSchema, hijo_dni);
+
+      if (!fechaNacimientoValida(hijo_fecha_nacimiento)) {
+        return NextResponse.json(
+          { error: 'Falta la fecha de nacimiento del jugador, o no es una fecha válida.' },
+          { status: 400 }
+        );
+      }
 
       if (hijoEmailVal.toLowerCase() === emailVal.toLowerCase()) {
         throw new ZodFail('El email del hijo debe ser distinto al del padre');
@@ -111,6 +152,41 @@ export async function POST(request: NextRequest) {
       if (hijoDniExiste) {
         return NextResponse.json({ error: 'El DNI del hijo ya está registrado' }, { status: 409 });
       }
+
+      edadHijo = edadCumplida(hijo_fecha_nacimiento as string);
+
+      consHijo = validarConsentimientos({
+        consentimiento: {
+          marcadas: Array.isArray(consentimientosRaw) ? consentimientosRaw : [],
+        },
+        menor: {
+          nombre: hijoNombreVal,
+          fechaNacimiento: hijo_fecha_nacimiento as string,
+          opinion: (hijo_opinion as Opinion) ?? 'no_consultado',
+        },
+        vinculo,
+        esAltaDeMenor: true,
+      });
+      if (!consHijo.ok) {
+        return NextResponse.json({ error: consHijo.error }, { status: 400 });
+      }
+    }
+
+    // --- Consentimientos del titular --------------------------------------
+    // Se validan ANTES de escribir nada. Si el consentimiento no es válido, no
+    // se crea la cuenta: una cuenta creada sin consentimiento no tiene a quién
+    // pertenecer.
+    //
+    // Un adulto no necesita representante, así que se valida con
+    // esAltaDeMenor: false y sin vínculo.
+    const consAdulto = validarConsentimientos({
+      consentimiento: { marcadas: Array.isArray(consentimientosRaw) ? consentimientosRaw : [] },
+      menor: { nombre },
+      vinculo: null,
+      esAltaDeMenor: false,
+    });
+    if (!consAdulto.ok) {
+      return NextResponse.json({ error: consAdulto.error }, { status: 400 });
     }
 
     const hash = await hashPassword(passwordVal);
@@ -135,9 +211,21 @@ export async function POST(request: NextRequest) {
       ]
     );
 
+    // Constancia del consentimiento del titular. Va después de crear el
+    // perfil porque necesita su id, pero antes que nada del hijo.
+    await registrarConsentimientos({
+      titularPerfilId: perfilId,
+      otorganteTipo: 'titular',
+      finalidades: consAdulto.finalidades,
+      edadAlOtorgar: null,
+      ip,
+      userAgent,
+      canal: 'registro',
+    });
+
     // If padre and child data provided
     let childId = null;
-    if (registraHijo) {
+    if (registraHijo && consHijo?.ok) {
       const hijoUserId = uuid();
       const hijoPerfilId = hijoUserId;
       const hijoHash = await hashPassword(hijoPasswordVal);
@@ -156,16 +244,46 @@ export async function POST(request: NextRequest) {
       );
 
       await insert(
-        'INSERT INTO deportistas (id, perfil_id) VALUES (?, ?)',
-        [uuid(), hijoPerfilId]
+        'INSERT INTO deportistas (id, perfil_id, fecha_nacimiento) VALUES (?, ?, ?)',
+        [uuid(), hijoPerfilId, hijo_fecha_nacimiento]
       );
 
       // Link parent-child. Ojo: tipo_vinculo describe la RELACION familiar
       // ('padre'|'madre'|'tutor'), no el rol del usuario, asi que no se renombra.
+      // Y ahora se guarda la que declaró el titular, no una fija: antes una
+      // madre quedaba asentada como si fuera el padre.
       await insert(
         'INSERT INTO familias (id, padre_perfil_id, deportista_perfil_id, tipo_vinculo) VALUES (?, ?, ?, ?)',
-        [uuid(), perfilId, hijoPerfilId, 'padre']
+        [uuid(), perfilId, hijoPerfilId, vinculo]
       );
+
+      // Constancia del consentimiento DEL JUEGOR, otorgado por el
+      // representante. El titular es el menor; el otorgante es el adulto.
+      // Confundir esos dos campos es justo el error que hace imposible
+      // responder quién consintió qué.
+      await registrarConsentimientos({
+        titularPerfilId: hijoPerfilId,
+        otorgantePerfilId: perfilId,
+        otorganteTipo: vinculo as 'padre' | 'madre' | 'tutor',
+        vinculo,
+        finalidades: consHijo.finalidades,
+        edadAlOtorgar: edadHijo,
+        ip,
+        userAgent,
+        canal: 'registro',
+      });
+
+      // La opinión del menor se guarda SIEMPRE, incluso cuando no se le
+      // preguntó. "No se le preguntó" es información: dice que el club no
+      // detectó a alguien que tenía derecho a opinar.
+      await registrarOpinionMenor({
+        menorPerfilId: hijoPerfilId,
+        consulta: 'documentacion_dni',
+        opinion: (hijo_opinion as Opinion) ?? 'no_consultado',
+        origen: 'transmitida_por_representante',
+        recogidaPor: perfilId,
+        edadAlConsultar: edadHijo,
+      });
 
       // El hijo también tiene que verificar su email para poder entrar.
       await generarYEnviarVerificacion(
