@@ -88,3 +88,59 @@ export function enteroEnRango(valor: unknown, min: number, max: number, porDefec
   if (!Number.isFinite(n)) return porDefecto;
   return Math.min(Math.max(n, min), max);
 }
+
+/**
+ * Normaliza una fecha que viene de la base a `YYYY-MM-DD`.
+ *
+ * EL AGUJERO QUE ESTO TAPA
+ *
+ * El driver de MariaDB devuelve las columnas DATE como objeto `Date` de
+ * JavaScript, no como texto. `String(fecha)` de un `Date` da
+ * "Wed Sep 30 2026 00:00:00 GMT+0000", y un `.split('-')` sobre eso no
+ * encuentra ningún guion: la fecha sale vacía o inventada.
+ *
+ * Se detectó en el recibo del club, que es el peor lugar posible: un
+ * comprobante que el banco mira con la fecha en blanco. Ya había pasado con las
+ * alertas de consentimiento, y en los dos casos el arreglo fue el mismo: dejar
+ * de confiar en que el driver devuelve un string.
+ *
+ * Se usa UTC a propósito. Con la zona local, una DATE del 30 de mayo cargada a
+ * las 23:30 se convierte en 31 de mayo y el comprobante dice un día que no es.
+ */
+export function fechaDesdeDb(valor: unknown): string | null {
+  if (valor == null || valor === '') return null;
+
+  if (valor instanceof Date) {
+    if (Number.isNaN(valor.getTime())) return null;
+    const a = valor.getUTCFullYear();
+    const m = String(valor.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(valor.getUTCDate()).padStart(2, '0');
+    return `${a}-${m}-${d}`;
+  }
+
+  const s = String(valor).trim();
+  // Si ya viene en ISO, se respeta.
+  if (FECHA_RE.test(s)) return s;
+
+  // Último recurso: que lo parsee Date.
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  const a = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${a}-${m}-${dd}`;
+}
+
+const MESES_LARGOS = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+
+/** `'2026-09-30'` → `'30 de septiembre de 2026'`. Acepta Date o texto. */
+export function fechaLargaDesdeDb(valor: unknown): string {
+  const iso = fechaDesdeDb(valor);
+  if (!iso) return '—';
+
+  const [a, m, d] = iso.split('-');
+  return `${Number(d)} de ${MESES_LARGOS[Number(m) - 1]} de ${a}`;
+}

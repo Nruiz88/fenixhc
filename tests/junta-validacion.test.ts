@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { parsearFecha, parsearMonto, recortar, enteroEnRango } from '@/lib/junta-validacion';
+import {
+  parsearFecha,
+  parsearMonto,
+  recortar,
+  enteroEnRango,
+  fechaDesdeDb,
+  fechaLargaDesdeDb,
+} from '@/lib/junta-validacion';
 
 // Lo escribe alguien a las apuradas en una reunión. Un '2026-02-31' que se
 // convierte calladamente en marzo desordena el libro de partes sin que nada
@@ -77,8 +84,43 @@ describe('montos', () => {
   });
 });
 
-describe('texto y números', () => {
-  it('recorta sin partir una palabra al pedo', () => {
+describe('fechas que vienen de la base', () => {
+  // El driver devuelve las DATE como objeto Date, no como texto. Ya apareció dos
+  // veces: en las alertas de consentimiento y en el recibo del club, que es el
+  // peor lugar posible — un comprobante que el banco mira con la fecha en
+  // blanco. Estos tests fijan el arreglo para que no vuelva.
+
+  it('normaliza un Date a ISO', () => {
+    expect(fechaDesdeDb(new Date(Date.UTC(2026, 4, 20)))).toBe('2026-05-20');
+    expect(fechaDesdeDb(new Date(Date.UTC(2026, 0, 1)))).toBe('2026-01-01');
+  });
+
+  it('respeta un ISO que ya viene bien', () => {
+    expect(fechaDesdeDb('2026-05-20')).toBe('2026-05-20');
+  });
+
+  it('no se corre de día por la zona horaria', () => {
+    // Una DATE cargada a la 23:30 en Argentina es al día siguiente en UTC. Con
+    // la zona local, el comprobante diría un día que no es.
+    const d = new Date(Date.UTC(2026, 4, 20, 3, 30));
+    expect(fechaDesdeDb(d)).toBe('2026-05-20');
+  });
+
+  it('devuelve null en vez de inventar una fecha', () => {
+    expect(fechaDesdeDb(null)).toBeNull();
+    expect(fechaDesdeDb('')).toBeNull();
+    expect(fechaDesdeDb(new Date('no es una fecha'))).toBeNull();
+    expect(fechaDesdeDb('no es una fecha')).toBeNull();
+  });
+
+  it('escribe la fecha larga en castellano', () => {
+    expect(fechaLargaDesdeDb(new Date(Date.UTC(2026, 4, 20)))).toBe('20 de mayo de 2026');
+    expect(fechaLargaDesdeDb('2026-09-30')).toBe('30 de septiembre de 2026');
+    expect(fechaLargaDesdeDb(null)).toBe('—');
+  });
+});
+
+describe('texto y números', () => {  it('recorta sin partir una palabra al pedo', () => {
     const largo = 'primera parte del acta de la reunión que se';
     const r = recortar(largo, 20);
     expect(r.length).toBeLessThanOrEqual(21);

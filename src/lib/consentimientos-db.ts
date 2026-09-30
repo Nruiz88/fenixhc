@@ -7,6 +7,7 @@
 // historial queda entero.
 
 import { query, execute, transaccion, uuid } from './db';
+import { fechaDesdeDb } from './junta-validacion';
 import {
   VERSION_AVISO,
   FINALIDADES,
@@ -283,19 +284,19 @@ export interface AlertaConsentimiento {
 /**
  * Fecha legible.
  *
- * El driver devuelve las DATE como objetos Date. Interpolados directo salen
- * como "Wed May 20 2026 00:00:00 GMT+0000", que no le sirve de mucho a una
- * secretaria que tiene que llamar a una familia. Además la zona horaria
- * puede correrse un día: 20 de mayo a la noche en Argentina es 21 en UTC.
+ * El driver devuelve las DATE como objetos Date, y `String(fecha)` de un Date
+ * da "Wed May 20 2026 00:00:00 GMT+0000": inútil para una secretaria que tiene
+ * que llamar a una familia. Además la zona horaria puede correrse un día.
+ *
+ * Usa el helper de la sección de junta, que ya resolvió esto después de que el
+ * mismo bug apareciera en el recibo del club.
  */
 function formatearFecha(valor: unknown): string {
-  if (!valor) return '—';
-  if (valor instanceof Date) {
-    return valor.toLocaleDateString('es-AR', {
-      day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
-    });
-  }
-  return String(valor);
+  const iso = fechaDesdeDb(valor);
+  if (!iso) return '—';
+
+  const [a, m, d] = iso.split('-');
+  return `${d}/${m}/${a}`;
 }
 
 export async function alertasConsentimientos(): Promise<AlertaConsentimiento[]> {

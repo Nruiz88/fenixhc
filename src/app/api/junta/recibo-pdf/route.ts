@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth';
 import { puede } from '@/lib/capacidades';
 import { obtenerRecibo, marcarReciboDescargado } from '@/lib/junta-db';
 import PDFDocument from 'pdfkit';
+import { fechaLargaDesdeDb } from '@/lib/junta-validacion';
 
 // El recibo en PDF.
 //
@@ -50,12 +51,6 @@ const FORMAS: Record<string, string> = {
 
 function plata(n: number): string {
   return `$ ${new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2 }).format(Number(n))}`;
-}
-
-function fechaLarga(iso: string): string {
-  const [a, m, d] = String(iso).split('-');
-  if (!a || !m || !d) return iso;
-  return `${Number(d)} de ${MESES[Number(m) - 1]} de ${a}`;
 }
 
 /**
@@ -110,7 +105,7 @@ function dibujarRecibo(doc: PDFKit.PDFDocument, r: any): void {
 
   // --- Datos ---
   const filas: [string, string][] = [
-    ['Fecha', fechaLarga(r.fecha_emision)],
+    ['Fecha', fechaLargaDesdeDb(r.fecha_emision)],
     ['Socio', r.socio_nombre || '—'],
   ];
   if (r.socio_dni) filas.push(['DNI', r.socio_dni]);
