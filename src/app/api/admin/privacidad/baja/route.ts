@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute, uuid } from '@/lib/db';
+import { query, execute, transaccion, uuid } from '@/lib/db';
 import { requireModulo } from '@/lib/auth';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 
@@ -85,69 +85,84 @@ export async function POST(request: NextRequest) {
 
     // 1. Fotografías de DNI. Se borran de la base; el archivo en disco lo
     //    limpia /api/files cuando ya no queda nadie que lo referencie.
-    await execute(
-      'UPDATE deportistas SET dni_frente_url = NULL, dni_fondo_url = NULL WHERE perfil_id = ?',
-      [persona.id]
-    );
+    // Todo lo que sigue va en UNA transacción. La baja toca seis tablas en un
+    // orden que importa, y antes sin transacción un error a la mitad dejaba
+    // el DNI borrado y el perfil sin anonimizar: un estado en el que la
+    // persona ya no tiene documentación pero sigue identificable, y sin
+    // registro de que se intentó hacer la baja.
+    await transaccion(async (conn) => {
+      // 1. Fotografías de DNI. Se borran de la base; el archivo en disco lo
+      //    limpia /api/files cuando ya no queda nadie que lo referencie.
+      await conn.execute(
+        'UPDATE deportistas SET dni_frente_url = NULL, dni_fondo_url = NULL WHERE perfil_id = ?',
+        [persona.id]
+      );
 
-    // 2. Comprobantes de pago. No se borran: son el respaldo de un cobro que
-    //    el club realizó. Se desenlazan para que no queden asociados a una
-    //    identidad, y queda la constancia de que existieron.
-    await execute(
-      'UPDATE cuotas SET comprobante_url = NULL WHERE familia_id IN (SELECT id FROM familias WHERE padre_perfil_id = ?)',
-      [persona.id]
-    );
+      // 2. Comprobantes de pago. No se borran: son el respaldo de un cobro
+      //    que el club realizó. Se desenlazan para que no queden asociados a
+      //    una identidad, y queda la constancia de que existieron.
+      await conn.execute(
+        `UPDATE cuotas SET comprobante_url = NULL
+          WHERE familia_id IN (SELECT id FROM familias WHERE padre_perfil_id = ?)`,
+        [persona.id]
+      );
 
-    // 3. Vínculos familiares: se despegan para que la cuota quede huérfana y
-    //    sin persona identificable detrás.
-    await execute(
-      'UPDATE familias SET padre_perfil_id = ? WHERE padre_perfil_id = ?',
-      [`baja-${uuid()}`, persona.id]
-    );
-    await execute(
-      'UPDATE familias SET deportista_perfil_id = ? WHERE deportista_perfil_id = ?',
-      [`baja-${uuid()}`, persona.id]
-    );
+      // 3. Vínculos familiares: se despegan para que la cuota quede sin
+      //    persona identificable detrás. El marcador es un UUID pelado, del
+      //    largo exacto de la columna: prefijarlo con "baja-" lo pasaba de 36
+      //    caracteres y el UPDATE entero fallaba.
+      await conn.execute(
+        'UPDATE familias SET padre_perfil_id = ? WHERE padre_perfil_id = ?',
+        [uuid(), persona.id]
+      );
+      await conn.execute(
+        'UPDATE familias SET deportista_perfil_id = ? WHERE deportista_perfil_id = ?',
+        [uuid(), persona.id]
+      );
 
-    // 4. Perfil anonimizado.
-    await execute(
-      `UPDATE perfiles
-          SET nombre = ?, apellido = 'DADO DE BAJA', dni = ?, cuil = NULL,
-              correo = ?, telefono = NULL, direccion = NULL, foto_url = NULL
-        WHERE id = ?`,
-      [
-        codigo,
-        `BAJA-${uuid().replace(/-/g, '').slice(0, 14)}`,
-        `baja+${codigo.toLowerCase()}@club.local`,
-        persona.id,
-      ]
-    );
+      // 4. Perfil anonimizado.
+      await conn.execute(
+        `UPDATE perfiles
+            SET nombre = ?, apellido = 'DADO DE BAJA', dni = ?, cuil = NULL,
+                correo = ?, telefono = NULL, direccion = NULL, foto_url = NULL
+          WHERE id = ?`,
+        [
+          codigo,
+          // DNI también CHAR(20): 32 hex es 32, entra bien.
+          uuid().replace(/-/g, '').slice(0, 18).toUpperCase(),
+          `baja+${codigo.toLowerCase()}@club.local`,
+          persona.id,
+        ]
+      );
 
-    // 5. Cuenta desactivada. El email se replaces por uno no contactable y la
-    //    verificación se revierte, así que no puede volver a entrar ni alguien
-    //    con la sesión vieja puede seguir usándola.
-    await execute(
-      `UPDATE usuarios
-          SET email = ?, email_verificado = 0,
-              verification_token = NULL, verification_expires_at = NULL
-        WHERE id = ?`,
-      [`baja+${codigo.toLowerCase()}@club.local`, persona.usuario_id]
-    );
+      // 5. Cuenta desactivada. El email se reemplaza por uno no contactable y
+      //    la verificación se revierte, así que no puede volver a entrar ni
+      //    alguien con la sesión vieja puede seguir usándola.
+      await conn.execute(
+        `UPDATE usuarios
+            SET email = ?, email_verificado = 0,
+                verification_token = NULL, verification_expires_at = NULL
+          WHERE id = ?`,
+        [`baja+${codigo.toLowerCase()}@club.local`, persona.usuario_id]
+      );
 
-    await execute(
-      `INSERT INTO solicitudes_baja
-         (id, perfil_id, solicitante_nombre, solicitante_email, motivo, estado, notas, resuelta_at, resuelta_por)
-       VALUES (?, ?, ?, ?, ?, 'resuelta', ?, NOW(), ?)`,
-      [
-        uuid(),
-        persona.id,
-        `${auth.user.nombre} ${auth.user.apellido} (administración)`,
-        auth.user.email,
-        motivo ?? null,
-        `Baja ejecutada por la administración. Datos anonimizados bajo el código ${codigo}. Documentación eliminada. Registros de pago y contabilidad conservados.`,
-        auth.user.id,
-      ]
-    );
+      // 6. Constancia. Va en la misma transacción: si el resto se revierte,
+      //    este registro tampoco puede quedar.
+      await conn.execute(
+        `INSERT INTO solicitudes_baja
+           (id, perfil_id, solicitante_nombre, solicitante_email, motivo, estado, notas, resuelta_at, resuelta_por)
+         VALUES (?, ?, ?, ?, ?, 'resuelta', ?, NOW(), ?)`,
+        [
+          uuid(),
+          persona.id,
+          `${auth.user.nombre} ${auth.user.apellido} (administración)`,
+          auth.user.email,
+          motivo ?? null,
+          `Baja ejecutada por la administración. Datos anonimizados bajo el código ${codigo}. Documentación eliminada. Registros de pago y contabilidad conservados.`,
+          auth.user.id,
+        ]
+      );
+    });
 
     return NextResponse.json({
       success: true,
@@ -157,6 +172,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: any) {
     console.error('Baja de datos personales error:', err);
-    return NextResponse.json({ error: err.message || 'Error al procesar la baja' }, { status: 500 });
+    // Se devuelve un mensaje genérico: el detalle del SQL (nombres de
+    // columnas, tablas) no ayuda a quien lo pide y sí ayuda a quien
+    // quisiera provocarlo.
+    return NextResponse.json(
+      { error: 'No se pudo completar la baja. No se modificó nada: los cambios quedaron revertidos.' },
+      { status: 500 }
+    );
   }
 }

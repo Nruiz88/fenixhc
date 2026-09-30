@@ -52,3 +52,41 @@ export function uuid(): string {
 export async function closePool() {
   await pool.end();
 }
+
+/**
+ * Corre una función dentro de una transacción: si lanza, se revierte todo.
+ *
+ * Existe por la baja de datos personales. Ese procedimiento toca seis tablas
+ * en un orden que importa, y sin transacción un error a la mitad dejaba el
+ * sistema en un estado que no existe en ningún lado: ya se había borrado el
+ * DNI y el comprobante cuando falló el paso siguiente, y la persona quedaba
+ * a medio anonimizar sin que quedara registro ni se pudiera volver atrás.
+ *
+ * El callback recibe la conexión: las funciones de este módulo usan el pool,
+ * y dentro de una transacción tienen que usar ESTA conexión o las
+ * statements se irían por otro lado y el rollback no las alcanzaría.
+ */
+export async function transaccion<T>(fn: (conn: mysql.PoolConnection) => Promise<T>): Promise<T> {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const resultado = await fn(conn);
+    await conn.commit();
+    return resultado;
+  } catch (err) {
+    try {
+      await conn.rollback();
+    } catch (rollbackErr) {
+      // Si el rollback falla el error útil es el del primero: reportar el
+      // rollback taparía la causa real y dejaría al operador sin saber qué
+      // pasó de verdad.
+      console.error('Falló el rollback de la transacción:', rollbackErr);
+    }
+    throw err;
+  } finally {
+    // Siempre se devuelve la conexión al pool, incluso después de un error:
+    // si no, una baja fallida filtraría una conexión y con varios fallos
+    // seguidos el pool se quedaría sin conexiones.
+    conn.release();
+  }
+}
