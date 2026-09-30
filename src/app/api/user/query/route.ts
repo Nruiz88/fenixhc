@@ -5,6 +5,7 @@ import { requireAuth, type AuthUser } from '@/lib/auth';
 import { TABLES_BY_ROLE } from '@/lib/constants';
 import { getView, buildViewSql } from '@/lib/views';
 import { esDirectiva } from '@/lib/roles';
+import { aplicarFiltrosPublicos } from '@/lib/publico';
 
 const ALLOWED_OPERATIONS = ['select', 'insert', 'update', 'delete'] as const;
 const MAX_LIMIT = 1000;
@@ -198,6 +199,14 @@ export async function POST(request: NextRequest) {
       conds.push(owner.cond);
       filterParams.push(...owner.params);
     }
+
+    // Lo que no se publica no se lee. Sin esta línea un socio podía pedir
+    // `comunicados` con columns '*' y leerse los borradores de la directiva:
+    // `comunicados` está en SHARED_READ, así que el ownerCondition no lo
+    // cubría. Las reglas viven en lib/publico.ts y las comparten el endpoint
+    // público y este, para que no diverjan.
+    if (!esDir) aplicarFiltrosPublicos(table, conds, filterParams);
+
     const clause = conds.length ? ` WHERE ${conds.join(' AND ')}` : '';
 
     switch (operation) {

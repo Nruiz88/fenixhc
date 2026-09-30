@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { query, insert, uuid } from '@/lib/db';
+import { aplicarFiltrosPublicos, PUBLIC_SELECT_TABLES } from '@/lib/publico';
 
 // Endpoint publico (sin autenticacion) para paginas: home, galeria,
 // comunicados, entrenamientos y formulario de contacto.
-const PUBLIC_SELECT_TABLES = [
-  'comunicados',
-  'fotos_galeria',
-  'sponsors',
-  'horarios_entrenamiento',
-  'partidos',
-  'canchas',
-];
+// Las tablas y el filtro de publicación están en lib/publico.ts.
 
 const PUBLIC_INSERT_TABLES = ['contacto_publico'];
 
@@ -28,12 +22,11 @@ const PUBLIC_COLUMNS: Record<string, string[]> = {
 
 const IDENT_RE = /^[A-Za-z0-9_]+$/;
 
-function buildWhere(table: string, filters?: Record<string, any>): { clause: string; params: any[] } {
-  if (!filters) return { clause: '', params: [] };
+function buildConditions(table: string, filters?: Record<string, any>): { conds: string[]; params: any[] } {
   const allowed = new Set(PUBLIC_COLUMNS[table] || []);
   const conditions: string[] = [];
   const params: any[] = [];
-  for (const [key, value] of Object.entries(filters)) {
+  for (const [key, value] of Object.entries(filters || {})) {
     if (value === null || value === undefined) continue;
     if (!allowed.has(key) || !IDENT_RE.test(key)) continue;
     if (Array.isArray(value)) {
@@ -57,7 +50,10 @@ function buildWhere(table: string, filters?: Record<string, any>): { clause: str
       conditions.push(`${key} = ?`); params.push(value);
     }
   }
-  return { clause: conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '', params };
+  // Se devuelven las condiciones por separado y no el WHERE ya armado, para
+  // que el filtro de publicación se pueda agregar con AND sin hacer split del
+  // string: un valor de filtro que contenga " AND " rompería ese split.
+  return { conds: conditions, params };
 }
 
 export async function POST(request: NextRequest) {
@@ -113,13 +109,18 @@ export async function POST(request: NextRequest) {
       : [];
     const selectCols = requestedCols.length > 0 ? requestedCols.join(', ') : '*';
 
-    const { clause, params } = buildWhere(table, filters);
+    const { conds, params } = buildConditions(table, filters);
     const orderBy = order?.column && allowedSet.has(order.column)
       ? ` ORDER BY ${order.column}${order.ascending ? ' ASC' : ' DESC'}`
       : '';
     const limitClause = ` LIMIT ${Math.min(Number(limit) || MAX_LIMIT, MAX_LIMIT)}`;
 
-    const rows = await query(`SELECT ${selectCols} FROM ${table}${clause}${orderBy}${limitClause}`, params);
+    // El filtro de publicación lo impone el servidor, con AND sobre lo que
+    // haya pedido el cliente. Ver lib/publico.ts para el porqué.
+    aplicarFiltrosPublicos(table, conds, params);
+    const whereFinal = conds.length ? ` WHERE ${conds.join(' AND ')}` : '';
+
+    const rows = await query(`SELECT ${selectCols} FROM ${table}${whereFinal}${orderBy}${limitClause}`, params);
     if (single) return NextResponse.json({ data: rows.length > 0 ? rows[0] : null });
     return NextResponse.json({ data: rows });
   } catch (err: any) {

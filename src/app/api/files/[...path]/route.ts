@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { esDirectiva as esDirectivaRol } from '@/lib/roles';
 import { readFile } from 'fs/promises';
 import path from 'path';
 
@@ -19,8 +20,20 @@ const MIME: Record<string, string> = {
 };
 
 // Buckets visibles sin sesión (imágenes de las páginas públicas).
-// El resto (DNI, comprobantes) solo lo ve el dueño de la carpeta o un admin.
 const PUBLIC_READ = new Set(['fotos-galeria', 'fotos-perfil', 'comunicados', 'sponsors', 'partidos']);
+
+// Buckets que también puede leer la directiva, no solo el dueño de la carpeta.
+//
+// Sin esto, `/admin/pagos` le mostraba el botón "Ver comprobante" al tesorero y
+// al-click le daba 403: el chequeo era `user.rol !== 'admin'`, así que un
+// tesorero solo podía ver los comprobantes de su propia carpeta. El flujo
+// principal del club —aprobar un pago con comprobante— quedaba roto para
+// todos los cargos menos admin.
+//
+// Los DNI no están acá a propósito: verlos es tarea de la directiva, y el
+// bucket se llama 'fotos-dni'. Si alguna vez hace falta limitarlos por rol,
+// el chequeo va por módulo, no con una lista de cargos sueltos.
+const DIRECTIVA_READ = new Set(['fotos-dni', 'comprobantes']);
 
 export async function GET(
   request: NextRequest,
@@ -28,24 +41,37 @@ export async function GET(
 ) {
   try {
     const { path: parts } = await params;
-    const clean = parts.map((p) => p.replace(/\.\./g, '')).filter(Boolean);
-    if (clean.length < 2) {
+    const root = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
+
+    // Path traversal: se resuelve el path y se comprueba que siga DENTRO del
+    // directorio de subidas. La versión anterior quitaba la cadena ".." con un
+    // replace, que es frágil: "...." se convierte en ".." y vuelve a escapar.
+    // Resolver y comparar no depende de qué haya escrito en el path.
+    const relativo = parts.filter(Boolean).join('/');
+    const filePath = path.resolve(root, relativo);
+    const dentro = filePath === root || filePath.startsWith(root + path.sep);
+
+    if (!dentro) {
       return NextResponse.json({ error: 'Path inválido' }, { status: 400 });
     }
 
-    const bucket = clean[0];
+    const segmentos = filePath.slice(root.length + 1).split(path.sep);
+    if (segmentos.length < 2) {
+      return NextResponse.json({ error: 'Path inválido' }, { status: 400 });
+    }
+
+    const bucket = segmentos[0];
     const user = await getCurrentUser(request);
 
     if (!PUBLIC_READ.has(bucket)) {
       if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-      // La carpeta es el id del dueño del archivo
-      if (user.rol !== 'admin' && clean[1] !== user.id) {
+      // La segunda carpeta es el id del dueño del archivo.
+      const esDueño = segmentos[1] === user.id;
+      const esDirectiva = DIRECTIVA_READ.has(bucket) && esDirectivaRol(user.rol);
+      if (!esDueño && !esDirectiva) {
         return NextResponse.json({ error: 'Sin permiso sobre este archivo' }, { status: 403 });
       }
     }
-
-    const root = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
-    const filePath = path.join(root, ...clean);
 
     const data = await readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
@@ -62,7 +88,7 @@ export async function GET(
       },
     });
   } catch (err: any) {
-    if (err?.code === 'ENOENT') {
+    if (err?.code === 'ENOENT' || err?.code === 'EISDIR') {
       return NextResponse.json({ error: 'Archivo no encontrado' }, { status: 404 });
     }
     return NextResponse.json({ error: 'Error al leer archivo' }, { status: 500 });

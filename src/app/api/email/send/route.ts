@@ -3,6 +3,7 @@ import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { query, execute } from '@/lib/db';
 import { requireModulo } from '@/lib/auth';
 import { sendEmail } from '@/lib/email';
+import { rateLimit } from '@/lib/rateLimit';
 
 // Email templates
 const TEMPLATES: Record<string, { getSubject: (data: any) => string; html: (data: any) => string }> = {
@@ -62,6 +63,44 @@ const TEMPLATES: Record<string, { getSubject: (data: any) => string; html: (data
   },
 };
 
+/**
+ * Escapa texto para interpolarlo en el HTML de un email.
+ *
+ * Sin esto, un comunicado con `<a href="...">` o `<img onerror=...>` se
+ * inyecta tal cual en el mail. En el navegador de la página el React lo
+ * escapa solo, pero acá el HTML se arma con template strings: lo que se
+ * escribe en la pantalla llega crudo al cliente de correo. Con eso, un
+ * secretario (o una sesión comprometida) puede mandar phishing con el
+ * dominio del club.
+ */
+function esc(s: unknown): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Escapa en profundidad los valores que la plantilla va a interpolar. */
+function escaparObjeto(o: any): any {
+  if (typeof o === 'string') return esc(o);
+  if (Array.isArray(o)) return o.map(escaparObjeto);
+  if (o && typeof o === 'object') {
+    const salida: Record<string, any> = {};
+    for (const [k, v] of Object.entries(o)) salida[k] = escaparObjeto(v);
+    return salida;
+  }
+  return o;
+}
+
+// Tope de destinatarios por envío. El club tiene unas decenas de socios; un
+// límite de 500 deja margen de sobra y evita que un endpoint quede como
+// relay para spam.
+const MAX_DESTINATARIOS = 500;
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await requireModulo('comunicados');
@@ -69,12 +108,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const leido = await leerJson<{ tipo?: string; destinatarios?: string; data?: any }>(request);
+    // Un envío es una acción cara y visible para todos. Sin este límite, un
+    // rol con permiso de comunicados puede mandar cientos de lotes por hora
+    // y quemarle la cuota de Resend y la reputación del dominio.
+    if (!rateLimit(`email:${auth.user.id}`, 10, 3_600_000)) {
+      return NextResponse.json(
+        { error: 'Alcanzaste el límite de envíos por hora. Probá más tarde.' },
+        { status: 429 }
+      );
+    }
+
+    const leido = await leerJson<{ tipo?: string; destinatarios?: string | string[]; data?: any }>(request);
     if (!leido.ok) return RESP_BAD_JSON();
     const { tipo, destinatarios, data } = leido.data;
 
     if (!tipo || !TEMPLATES[tipo]) {
-      return NextResponse.json({ error: 'Invalid email type' }, { status: 400 });
+      return NextResponse.json({ error: 'Tipo de email inválido' }, { status: 400 });
     }
 
     const template = TEMPLATES[tipo];
@@ -96,15 +145,33 @@ export async function POST(request: NextRequest) {
       );
       emails = rows.map((r) => r.correo).filter(Boolean);
     } else if (Array.isArray(destinatarios)) {
-      emails = destinatarios;
+      // Lista explícita: se valida cada dirección y se limita la cantidad.
+      // Antes se aceptaba tal cual, lo que convertía el endpoint en un relay
+      // de spam con el dominio del club.
+      emails = destinatarios.filter((d) => typeof d === 'string' && EMAIL_RE.test(d.trim())).map((d) => d.trim());
     }
 
     if (emails.length === 0) {
-      return NextResponse.json({ ok: true, sent: 0, message: 'No emails to send to' });
+      return NextResponse.json({ ok: true, sent: 0, message: 'No hay destinatarios válidos' });
     }
 
-    const subject = template.getSubject(data);
-    const html = template.html(data);
+    if (emails.length > MAX_DESTINATARIOS) {
+      return NextResponse.json(
+        { error: `Máximo ${MAX_DESTINATARIOS} destinatarios por envío` },
+        { status: 400 }
+      );
+    }
+
+    // Se eliminan duplicados: la misma dirección dos veces en el mismo envío
+    // hace que Resend lo rechace o que la persona reciba el mail dos veces.
+    emails = [...new Set(emails)];
+
+    // Se escapan los DATOS, no la plantilla. Escapar la plantilla entera
+    // convertiría sus propios <div> en texto y el mail llegaría roto; lo que
+    // hay que neutralize es lo que viene del usuario.
+    const datos = escaparObjeto(data);
+    const subject = template.getSubject(datos).slice(0, 250);
+    const html = template.html(datos);
 
     // Envío real. Si no hay RESEND_API_KEY configurado, sendEmail() es un
     // no-op y lo loguea (ver lib/email.ts).

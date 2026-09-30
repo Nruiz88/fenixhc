@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
+import { rateLimit, clientIp } from '@/lib/rateLimit';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 
@@ -8,13 +9,30 @@ export const runtime = 'nodejs';
 const ALLOWED_BUCKETS = ['fotos-perfil', 'fotos-dni', 'comprobantes', 'fotos-galeria', 'comunicados', 'sponsors', 'partidos'];
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
+// Cuántos archivos por hora y por usuario. Sin esto, una cuenta —o la que sea
+// que loguee alguien con un rol de gestión— puede llenar el disco del servidor
+// subiendo archivos de 10 MB en bucle.
+const MAX_SUBIDAS_POR_HORA = 60;
+
 // Whitelist de tipos: nada de .svg/.html/.js que podrían ejecutarse en el mismo origen
 const ALLOWED_EXT = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'mp4', 'webm', 'mov', 'pdf']);
+
+// El MIME lo manda el cliente y por lo tanto no significa nada: un `.jpg` con
+// `Content-Type: text/html` se sirve igual. Lo que evita que el navegador
+// ejecute lo que sube es la extensión de la whitelist, el `X-Content-Type-
+// Options: nosniff` y el sandbox de /api/files.
 
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser(request);
     if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+
+    if (!rateLimit(`upload:${user.id}`, MAX_SUBIDAS_POR_HORA, 3_600_000)) {
+      return NextResponse.json(
+        { error: 'Subiste demasiados archivos. Probá de nuevo en un rato.' },
+        { status: 429 }
+      );
+    }
 
     const formData = await request.formData();
     const file = formData.get('file') as File;
@@ -29,9 +47,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Bucket no permitido' }, { status: 400 });
     }
 
-    // Normalizar path: sin traversal ni slashes iniciales
-    const cleanPath = pathField.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\.\./g, '');
-    if (!cleanPath || cleanPath.includes('/../')) {
+    // Normalizar path. El `includes('/../')` de la versión anterior nunca podía
+    // dar true: el replace de arriba ya se había llevado todos los "..". La
+    // comprobación real es la de contención, más abajo.
+    const cleanPath = pathField.replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!cleanPath) {
       return NextResponse.json({ error: 'Path inválido' }, { status: 400 });
     }
 
@@ -55,15 +75,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Solo podés subir archivos en tu carpeta' }, { status: 403 });
     }
 
-    const root = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+    const root = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
+
+    // Contención: el destino tiene que quedar dentro de root/bucket. Resolver
+    // y comparar no depende de qué haya escrito el cliente en el path.
+    const destino = path.resolve(root, bucket, cleanPath);
+    const baseBucket = path.resolve(root, bucket);
+    if (!destino.startsWith(baseBucket + path.sep)) {
+      return NextResponse.json({ error: 'Path inválido' }, { status: 400 });
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
-    const targetDir = path.join(root, bucket, path.dirname(cleanPath));
-    await mkdir(targetDir, { recursive: true });
-    await writeFile(path.join(root, bucket, cleanPath), buffer);
+    await mkdir(path.dirname(destino), { recursive: true });
+    await writeFile(destino, buffer);
 
     return NextResponse.json({ url: `/api/files/${bucket}/${cleanPath}` });
   } catch (err: any) {
     console.error('Upload error:', err);
-    return NextResponse.json({ error: err.message || 'Error al subir archivo' }, { status: 500 });
+    return NextResponse.json({ error: 'Error al subir archivo' }, { status: 500 });
   }
 }
