@@ -3,15 +3,21 @@
 import { useState } from 'react';
 import { ConfiguracionCuenta } from '@/components/ConfiguracionCuenta';
 import AdminConfiguracionCuotas from './cuotas/page';
+import SolicitudesBaja from '@/app/admin/privacidad/solicitudes/page';
 import { PageHeader } from '@/components/admin/ui';
-import { User, Coins } from 'lucide-react';
+import { User, Coins, Inbox } from 'lucide-react';
 
 // Configuración del panel con pestañas en vez de una sola pantalla larga.
 //
-// Con dos secciones, dos botones que cambian la vista usan menos espacio que
-// dos formularios apilados, y no hay que scrollear para llegar al segundo.
+// Con varias secciones, unos botones que cambian la vista usan menos espacio
+// que todo apilado, y no hay que scrollear para llegar a lo último.
+//
+// "Solicitudes de baja" es la primera porque es lo urgente: la ley obliga a
+// responder en 10 días hábiles y la bandeja se llena sola, sin que nadie
+// tenga que acordarse de mirarla.
 
 const PESTANAS = [
+  { clave: 'solicitudes', etiqueta: 'Solicitudes de baja', icono: Inbox },
   { clave: 'cuotas', etiqueta: 'Cuotas y vencimientos', icono: Coins },
   { clave: 'cuenta', etiqueta: 'Mi cuenta', icono: User },
 ] as const;
@@ -19,13 +25,13 @@ const PESTANAS = [
 type Clave = (typeof PESTANAS)[number]['clave'];
 
 export default function AdminConfiguracion() {
-  const [pestana, setPestana] = useState<Clave>('cuotas');
+  const [pestana, setPestana] = useState<Clave>('solicitudes');
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Configuración"
-        description="Precios de la cuota y tus datos de acceso."
+        description="Pedidos de baja, precios de la cuota y tus datos de acceso."
       />
 
       <div className="inline-flex rounded-lg border border-line bg-surface p-0.5">
@@ -46,7 +52,11 @@ export default function AdminConfiguracion() {
         ))}
       </div>
 
-      {pestana === 'cuotas' ? <AdminConfiguracionCuotas /> : <ConfiguracionCuenta />}
+      {pestana === 'cuotas' && <AdminConfiguracionCuotas />}
+      {pestana === 'cuenta' && <ConfiguracionCuenta />}
+      {pestana === 'solicitudes' && (
+        <SolicitudesBaja />
+      )}
     </div>
   );
 }

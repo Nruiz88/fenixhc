@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, execute, transaccion, uuid } from '@/lib/db';
 import { requireModulo } from '@/lib/auth';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
+import { ejecutarBaja, ErrorBaja } from '@/lib/baja';
 
-// Baja de datos personales (derecho de supresión, Ley 25.326 art. 8 inc. d).
+// Baja directa desde el panel, sin que haya una solicitud de por medio.
 //
-// La baja NO borra en cascada. Si se borrara la cuenta, se irían el historial
-// de pagos y la contabilidad del club, que son datos que tiene obligación de
-// conservar. Lo que se elimina es la identidad:
+// El caso es: el club se entera por otro medio (un mail, una conversación)
+// que alguien quiere sus datos borrados, y la administración lo ejecuta
+// directamente.
 //
-//   - La documentación (fotos de DNI) se borra del disco y de la base.
-//   - El perfil se anonimiza: el nombre pasa a un código, el DNI y el CUIL
-//     se vacían, y el email se cambia a uno no contactable.
-//   - Las cuotas quedan sin padre_perfil_id, así que el cobro histórico se
-//     conserva sin querma a una persona identificable.
-//   - La cuenta se desactiva para que nadie pueda entrar con esos datos.
-//
-// Lo que NO se borra nunca: los movimientos de finanzas y el estado de las
-// cuotas. Son registros contables, y borrarlos sería destruir la contabilidad
-// del club.
+// Si la baja viene de un pedido formal de la persona, se usa el endpoint de
+// solicitudes: ahí queda la trazabilidad de que el club recibió un
+// reclamo y lo resolvió, que es distinto de una baja administrativa.
+
+// Exige confirmación explícita. Es irreversible y afecta datos de una
+// persona, muchas veces menor de edad: a un click de más no puede llegar a
+// borrar el DNI de un chico.
+const CONFIRMACION =
+  'La baja anonimiza a la persona y borra su documentación. Los registros de pago y contabilidad se conservan, sin nombre.';
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,179 +38,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Falta la persona a dar de baja' }, { status: 400 });
     }
 
-    // Es una acción irreversible sobre datos de una persona. Se pide
-    // confirmación explícita: un click de más no puede borrar el DNI de un
-    // menor.
     if (!confirmar) {
       return NextResponse.json(
-        {
-          error: 'Falta la confirmación',
-          requiereConfirmacion: true,
-          mensaje:
-            'La baja anonimiza a la persona y borra su documentación. Los registros de pago y contabilidad se conservan, sin nombre.',
-        },
+        { error: 'Falta la confirmación', requiereConfirmacion: true, mensaje: CONFIRMACION },
         { status: 400 }
       );
     }
 
-    const perfil = await query<any>(
-      'SELECT id, nombre, apellido, dni, cuil, correo, rol, usuario_id FROM perfiles WHERE id = ?',
-      [perfil_id]
-    );
-    if (!perfil[0]) {
-      return NextResponse.json({ error: 'La persona no existe' }, { status: 404 });
-    }
-
-    const persona = perfil[0];
-
-    // No se puede dar de baja al último administrador, por la misma razón que
-    // no se puede quitarle el rol: el club quedaría sin nadie que lo administre.
-    if (persona.rol === 'admin') {
-      const [otros] = await query<{ c: number }>(
-        "SELECT COUNT(*) AS c FROM usuarios WHERE rol = 'admin' AND id != ? AND email_verificado = 1",
-        [persona.usuario_id]
-      );
-      if (Number(otros?.c ?? 0) === 0) {
-        return NextResponse.json(
-          { error: 'No se puede dar de baja al único administrador. Creá otro primero.' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Código de seudonimización. Se genera al azar y no se deriva del nombre,
-    // para que no permita reconstruirlo.
-    const codigo = `BAJA-${uuid().slice(0, 8).toUpperCase()}`;
-
-    // 1. Fotografías de DNI. Se borran de la base; el archivo en disco lo
-    //    limpia /api/files cuando ya no queda nadie que lo referencie.
-    // Todo lo que sigue va en UNA transacción. La baja toca seis tablas en un
-    // orden que importa, y antes sin transacción un error a la mitad dejaba
-    // el DNI borrado y el perfil sin anonimizar: un estado en el que la
-    // persona ya no tiene documentación pero sigue identificable, y sin
-    // registro de que se intentó hacer la baja.
-    await transaccion(async (conn) => {
-      // 1. Fotografías de DNI. Se borran de la base; el archivo en disco lo
-      //    limpia /api/files cuando ya no queda nadie que lo referencie.
-      await conn.execute(
-        'UPDATE deportistas SET dni_frente_url = NULL, dni_fondo_url = NULL WHERE perfil_id = ?',
-        [persona.id]
-      );
-
-      // 2. Comprobantes de pago. No se borran: son el respaldo de un cobro
-      //    que el club realizó. Se desenlazan para que no queden asociados a
-      //    una identidad, y queda la constancia de que existieron.
-      await conn.execute(
-        `UPDATE cuotas SET comprobante_url = NULL
-          WHERE familia_id IN (SELECT id FROM familias WHERE padre_perfil_id = ?)`,
-        [persona.id]
-      );
-
-      // 3. Vínculos familiares.
-      //
-      //    No se pueden "desvincular" poniendo un id nuevo: familias tiene
-      //    FK contra perfiles, así que un id que no existe lo rechaza. Y
-      //    borrar la fila no sirve tampoco, porque las cuotas cuelgan de la
-      //    familia con ON DELETE CASCADE y se perdería el historial de pagos.
-      //
-      //    Lo que se hace es crear un perfil sustituto, ya anonimizado, y
-      //    apuntar el vínculo ahí. La familia y sus cuotas sobreviven, pero
-      //    ya no hay detrás una persona identificable.
-      const [familiasAfectadas] = await conn.execute<any[]>(
-        'SELECT id, padre_perfil_id, deportista_perfil_id FROM familias WHERE padre_perfil_id = ? OR deportista_perfil_id = ?',
-        [persona.id, persona.id]
-      );
-
-      for (const f of familiasAfectadas) {
-        const sustituto = async (rol: string) => {
-          const nuevoId = uuid();
-          await conn.execute(
-            `INSERT INTO perfiles
-               (id, usuario_id, rol, nombre, apellido, dni, cuil, correo, telefono, direccion)
-             VALUES (?, NULL, ?, ?, 'DADO DE BAJA', ?, NULL, ?, NULL, NULL)`,
-            [
-              nuevoId,
-              rol,
-              `BAJA-${uuid().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
-              // El DNI es NOT NULL UNIQUE: un uuid distinto por fila.
-              `B${uuid().replace(/-/g, '').slice(0, 17).toUpperCase()}`,
-              `baja+${nuevoId.slice(0, 8)}@club.local`,
-            ]
-          );
-          return nuevoId;
-        };
-
-        const padreNuevo =
-          f.padre_perfil_id === persona.id ? await sustituto('socio_benefactor') : f.padre_perfil_id;
-        const deportistaNuevo =
-          f.deportista_perfil_id === persona.id
-            ? await sustituto('socio_cadete')
-            : f.deportista_perfil_id;
-
-        await conn.execute(
-          'UPDATE familias SET padre_perfil_id = ?, deportista_perfil_id = ? WHERE id = ?',
-          [padreNuevo, deportistaNuevo, f.id]
-        );
-      }
-
-      // 4. Perfil anonimizado.
-      await conn.execute(
-        `UPDATE perfiles
-            SET nombre = ?, apellido = 'DADO DE BAJA', dni = ?, cuil = NULL,
-                correo = ?, telefono = NULL, direccion = NULL, foto_url = NULL
-          WHERE id = ?`,
-        [
-          codigo,
-          // DNI también CHAR(20): 32 hex es 32, entra bien.
-          uuid().replace(/-/g, '').slice(0, 18).toUpperCase(),
-          `baja+${codigo.toLowerCase()}@club.local`,
-          persona.id,
-        ]
-      );
-
-      // 5. Cuenta desactivada. El email se reemplaza por uno no contactable y
-      //    la verificación se revierte, así que no puede volver a entrar ni
-      //    alguien con la sesión vieja puede seguir usándola.
-      await conn.execute(
-        `UPDATE usuarios
-            SET email = ?, email_verificado = 0,
-                verification_token = NULL, verification_expires_at = NULL
-          WHERE id = ?`,
-        [`baja+${codigo.toLowerCase()}@club.local`, persona.usuario_id]
-      );
-
-      // 6. Constancia. Va en la misma transacción: si el resto se revierte,
-      //    este registro tampoco puede quedar.
-      await conn.execute(
-        `INSERT INTO solicitudes_baja
-           (id, perfil_id, solicitante_nombre, solicitante_email, motivo, estado, notas, resuelta_at, resuelta_por)
-         VALUES (?, ?, ?, ?, ?, 'resuelta', ?, NOW(), ?)`,
-        [
-          uuid(),
-          persona.id,
-          `${auth.user.nombre} ${auth.user.apellido} (administración)`,
-          auth.user.email,
-          motivo ?? null,
-          `Baja ejecutada por la administración. Datos anonimizados bajo el código ${codigo}. Documentación eliminada. Registros de pago y contabilidad conservados.`,
-          auth.user.id,
-        ]
-      );
+    const r = await ejecutarBaja({
+      perfilId: perfil_id,
+      autorizadaPorId: auth.user.id,
+      autorizadaPorNombre: `${auth.user.nombre} ${auth.user.apellido}`,
+      autorizadaPorEmail: auth.user.email,
+      motivo,
+      solicitud: null,
     });
 
     return NextResponse.json({
       success: true,
-      codigo,
+      codigo: r.codigo,
       mensaje:
         'La persona fue dada de baja. Su documentación se eliminó y sus datos personales quedaron anonimizados. Los registros de pago y la contabilidad se conservaron.',
     });
   } catch (err: any) {
+    if (err instanceof ErrorBaja) {
+      const status = err.motivo === 'perfil_inexistente' ? 404 : 400;
+      return NextResponse.json({ error: err.message }, { status });
+    }
     console.error('Baja de datos personales error:', err);
-    // Se devuelve un mensaje genérico: el detalle del SQL (nombres de
-    // columnas, tablas) no ayuda a quien lo pide y sí ayuda a quien
-    // quisiera provocarlo.
+    // Genérico a propósito: el detalle del SQL (nombres de columnas y tablas)
+    // no ayuda a quien pide la baja y sí ayuda a quien quisiera provocarlo.
     return NextResponse.json(
       { error: 'No se pudo completar la baja. No se modificó nada: los cambios quedaron revertidos.' },
       { status: 500 }
     );
   }
 }
+
+export { CONFIRMACION };

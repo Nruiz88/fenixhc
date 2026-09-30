@@ -49,6 +49,16 @@ mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/02_seed.sql
 - `mariadb/06_configuracion_cuota.sql` → monto base de la cuota y tramos de recargo.
   **Necesaria para que los recargos funcionen**; sin ella el panel sigue andando con los
   valores por defecto, pero no se pueden editar.
+- `mariadb/07_datos_personales.sql` → bitácora de accesos a documentación y tabla de
+  solicitudes de baja.
+- `mariadb/08_perfil_sin_cuenta.sql` → permite `perfiles.usuario_id = NULL`, necesario para
+  los perfiles anonimizados que deja una baja.
+- `mariadb/09_solicitudes_baja.sql` → convierte la tabla de bajas en bandeja de entrada:
+  agrega `resultado` y `canal`, y vuelve `perfil_id` nullable para los pedidos que llegan
+  sin ficha asociada. **Sin ella el formulario `/solicitar-baja` y el panel de solicitudes
+  devuelven error.**
+
+Todas son idempotentes: se pueden volver a correr sin duplicar nada.
 
 > En Coolify el mismo proceso se hace con un solo comando SSH/consola (ver README).
 
@@ -253,7 +263,30 @@ driver de MySQL se iría al bundle del navegador.
 
 Tests: `npm test` (vitest). Cubren los casos de fecha que fallan en silencio:
 cambio de año, meses cortos, límite del día del hito y redondeo. También
-fijan la matriz de roles y permisos (`tests/roles.test.ts`).
+fijan la matriz de roles y permisos (`tests/roles.test.ts`), que todas las
+pantallas del panel caigan bajo un módulo (`tests/proteccion-rutas.test.ts`) y
+el mínimo de datos que tiene que traer un pedido de baja
+(`tests/baja-solicitud.test.ts`).
+
+## Solicitudes de baja de datos
+El derecho de supresión lo tiene la persona, no el club, así que hay tres
+piezas y ninguna borra nada por sí sola:
+
+| Pieza | Ruta | Qué hace |
+| --- | --- | --- |
+| Formulario público | `/solicitar-baja` | Para quien no tiene cuenta. Exige DNI. |
+| Portal del socio | `/socio-{cadete,benefactor}/configuracion` | Pide la baja propia o de un jugador a su cargo. |
+| Bandeja del panel | `/admin/configuracion` → "Solicitudes de baja" | Aprueba (ejecuta la baja) o rechaza con motivo. |
+
+- El pedido **nunca** anonimiza a nadie por sí solo. Al aprobar, el admin elige
+  a qué ficha corresponde y recién ahí corre `src/lib/baja.ts`, el mismo
+  procedimiento que usa la baja directa del panel.
+- La identidad se verifica por DNI contra `perfiles`. Por eso `perfil_id` es
+  nullable en la tabla: un formulario anónimo no sabe todavía a qué ficha
+  corresponde, y adivinarlo sería peor que no vincularlo.
+- Aprobar conserva pagos y contabilidad; solo anonimiza la identidad.
+- Rechazar exige motivo: se le comunica a quien pidió.
+- Módulo requerido: `configuracion` (admin y presidente).
 
 ## Proxy (antes middleware)
 El archivo se llama `src/proxy.ts` y exporta `proxy()`. En Next 16 la

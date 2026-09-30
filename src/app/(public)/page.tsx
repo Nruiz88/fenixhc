@@ -209,7 +209,11 @@ function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-4">Navegación</h3>
             <ul className="space-y-2">
-              {[{ label: 'El Club', href: '/club' }, { label: 'Sobre Nosotros', href: '/sobre-nosotros' }, { label: 'Comunicados', href: '/comunicados' }, { label: 'Galería', href: '/galeria' }, { label: 'Entrenamientos', href: '/entrenamientos' }, { label: 'Contacto', href: '/contacto' }, { label: 'Iniciar Sesión', href: '/login' }].map((l) => (
+              {/* "Solicitar baja" va acá, y no escondida en una página
+                  interna: el que ya se dio de baja no tiene cuenta, y si el
+                  enlace no aparece a simple vista el derecho a pedir la
+                  supresión de sus datos queda solo en el papel. */}
+              {[{ label: 'El Club', href: '/club' }, { label: 'Sobre Nosotros', href: '/sobre-nosotros' }, { label: 'Comunicados', href: '/comunicados' }, { label: 'Galería', href: '/galeria' }, { label: 'Entrenamientos', href: '/entrenamientos' }, { label: 'Contacto', href: '/contacto' }, { label: 'Iniciar Sesión', href: '/login' }, { label: 'Aviso de privacidad', href: '/privacidad' }, { label: 'Pedir la baja de mis datos', href: '/solicitar-baja' }].map((l) => (
                 <li key={l.href}><Link href={l.href} className="text-sm text-gray-400 hover:text-[#DC2626] transition-colors">{l.label}</Link></li>
               ))}
             </ul>
