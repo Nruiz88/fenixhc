@@ -227,8 +227,29 @@ const RUTAS_ADICIONALES: Record<string, Modulo> = {
   '/admin/privacidad': 'configuracion',
 };
 
+/**
+ * Pantallas del panel que no dependen de un módulo.
+ *
+ * TODAS las demás pasan por la matriz de permisos. Estas no, y está dicho acá a
+ * propósito en vez de dejarlo implícito: una pantalla que se cuelga de esta
+ * lista queda protegida solo por `esDirectiva`, que el proxy ya aplica a todo lo
+ * que empieza con `/admin`.
+ *
+ * Hoy está acá el manual, `/admin/ayuda`. Va sin módulo a propósito: el manual
+ * se escribe para el cargo que todavía no conoce el sistema, así que un rol al
+ * que le falta el módulo `configuracion` igual tiene que poder leerlo.
+ *
+ * Si alguna vez entra una pantalla más, tiene que entrar con una razón escrita
+ * acá. La alternativa —ponerla en un módulo cualquiera— es peor: el chequeo
+ * parecería bite más de lo que muerde.
+ */
+export const RUTAS_SIN_MODULO: readonly string[] = ['/admin/ayuda'];
+
 /** Módulo al que pertenece una ruta del panel, incluidas las no canónicas. */
 export function moduloDeRutaCompleto(pathname: string): Modulo | null {
+  for (const ruta of RUTAS_SIN_MODULO) {
+    if (pathname === ruta || pathname.startsWith(ruta + '/')) return null;
+  }
   for (const [ruta, modulo] of Object.entries(RUTAS_ADICIONALES)) {
     if (pathname === ruta || pathname.startsWith(ruta + '/')) return modulo;
   }

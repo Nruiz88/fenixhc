@@ -11,6 +11,7 @@ import {
   Menu, LogOut, LayoutDashboard, Users, UserCheck, FileText, Link2,
   DollarSign, PieChart, Bell, Calendar, Home, ChevronRight, Settings,
   Megaphone, Star, Clock, TrendingUp, BarChart3, Shield, ShieldCheck, Landmark,
+  BookOpen,
 } from 'lucide-react';
 import { tieneModulo, ROL_LABEL, type Modulo, type Rol } from '@/lib/roles';
 import { iniciales } from '@/lib/format';
@@ -70,6 +71,10 @@ const SECCIONES: { titulo: string; items: NavItem[] }[] = [
     items: [
       { label: 'Configuración', href: '/admin/configuracion', icon: Settings, modulo: 'configuracion' },
       { label: 'Datos personales', href: '/admin/privacidad', icon: ShieldCheck, modulo: 'configuracion' },
+      // El manual no es un módulo con permisos: entra cualquiera que pueda ver
+      // el panel. Y tiene que ser visible justamente para el que no conoce el
+      // sistema, que es el que lo necesita.
+      { label: 'Manual', href: '/admin/ayuda', icon: BookOpen },
     ],
   },
 ];
@@ -78,7 +83,8 @@ interface NavItem {
   label: string;
   href: string;
   icon: any;
-  modulo: Modulo;
+  /** Opcional a propósito: los ítems sin módulo son visibles para todos. */
+  modulo?: Modulo;
 }
 
 function Sidebar({
@@ -93,7 +99,12 @@ function Sidebar({
   onNavigate?: () => void;
 }) {
   const visibles = SECCIONES
-    .map((s) => ({ ...s, items: s.items.filter((i) => !rol || tieneModulo(rol, i.modulo)) }))
+    .map((s) => ({
+      ...s,
+      // Un ítem sin módulo es visible para todos: es el caso del manual, que
+      // justamente necesita ver quien todavía no conoce el sistema.
+      items: s.items.filter((i) => !i.modulo || !rol || tieneModulo(rol, i.modulo)),
+    }))
     .filter((s) => s.items.length > 0);
 
   return (

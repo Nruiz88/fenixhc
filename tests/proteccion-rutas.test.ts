@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { moduloDeRutaCompleto, tieneModulo, type Rol } from '@/lib/roles';
+import { moduloDeRutaCompleto, tieneModulo, RUTAS_SIN_MODULO, esDirectiva, type Rol } from '@/lib/roles';
 
 // Una pantalla del panel que no está en la matriz de rutas NO está protegida
 // por el proxy: el chequeo devuelve null y la única defensa que queda es el
@@ -42,12 +42,44 @@ describe('protección de las pantallas del panel', () => {
     expect(rutas.length).toBeGreaterThan(10);
   });
 
-  it('toda pantalla del panel cae bajo algún módulo', () => {
-    const huerfanas = rutas.filter((r) => moduloDeRutaCompleto(r) === null);
+  it('toda pantalla del panel cae bajo algún módulo, salvo las declaradas', () => {
+    // Hay una lista de excepciones en roles.ts: pantallas que dependen solo de
+    // `esDirectiva` y no de un módulo. No están desprotegidas —el proxy las
+    // corta igual por ser `/admin/*`— pero es una excepción deliberada y tiene
+    // que estar escrita en el código, no implícita.
+    const huerfanas = rutas.filter(
+      (r) => moduloDeRutaCompleto(r) === null && !RUTAS_SIN_MODULO.includes(r)
+    );
     expect(
       huerfanas,
       `Estas pantallas no están protegidas por el proxy:\n  ${huerfanas.join('\n  ')}`
     ).toEqual([]);
+  });
+
+  it('las excepciones son pocas y las que existen son reales', () => {
+    // La lista no debe crecer a medida que se abren pantallas: es la clase de
+    // excepción que se acumula "solo por esta vez" hasta que la matriz de
+    // permisos deja de proteger nada.
+    expect(RUTAS_SIN_MODULO.length).toBeLessThanOrEqual(3);
+
+    // Y cada ruta de la lista tiene que existir de verdad, o queda protegiendo
+    // algo que ya no está.
+    for (const r of RUTAS_SIN_MODULO) {
+      expect(rutas, `${r} está en RUTAS_SIN_MODULO pero no existe`).toContain(r);
+    }
+  });
+
+  it('el manual entra a cualquier cargo de directiva y a ningún socio', () => {
+    // Es el caso que justifica la excepción: el manual le sirve a quien todavía
+    // no conoce el sistema, así que no puede depender de `configuracion`, que
+    // solo tienen admin y presidente.
+    expect(moduloDeRutaCompleto('/admin/ayuda')).toBeNull();
+
+    for (const rol of [
+      'presidente', 'secretario', 'tesorero', 'vocal_titular', 'vocal_suplente',
+    ] as Rol[]) {
+      expect(esDirectiva(rol), `${rol} debería poder leer el manual`).toBe(true);
+    }
   });
 
   it('la pantalla de datos personales exige el módulo de configuración', () => {
