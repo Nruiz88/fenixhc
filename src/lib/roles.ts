@@ -235,13 +235,18 @@ const RUTAS_ADICIONALES: Record<string, Modulo> = {
  * lista queda protegida solo por `esDirectiva`, que el proxy ya aplica a todo lo
  * que empieza con `/admin`.
  *
- * Hoy está acá el manual, `/admin/ayuda`. Va sin módulo a propósito: el manual
- * se escribe para el cargo que todavía no conoce el sistema, así que un rol al
- * que le falta el módulo `configuracion` igual tiene que poder leerlo.
+ * Hoy está acá el manual, `/admin/ayuda`.
+ *
+ * Va sin módulo aunque el club lo haya reservado al admin en el menú lateral.
+ * Son dos cosas distintas: el ENLACE se muestra solo al admin, en
+ * `admin/layout.tsx` con `soloAdmin`. La RUTA queda abierta a toda la
+ * directiva, porque no hay motivo para negarle el manual a un tesorero que lo
+ * está buscando justo cuando lo necesita. Se llega escribiendo la dirección o
+ * pasándosela.
  *
  * Si alguna vez entra una pantalla más, tiene que entrar con una razón escrita
  * acá. La alternativa —ponerla en un módulo cualquiera— es peor: el chequeo
- * parecería bite más de lo que muerde.
+ * parecería morder más de lo que muerde.
  */
 export const RUTAS_SIN_MODULO: readonly string[] = ['/admin/ayuda'];
 

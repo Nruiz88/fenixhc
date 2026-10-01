@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { moduloDeRutaCompleto, tieneModulo, RUTAS_SIN_MODULO, esDirectiva, type Rol } from '@/lib/roles';
 
@@ -73,6 +73,9 @@ describe('protección de las pantallas del panel', () => {
     // Es el caso que justifica la excepción: el manual le sirve a quien todavía
     // no conoce el sistema, así que no puede depender de `configuracion`, que
     // solo tienen admin y presidente.
+    //
+    // Que el club lo haya reservado al admin en el MENÚ no cambia esto. El
+    // enlace y la ruta son dos cosas: se llega escribiendo la dirección.
     expect(moduloDeRutaCompleto('/admin/ayuda')).toBeNull();
 
     for (const rol of [
@@ -80,6 +83,17 @@ describe('protección de las pantallas del panel', () => {
     ] as Rol[]) {
       expect(esDirectiva(rol), `${rol} debería poder leer el manual`).toBe(true);
     }
+  });
+
+  it('el enlace del manual en el menú es solo del admin', () => {
+    // La ruta abierta no es lo mismo que el enlace. Si el menú le muestra
+    // "Manual" al tesorero y la club lo reservó al admin, el menú está
+    // contradiciendo la decisión.
+    const layout = readFileSync(join(__dirname, '../src/app/admin/layout.tsx'), 'utf8');
+    const item = layout.match(/label:\s*'Manual'.*/);
+
+    expect(item, 'no se encuentra el ítem del manual en el menú').toBeTruthy();
+    expect(item![0]).toMatch(/soloAdmin:\s*true/);
   });
 
   it('la pantalla de datos personales exige el módulo de configuración', () => {

@@ -71,10 +71,10 @@ const SECCIONES: { titulo: string; items: NavItem[] }[] = [
     items: [
       { label: 'Configuración', href: '/admin/configuracion', icon: Settings, modulo: 'configuracion' },
       { label: 'Datos personales', href: '/admin/privacidad', icon: ShieldCheck, modulo: 'configuracion' },
-      // El manual no es un módulo con permisos: entra cualquiera que pueda ver
-      // el panel. Y tiene que ser visible justamente para el que no conoce el
-      // sistema, que es el que lo necesita.
-      { label: 'Manual', href: '/admin/ayuda', icon: BookOpen },
+      // El manual entra solo para admin. La RUTA sigue abierta a toda la
+      // directiva —ver RUTAS_SIN_MODULO en lib/roles— pero el enlace del menú
+      // es solo del admin: se llega escribiendo la dirección o pasándosela.
+      { label: 'Manual', href: '/admin/ayuda', icon: BookOpen, soloAdmin: true },
     ],
   },
 ];
@@ -85,6 +85,14 @@ interface NavItem {
   icon: any;
   /** Opcional a propósito: los ítems sin módulo son visibles para todos. */
   modulo?: Modulo;
+  /**
+   * El enlace se muestra solo al admin, aunque la ruta esté abierta.
+   *
+   * Es distinto de `modulo`: acá no se esconde la pantalla, se esconde el
+   * acceso desde el menú. El manual es el caso: toda la directiva puede
+   * leerlo, pero el club lo da por publicado y el que lo muestra es el admin.
+   */
+  soloAdmin?: boolean;
 }
 
 function Sidebar({
@@ -101,9 +109,11 @@ function Sidebar({
   const visibles = SECCIONES
     .map((s) => ({
       ...s,
-      // Un ítem sin módulo es visible para todos: es el caso del manual, que
-      // justamente necesita ver quien todavía no conoce el sistema.
-      items: s.items.filter((i) => !i.modulo || !rol || tieneModulo(rol, i.modulo)),
+      // Un ítem sin módulo es visible para todos; uno con `soloAdmin` espera a
+      // saber quién es, porque el menú se dibuja recién con el rol cargado.
+      items: s.items.filter(
+        (i) => (!i.modulo || (rol && tieneModulo(rol, i.modulo))) && (!i.soloAdmin || rol === 'admin')
+      ),
     }))
     .filter((s) => s.items.length > 0);
 
@@ -172,6 +182,40 @@ function Sidebar({
   );
 }
 
+/**
+ * Mené vacío mientras se resuelve el rol.
+ *
+ * No es adorno. El menú lateral depende de qué módulos tenga la persona, y eso
+ * no se sabe hasta que el navegador pregunta quién es: en el servidor no hay
+ * cookie a mano. Dibujar el menú sin el rol y filtrarlo después pintaba todos
+ * los ítems un instante y después sacaba los que no tocaban.
+ */
+function EsqueletoSidebar() {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-line px-4 py-4">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 shrink-0 animate-pulse rounded-lg bg-surface-2" />
+          <div className="space-y-1.5">
+            <div className="h-3 w-16 animate-pulse rounded bg-surface-2" />
+            <div className="h-2 w-24 animate-pulse rounded bg-surface-2" />
+          </div>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 space-y-5 overflow-hidden px-3 py-4">
+        {Array.from({ length: 4 }).map((_, s) => (
+          <div key={s} className="space-y-1.5">
+            <div className="h-2.5 w-16 animate-pulse rounded bg-surface-2" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-8 animate-pulse rounded-lg bg-surface-2/60" />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Convierte /admin/links-familia -> "Links Familia" */
 function tituloRuta(seg: string): string {
   const REGLAS: Record<string, string> = {
@@ -187,7 +231,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [open, setOpen] = useState(false);
+  const [abierto, setAbierto] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -197,7 +241,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     })();
   }, []);
 
-  useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(() => { setAbierto(false); }, [pathname]);
 
   const handleLogout = async () => { await logout(); router.push('/login'); };
 
@@ -213,25 +257,44 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="flex min-h-screen bg-base">
       <aside className="hidden min-h-0 w-64 shrink-0 flex-col border-r border-line bg-surface lg:flex">
-        <Sidebar currentPath={pathname} onLogout={handleLogout} rol={user?.rol} />
+        {/* El sidebar espera a saber el rol. Antes se renderizaba con el rol
+            todavía desconocido, y el filtro de `tieneModulo` dejaba pasar todo:
+            el servidor mandaba los 20 ítems del menú y el cliente sacaba los que
+            no correspondían. Eso rompía la hidratación en todas las pantallas
+            del panel —error de React 418— y, peor, le mostraba a un tesorero
+            durante un instante «Configuración» y «Datos personales», que no
+            puede tocar. No es una brecha: el proxy los corta igual. Pero que el
+            panel insinúe lo que no está permitido es exactamente el tipo de cosa
+            que hace que alguien intente y se frustre. */}
+        {user ? (
+          <Sidebar currentPath={pathname} onLogout={handleLogout} rol={user.rol} />
+        ) : (
+          <EsqueletoSidebar />
+        )}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <Sheet open={open} onOpenChange={setOpen}>
+            <Sheet open={abierto} onOpenChange={setAbierto}>
               <SheetTrigger>
                 <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label="Abrir menú">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="w-64 border-line bg-surface p-0">
-                <Sidebar
-                  currentPath={pathname}
-                  onLogout={handleLogout}
-                  rol={user?.rol}
-                  onNavigate={() => setOpen(false)}
-                />
+                {/* Misma razón que arriba: sin rol conocido, el menú no se
+                    dibuja. En móvil el mismo filtro dejaba pasar todo. */}
+                {user ? (
+                  <Sidebar
+                    currentPath={pathname}
+                    onLogout={handleLogout}
+                    rol={user.rol}
+                    onNavigate={() => setAbierto(false)}
+                  />
+                ) : (
+                  <EsqueletoSidebar />
+                )}
               </SheetContent>
             </Sheet>
 
