@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
-import { writeFile, mkdir } from 'fs/promises';
+import { escribir } from '@/lib/almacen';
 import path from 'path';
 
 export const runtime = 'nodejs';
@@ -75,20 +75,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Solo podés subir archivos en tu carpeta' }, { status: 403 });
     }
 
-    const root = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
+    const buffer = Buffer.from(await file.arrayBuffer());
 
-    // Contención: el destino tiene que quedar dentro de root/bucket. Resolver
-    // y comparar no depende de qué haya escrito el cliente en el path.
-    const destino = path.resolve(root, bucket, cleanPath);
-    const baseBucket = path.resolve(root, bucket);
-    if (!destino.startsWith(baseBucket + path.sep)) {
-      return NextResponse.json({ error: 'Path inválido' }, { status: 400 });
+    // El destino —disco o S3— lo decide lib/almacen, no esta ruta. Acá solo se
+    // le pasa la clave. La contención del path se hace adentro, junto con la
+    // escritura, para que no puedan quedar separadas: si el chequeo viviera acá
+    // y la escritura en el otro lado, un bucket nuevo podría saltárselo.
+    try {
+      await escribir(bucket, cleanPath, buffer);
+    } catch (err: any) {
+      if (err?.code === 'EPATH') {
+        return NextResponse.json({ error: 'Path inválido' }, { status: 400 });
+      }
+      throw err;
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await mkdir(path.dirname(destino), { recursive: true });
-    await writeFile(destino, buffer);
-
+    // La URL no depende del backend. Con S3 o con disco se devuelve la misma, y
+    // `/api/files` la resuelve contra el que esté activo. Por eso migrar el
+    // almacenamiento no obliga a tocar ninguna fila de la base.
     return NextResponse.json({ url: `/api/files/${bucket}/${cleanPath}` });
   } catch (err: any) {
     console.error('Upload error:', err);

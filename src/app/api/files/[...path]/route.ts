@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { esDirectiva as esDirectivaRol } from '@/lib/roles';
 import { registrarAcceso, tipoDeBucket } from '@/lib/bitacora';
-import { readFile } from 'fs/promises';
+import { leer } from '@/lib/almacen';
 import path from 'path';
 
 export const runtime = 'nodejs';
@@ -42,21 +42,16 @@ export async function GET(
 ) {
   try {
     const { path: parts } = await params;
-    const root = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
 
-    // Path traversal: se resuelve el path y se comprueba que siga DENTRO del
-    // directorio de subidas. La versión anterior quitaba la cadena ".." con un
+    // Path traversal: la clave se arma con los segmentos de la URL y se valida
+    // adentro de lib/almacen. La versión anterior quitaba la cadena ".." con un
     // replace, que es frágil: "...." se convierte en ".." y vuelve a escapar.
     // Resolver y comparar no depende de qué haya escrito en el path.
     const relativo = parts.filter(Boolean).join('/');
-    const filePath = path.resolve(root, relativo);
-    const dentro = filePath === root || filePath.startsWith(root + path.sep);
 
-    if (!dentro) {
-      return NextResponse.json({ error: 'Path inválido' }, { status: 400 });
-    }
-
-    const segmentos = filePath.slice(root.length + 1).split(path.sep);
+    // El bucket es el primer segmento y tiene que haber un segundo: sin dueño
+    // no hay a quién preguntarle si puede verlo.
+    const segmentos = relativo.split('/').filter(Boolean);
     if (segmentos.length < 2) {
       return NextResponse.json({ error: 'Path inválido' }, { status: 400 });
     }
@@ -88,8 +83,23 @@ export async function GET(
       }
     }
 
-    const data = await readFile(filePath);
-    const ext = path.extname(filePath).toLowerCase();
+    // Todo lo de arriba —permisos y bitácora— va antes de leer, y es igual
+    // con disco que con S3. Que Node sea el que lee, y no el navegador con una
+    // URL firmada, es lo que permite que el chequeo siga siendo el mismo.
+    let data: Buffer;
+    try {
+      data = await leer(bucket, segmentos.slice(1).join('/'));
+    } catch (err: any) {
+      if (err?.code === 'ENOENT' || err?.code === 'EISDIR') {
+        return NextResponse.json({ error: 'Archivo no encontrado' }, { status: 404 });
+      }
+      if (err?.code === 'EPATH') {
+        return NextResponse.json({ error: 'Path inválido' }, { status: 400 });
+      }
+      throw err;
+    }
+
+    const ext = path.extname(relativo).toLowerCase();
 
     const isInline = ext === '.jpg' || ext === '.jpeg' || ext === '.png' || ext === '.webp' || ext === '.gif' || ext === '.heic' || ext === '.mp4' || ext === '.webm';
 
@@ -98,7 +108,7 @@ export async function GET(
         'Content-Type': MIME[ext] || 'application/octet-stream',
         'Cache-Control': 'private, max-age=3600',
         'X-Content-Type-Options': 'nosniff',
-        'Content-Disposition': `${isInline ? 'inline' : 'attachment'}; filename="${path.basename(filePath)}"`,
+        'Content-Disposition': `${isInline ? 'inline' : 'attachment'}; filename="${path.basename(relativo)}"`,
         'Content-Security-Policy': "default-src 'none'; sandbox",
       },
     });

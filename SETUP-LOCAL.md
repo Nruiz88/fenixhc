@@ -66,10 +66,49 @@ Todas son idempotentes: se pueden volver a correr sin duplicar nada.
 > En Coolify el mismo proceso se hace con un solo comando SSH/consola (ver README).
 
 ## 4. Archivos subidos
-No hay buckets externos: `/api/upload` guarda en disco (`.env.local` → `UPLOAD_DIR`,
-por defecto `./uploads`) y los sirve `/api/files/...` (requiere sesión).
+`/api/upload` guarda y `/api/files/...` sirve. El destino se decide en
+`src/lib/almacen.ts`, que tiene dos backends: **disco** (por defecto) y **S3**.
 
-En producción, montá un **volume** en esa carpeta para que las fotos no se pierdan.
+Lo que **no** cambia al cambiar de backend es cómo se autorizan los archivos.
+Los permisos, la bitácora y el sandbox viven en `/api/files/[...path]/route.ts`
+antes de leer, y son iguales en los dos casos. La URL que devuelve la subida es
+siempre `/api/files/<bucket>/<path>`, así que migrar el almacenamiento no
+obliga a tocar ninguna fila de la base.
+
+### Disco
+```bash
+UPLOAD_DIR=/var/fenix-uploads   # opcional, por defecto ./uploads
+```
+En producción, **montá un volume** en esa carpeta. Sin el mount, los archivos se
+escriben en la capa del contenedor y se pierden en cada deploy.
+
+### S3
+Con estas variables configuradas, `lib/almacen.ts` deja de usar disco:
+```bash
+S3_BUCKET=fenix
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_REGION=auto                    # R2 usa "auto"
+S3_ENDPOINT=https://<cuenta>.r2.cloudflarestorage.com
+S3_FORCE_PATH_STYLE=true          # R2 y la mayoría de los compatibles lo piden
+```
+
+**Las tres primeras son obligatorias.** Con el bucket puesto y las claves
+faltando, el módulo cae a disco a propósito: es mejor que subir el DNI de un
+menor a una carpeta que se pierde en el siguiente deploy.
+
+El bucket de S3 es **privado**. Los archivos se sirven siempre por
+`/api/files/...`, nunca por URL directa. Eso conserva la bitácora de accesos
+(`lib/bitacora.ts`), que registra quién abrió un documento ajeno y desde qué
+dispositivo.
+
+> **Por qué no URLs firmadas.** Serían más rápidas —el navegador pediría el
+> archivo directo a S3 y Node no participaría— pero una URL firmada es un token:
+> va en el `src` de un `<img>`, en el historial del navegador, en la caché del
+> proxy y en el header `Referer`. Para una foto de galería es un detalle. Para
+> la copia del DNI de un menor es cambiar la postura de seguridad de lo más
+> sensible que maneja el club, a cambio de RAM. Que Node haga de proxy cuesta
+> memoria; que el DNI quede en un historial de navegador cuesta más.
 
 ## 5. Ejecutar la app
 ```bash
