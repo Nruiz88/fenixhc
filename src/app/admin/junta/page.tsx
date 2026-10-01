@@ -9,6 +9,7 @@ import { TabComunicaciones } from './tabs/comunicaciones';
 import { TabPartes } from './tabs/partes';
 import { TabDocumentos } from './tabs/documentos';
 import { TabSeguros } from './tabs/seguros';
+import { TabAvisos } from './tabs/avisos';
 import { TabRecibos } from './tabs/recibos';
 import { TabInventario } from './tabs/inventario';
 
@@ -62,6 +63,13 @@ const TABS: Tab[] = [
     capacidad: 'adherentes_seguro',
     icono: PageHeader,
     Componente: TabSeguros,
+  },
+  {
+    clave: 'avisos',
+    etiqueta: 'Avisos a familias',
+    capacidad: 'comunicar_padres',
+    icono: PageHeader,
+    Componente: TabAvisos,
   },
   {
     clave: 'recibos',

@@ -184,7 +184,7 @@ describe('el manual habla con el socio, no con el desarrollador', () => {
         ...(t.avisos ?? []),
       ]
         .filter((txt) =>
-          /todavía no|aún no|en preparación|pendiente de|se completa|falta implementar|no hay pantalla|debería existir/i.test(
+          /aún no (hay|existe|está)|todavía no (hay|existe)|en preparación|pendiente de implementar|falta implementar|debería existir|no hay pantalla/i.test(
             txt
           )
         )

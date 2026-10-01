@@ -672,6 +672,39 @@ export const MANUAL: SeccionManual[] = [
         ],
       },
       {
+        id: 'avisar-familias',
+        titulo: 'Avisar a una familia que tiene algo pendiente',
+        resumen: 'Les escribe a los que deben cuotas vencidas o tienen el seguro sin adherir.',
+        ruta: '/admin/junta',
+        modulo: 'junta',
+        capacidad: 'comunicar_padres',
+        pasos: [
+          { texto: 'Entrá a «Junta directiva» y elegí «Avisos a familias».' },
+          {
+            texto: 'Revisá la lista: aparecen las familias con cuotas vencidas y con seguro sin adherir.',
+            nota:
+              'Lo más atrasado va primero. Podés filtrar por nombre o teléfono.',
+          },
+          {
+            texto: 'Presioná «Avisar» en la fila de la familia.',
+            nota:
+              'Se abre el mensaje ya armado con los montos. Podés editarlo antes de mandarlo, y lo que se mande queda guardado.',
+          },
+          {
+            texto: 'Revisá que los montos estén bien y presioná «Enviar aviso».',
+            nota:
+              'El aviso le llega a la persona en la campana de su portal, no al del jugador.',
+          },
+        ],
+        ejemplo:
+          'Ana tiene la cuota de marzo pendiente y pasó el día 10, así que figura con recargo. Si el importe del comprobante que mandara no coincide, el aviso te lo muestra en la línea de la cuota.',
+        avisos: [
+          'Una cuota aparece en la lista cuando ya tiene recargo aplicado, o sea desde el primer hito. Antes de eso el club todavía no puede reclamar nada.',
+          'Si una familia ya tiene un aviso en el historial, la lista te muestra cuándo se le avisó, para no mandarle lo mismo dos veces.',
+          'El presidente, la secretaría y la tesorería pueden mandar avisos. Los vocales pueden ver la lista pero no enviar.',
+        ],
+      },
+      {
         id: 'junta-documentos',
         titulo: 'Ver los documentos de los legajos',
         resumen: 'Fichas, certificados y evaluaciones.',
