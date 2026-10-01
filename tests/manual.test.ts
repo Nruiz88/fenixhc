@@ -169,20 +169,63 @@ describe('el manual no promete permisos que no hay', () => {
   });
 });
 
-describe('el manual reconoce lo que todavía no está hecho', () => {
-  it('las tareas con funciones a medio hacer lo dicen', () => {
-    // Hay pantallas que existen y se consultan pero que todavía no se completan.
-    // Si el manual no lo dice, alguien pierde una tarde intentando subir un
-    // documento que no tiene dónde subirse.
-    const aMedioHacer = ['junta-seguros', 'junta-documentos'];
+describe('el manual habla con el socio, no con el desarrollador', () => {
+  it('ninguna tarea anuncia que una función falta', () => {
+    // El manual es para la directiva, no para quien desarrolla. Anunciar que
+    // "todavía no hay pantalla para X" le dice al socio que el club no lo
+    // tiene, que es distinto de cómo se usa hoy lo que sí hay.
+    //
+    // Si una función no existe, no se documenta. Si existe y se usa por otro
+    // medio, se documenta el medio que hay.
+    const estadoDeDesarrollo = TAREAS.flatMap((t) =>
+      [
+        ...t.pasos.map((p) => p.texto),
+        ...t.pasos.map((p) => p.nota ?? ''),
+        ...(t.avisos ?? []),
+      ]
+        .filter((txt) =>
+          /todavía no|aún no|en preparación|pendiente de|se completa|falta implementar|no hay pantalla|debería existir/i.test(
+            txt
+          )
+        )
+        .map((txt) => `${t.id}: "${txt}"`)
+    );
 
-    for (const id of aMedioHacer) {
-      const t = TAREAS.find((x) => x.id === id);
-      expect(t, `${id} no existe`).toBeTruthy();
+    expect(estadoDeDesarrollo, estadoDeDesarrollo.join('\n')).toEqual([]);
+  });
+
+  it('los avisos son cosas que se rompen, no cosas que faltan', () => {
+    // Un aviso tiene que explicar qué pasa mal si no se sabe. Si se documenta
+    // el motivo, la persona entiende por qué el paso va en ese orden.
+    for (const t of TAREAS) {
+      for (const a of t.avisos ?? []) {
+        expect(
+          a.length,
+          `${t.id}: un aviso de menos de 20 caracteres no explica nada ("${a}")`
+        ).toBeGreaterThan(20);
+      }
+    }
+  });
+
+  it('cada tarea dice para qué cargo es', () => {
+    // El manual se filtra por permisos, pero el texto tiene que decirlo. La
+    // diferencia: si el tesorero ve "cargá un comunicado" desaparecer de la
+    // pantalla y no entiende por qué, y si lo ve, tiene que entender que no
+    // puede.
+    const conPermiso = TAREAS.filter((t) => t.capacidad && t.modulo === 'junta');
+
+    for (const t of conPermiso) {
+      // El reparto de cargos puede estar en el paso, en la nota o en el aviso:
+      // lo que importa es que esté escrito en algún lado.
+      const texto = [
+        ...t.pasos.map((p) => p.texto),
+        ...t.pasos.map((p) => p.nota ?? ''),
+        ...(t.avisos ?? []),
+      ].join(' ');
       expect(
-        (t!.avisos ?? []).join(' '),
-        `${id} está a medio hacer y no lo advierte`
-      ).toMatch(/todavía no|pendiente|en preparación|se completa/i);
+        texto,
+        `${t.id} no aclara qué cargo puede hacerla`
+      ).toMatch(/presidente|secretario|tesorero|vocal/i);
     }
   });
 });

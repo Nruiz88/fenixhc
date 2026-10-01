@@ -563,13 +563,18 @@ export const MANUAL: SeccionManual[] = [
           { texto: 'Entrá a «Junta directiva» y elegí «Seguro».' },
           { texto: 'La lista muestra quién está al día y quién vencen.' },
           {
-            texto: 'Para avisarle a una familia que vence, usá «Comunicar padres».',
+            texto: 'Para avisarle a una familia, buscá su teléfono en «Socios Benefactores».',
             nota:
-              'Ese envío está en preparación y todavía no está disponible en pantalla. Por ahora hay que avisar por otro medio y dejar anotado acá.',
+              'El mismo teléfono está en la segunda columna del legajo, así que llegás al dato sin salir del club.',
+          },
+          {
+            texto: 'Dejá asentada la gestión en «Partes», tipo administrativo.',
+            nota: 'Así el próximo que tome el asunto sabe qué se avisó y a quién.',
           },
         ],
         avisos: [
-          'Todavía no hay una pantalla para mandar el aviso de vencimiento a las familias. Es una tarea pendiente.',
+          'El presidente, la secretaría y la tesorería ven esta pantalla. Los vocales no.',
+          'El seguro se controla por mes, no por fecha de vencimiento exacta. Fijate en el período del socio antes de marcarlo al día.',
         ],
       },
       {
@@ -604,6 +609,9 @@ export const MANUAL: SeccionManual[] = [
             texto: 'Cuando lo devuelven, marcá el préstamo como cerrado.',
           },
         ],
+        avisos: [
+          'Cargar y actualizar el inventario le corresponde al presidente o a la tesorería. Los vocales entran a la sección pero no tocan los equipos.',
+        ],
       },
       {
         id: 'junta-documentos',
@@ -615,13 +623,16 @@ export const MANUAL: SeccionManual[] = [
         pasos: [
           { texto: 'Entrá a «Junta directiva» y elegí «Documentos de legajos».' },
           {
-            texto: 'Buscá por jugador o por nombre de documento.',
+            texto: 'Buscá por jugador, por nombre de documento o por DNI.',
           },
-          { texto: 'Presioná «Abrir» para ver o descargar.' },
+          { texto: 'Presioná «Abrir» para ver el documento o descargarlo.' },
+          {
+            texto: 'Si está marcado «Privado», es un documento que no debería circular entre toda la junta.',
+          },
         ],
         avisos: [
-          'Cada vez que alguien de la directiva abre un documento que no es suyo, queda registrado quién y cuándo. Eso lo pide la ley de protección de datos.',
-          'Todavía no se pueden cargar documentos desde esta pantalla. Hoy se consultan; la carga se completa.',
+          'Cada vez que alguien de la directiva abre un documento que no es suyo, queda registrado quién lo abrió y cuándo. No es un control interno: es lo que el club tiene que poder responder si un padre pregunta quién vio el DNI de su hijo.',
+          'Podés ver que hay documentos aunque no tengas permiso para abrirlos. Bajar un DNI le corresponde al presidente o a la secretaría.',
         ],
       },
     ],
