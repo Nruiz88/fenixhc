@@ -224,8 +224,99 @@ describe('el manual habla con el socio, no con el desarrollador', () => {
       ].join(' ');
       expect(
         texto,
-        `${t.id} no aclara qué cargo puede hacerla`
+        `${t.id} no aclara que cargo puede hacerla`
       ).toMatch(/presidente|secretario|tesorero|vocal/i);
     }
+  });
+});
+describe('los ejemplos enseÃ±an, no decoran', () => {
+  it('las tareas mÃ¡s consultadas tienen ejemplo', () => {
+    // Un ejemplo enseÃ±a la forma del resultado mÃ¡s rÃ¡pido que una
+    // instrucciÃ³n: "AprobÃ¡ el comprobante" no dice cuÃ¡nto tiene que dar.
+    // Sin ejemplo, la persona aprueba a ciegas y se entera del error cuando la
+    // contabilidad no cierra.
+    const debenTener = [
+      'aprobar-pago',
+      'pago-otro-canal',
+      'recargo-atraso',
+      'crear-usuario',
+      'vincular-familia',
+      'registrar-gasto',
+      'consentimientos',
+    ];
+
+    for (const id of debenTener) {
+      const t = TAREAS.find((x) => x.id === id);
+      expect(t, `${id} no existe`).toBeTruthy();
+      expect(t!.ejemplo, `${id} se usa todos los meses y no tiene ejemplo`).toBeTruthy();
+    }
+  });
+
+  it('los ejemplos usan los nÃºmeros reales del club', () => {
+    // Un ejemplo con nÃºmeros inventados desconecta a la persona de la
+    // pantalla: ve $50.000 donde la pantalla dice $75.000 y deja de confiar.
+    const conEjemplo = TAREAS.filter((t) => t.ejemplo);
+    expect(conEjemplo.length).toBeGreaterThanOrEqual(10);
+
+    const conPlata = conEjemplo.filter((t) => /\$/.test(t.ejemplo!));
+    expect(conPlata.length, 'ningÃºn ejemplo muestra un monto').toBeGreaterThanOrEqual(5);
+  });
+
+  it('los ejemplos tienen un largo que se lee de un vistazo', () => {
+    // Un ejemplo de una lÃ­nea no muestra el caso; uno de un pÃ¡rrafo deja de
+    // usarse porque hay que leerlo entero antes de empezar.
+    for (const t of TAREAS) {
+      if (!t.ejemplo) continue;
+      expect(t.ejemplo.length, `${t.id}: ejemplo muy corto`).toBeGreaterThan(60);
+      expect(t.ejemplo.length, `${t.id}: ejemplo muy largo`).toBeLessThan(320);
+    }
+  });
+});
+
+describe('los temas son navegables', () => {
+  it('toda secciÃ³n declara un Ã­cono que existe', () => {
+    // Si el Ã­cono no existe en el mapa, la pantalla cae al BookOpen y todas
+    // las tarjetas se ven iguales: la navegaciÃ³n por tema deja de servir.
+    const ICONOS = ['Sparkles', 'Users', 'DollarSign', 'PieChart', 'CalendarDays',
+                    'Megaphone', 'Landmark', 'ShieldCheck'];
+    for (const s of MANUAL) {
+      expect(ICONOS, `la secciÃ³n "${s.titulo}" usa "${s.icono}"`).toContain(s.icono);
+    }
+  });
+
+  it('ninguna secciÃ³n tiene el mismo Ã­cono que otra', () => {
+    // Si dos temas se ven igual, el Ã­ndice no sirve para elegir.
+    const iconos = MANUAL.map((s) => s.icono);
+    const repetidos = iconos.filter((i, n) => iconos.indexOf(i) !== n);
+    expect(repetidos).toEqual([]);
+  });
+
+  it('toda secciÃ³n se presenta sola', () => {
+    // Con un solo tema el filtro es ruido, y con ninguno es un menu vacÃ­o.
+    for (const s of MANUAL) {
+      expect(s.tareas.length, `"${s.titulo}" tiene una sola tarea`).toBeGreaterThan(2);
+    }
+  });
+
+  it('los identificadores de secciÃ³n no se repiten', () => {
+    // El tema se elige por tÃ­tulo, asÃ­ que dos secciones con el mismo tÃ­tulo
+    // fundirÃ­an la navegaciÃ³n.
+    const titulos = MANUAL.map((s) => s.titulo);
+    const repetidos = titulos.filter((t, i) => titulos.indexOf(t) !== i);
+    expect(repetidos).toEqual([]);
+  });
+});
+
+describe('la paginaciÃ³n no promete lo que no hay', () => {
+  it('las tareas por pÃ¡gina alcanzan para varias pÃ¡ginas', () => {
+    // Si no, la paginaciÃ³n nunca aparece y el cÃ³digo eså¤æ‚åº¦ muerta.
+    expect(TAREAS.length).toBeGreaterThan(6);
+  });
+
+  it('ninguna tarea visible se repite entre Ã­ndice y detalle', () => {
+    // La clave del Ã­ndice es el id. Si dos tareas compartieran id, al abrir
+    // una se abrirÃ­a la otra.
+    const ids = TAREAS.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

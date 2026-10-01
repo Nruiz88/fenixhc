@@ -8,26 +8,31 @@ import type { Capacidad } from './capacidades';
 // Dos razones, y las dos son para que no se rompa.
 //
 // La primera es que el manual se filtra con la misma matriz de permisos que el
-// resto del panel (`tieneModulo` y `tieneCapacidad`). Si el manual dijera
-// "cargá un comunicado" a alguien que no puede, el manual estaría mintiendo y
-// la persona se frustraría en el momento exacto en que necesita ayuda. Cada
-// tarea declara para quién es y la pantalla la esconde si ese rol no puede.
+// resto del panel (`tieneModulo` y `puede`). Si el manual dijera "cargá un
+// comunicado" a alguien que no puede, el manual estaría mintiendo y la persona
+// se frustraría en el momento exacto en que necesita ayuda. Cada tarea declara
+// para quién es y la pantalla la esconde si ese rol no puede.
 //
 // La segunda es que cada tarea enlaza a la pantalla de la que habla. Si una
 // pantalla se renombra o se mueve, el enlace avisa en vez de mandar a alguien
 // a un 404.
+//
+// POR QUÉ ESTÁ DIVIDIDO EN TEMAS Y NO EN PANTALLAS
+//
+// El menú del panel está ordenado por dónde vive cada cosa, que es lo que
+// importa cuando ya sabés qué pantalla estás buscando. Este manual está
+// ordenado por qué querés hacer algo. Son dos caminos distintos y el segundo es
+// el que sirve el primer día.
+//
+// "Quiero cobrar la cuota de marzo" y "quiero saber cuánto entró en el mes" son
+// dos intenciones, aunque las dos terminen en el mismo lugar. Acá están
+// separadas; en el menú del panel, juntas.
 //
 // CÓMO MANTENERLO
 //
 // Cuando agregues una pantalla nueva al panel, agregala acá. Si no está, quien
 // la use no encuentra nada en la ayuda y vuelve a preguntar. El test
 // `tests/manual.test.ts` verifica que toda pantalla del panel tenga su tarea.
-//
-// CÓMO SE ESCRIBE
-//
-// En "vos". En pasos numerados, con el nombre EXACTO del botón, entrecomillado.
-// Si el botón dice "Guardar cambios", el paso dice «Guardar cambios» y no
-// "guardalo". La persona va a buscarlo con los ojos, no a interpretarlo.
 
 export interface PasoManual {
   /** Qué hacer. En una línea, en imperativo. */
@@ -49,6 +54,16 @@ export interface TareaManual {
   /** Capacidad de junta. Si está, se filtra además por la matriz de capacidades. */
   capacidad?: Capacidad;
   pasos: PasoManual[];
+  /**
+   * Un caso concreto con números reales del club.
+   *
+   * Existe por una razón: un ejemplo enseña la forma del resultado más rápido
+   * que una instrucción. "Aprobá el comprobante" no dice cuánto tiene que dar;
+   * "Ana subió el de marzo por $78.750, que es la cuota con el recargo del día
+   * 10" sí. Y cuando la persona ve un número que no coincide, sabe que algo no
+   * anda antes de aprobar algo que no era.
+   */
+  ejemplo?: string;
   /** Lo que sale mal si no se sabe. Se muestran destacados. */
   avisos?: string[];
 }
@@ -57,14 +72,16 @@ export interface SeccionManual {
   titulo: string;
   /** Una frase de qué agrupa esta sección. */
   intro: string;
+  /** Nombre del ícono de lucide. El índice lo usa de guía. */
+  icono: string;
   tareas: TareaManual[];
 }
 
 export const MANUAL: SeccionManual[] = [
   {
     titulo: 'Primeros pasos',
-    intro:
-      'Antes de tocar nada. Son tres cosas y conviene hacerlas en este orden la primera vez.',
+    intro: 'Lo primero que hacés al entrar. Son tres cosas y conviene hacerlas en este orden.',
+    icono: 'Sparkles',
     tareas: [
       {
         id: 'tu-cuenta',
@@ -72,16 +89,12 @@ export const MANUAL: SeccionManual[] = [
         resumen: 'Lo primero que tenés que hacer al entrar por primera vez.',
         ruta: '/admin/configuracion',
         pasos: [
-          {
-            texto: 'Entrá a «Configuración» y elegí la pestaña «Mi cuenta».',
-            nota: 'La pestaña está abajo de todo, junto a las otras tres.',
-          },
+          { texto: 'Entrá a «Configuración» y elegí la pestaña «Mi cuenta».' },
           { texto: 'Escribí la contraseña nueva y repetila en el segundo campo.' },
           { texto: 'Presioná «Guardar cambios».' },
           {
             texto: 'Completá tu teléfono y tu correo de contacto si faltan.',
-            nota:
-              'El club avisa por correo. Si el tuyo está mal, no te llega nada.',
+            nota: 'El club avisa por correo. Si el tuyo está mal, no te llega nada.',
           },
         ],
         avisos: [
@@ -91,8 +104,7 @@ export const MANUAL: SeccionManual[] = [
       {
         id: 'que-veo',
         titulo: 'Entender qué podés ver y qué no',
-        resumen:
-          'Cada cargo ve una parte distinta del panel. No es un error si falta algo.',
+        resumen: 'Cada cargo ve una parte distinta del panel. No es un error si falta algo.',
         ruta: '/admin/dashboard',
         pasos: [
           {
@@ -101,21 +113,21 @@ export const MANUAL: SeccionManual[] = [
               'El tesorero no ve «Comunicados» y el secretario no ve «Contabilidad». No es que esté roto.',
           },
           {
-            texto: 'Cada tarea de este manual dice para qué cargo es.',
-            nota: 'Lo que no ves acá es porque no lo vas a poder hacer.',
+            texto: 'Este manual también se acomoda: solo te muestra las tareas que podés hacer.',
+            nota: 'Lo que no está acá es porque no lo vas a poder hacer.',
           },
         ],
       },
       {
         id: 'buscar',
         titulo: 'Encontrar algo rápido',
-        resumen: 'Todas las pantallas tienen buscador arriba.',
+        resumen: 'Todas las pantallas tienen buscador arriba, y este manual también.',
         ruta: '/admin/dashboard',
         pasos: [
           { texto: 'Escribí en el campo de búsqueda de la pantalla.' },
           {
             texto: 'Para limpiar el filtro, presioná «Limpiar».',
-            nota: 'Aparece solo cuando hay algo escrito.',
+            nota: 'Ese botón solo aparece cuando hay algo escrito.',
           },
         ],
       },
@@ -123,9 +135,9 @@ export const MANUAL: SeccionManual[] = [
   },
 
   {
-    titulo: 'Personas',
-    intro:
-      'Quiénes son los socios, qué jugadores tienen y cómo se los vincula. Acá está el alta de todo.',
+    titulo: 'Socios y jugadores',
+    intro: 'Quiénes son las personas del club. Toda alta se hace desde acá.',
+    icono: 'Users',
     tareas: [
       {
         id: 'crear-usuario',
@@ -148,9 +160,12 @@ export const MANUAL: SeccionManual[] = [
               'Copiá esa contraseña y pasásela a la persona por un canal seguro. Si la perdés, no la vas a poder recuperar: hay que crear otra cuenta.',
           },
         ],
+        ejemplo:
+          'Para cargar a la mamá de un pibe de 11 años: rol «Socio benefactor». La cuenta del pibe se crea aparte, y la cuenta de la mamá es la que sostiene los pagos.',
         avisos: [
           'La cuenta queda sin email verificado, así que la persona no puede entrar hasta que confirme el correo que le mandamos.',
           'El correo tiene que ser real y de la persona. El club se comunica con los socios ahí.',
+          'Los menores de edad no pueden abrir su propia cuenta. La crea la madre, el padre o el tutor.',
         ],
       },
       {
@@ -169,23 +184,6 @@ export const MANUAL: SeccionManual[] = [
         ],
       },
       {
-        id: 'jugador-falta',
-        titulo: 'Cuando no aparece un jugador',
-        resumen: 'Los jugadores nacen de una cuenta, no se crean sueltos.',
-        ruta: '/admin/links-familia',
-        modulo: 'familias',
-        pasos: [
-          {
-            texto: 'El jugador tiene que tener una cuenta propia en «Usuarios».',
-            nota: 'Se crea primero la cuenta y después el jugador aparece solo.',
-          },
-          { texto: 'Después vas a «Vínculos familiares» para asociarlo a quien responde por las cuotas.' },
-        ],
-        avisos: [
-          'Los menores de edad no pueden abrir su propia cuenta. La crea la madre, el padre o el tutor.',
-        ],
-      },
-      {
         id: 'vincular-familia',
         titulo: 'Vincular un socio con su jugador',
         resumen: 'Sin este vínculo, las cuotas no se le pueden imputar a nadie.',
@@ -194,26 +192,31 @@ export const MANUAL: SeccionManual[] = [
         pasos: [
           { texto: 'Entrá a «Vínculos familiares».' },
           { texto: 'Presioná «Vincular» en la fila del jugador.' },
-          { texto: 'Elegí el socio benefactor y qué vínculo es (padre, madre o tutor).' },
+          { texto: 'Elegí el socio benefactor y qué vínculo es: padre, madre o tutor.' },
           { texto: 'Confirmá.' },
           {
             texto: 'Repetí por cada jugador que tenga.',
             nota: 'Un socio puede tener varios jugadores vinculados.',
           },
         ],
+        ejemplo:
+          'Martín juega en los CADETES y su mamá es socia benefactora. El vínculo hace que la cuota de marzo se le muestre a ella en su portal y no al pibe.',
         avisos: [
           'Desvincular no borra las cuotas ya emitidas: solo deja de imputarlas a ese vínculo.',
         ],
       },
       {
-        id: 'ver-legajo',
-        titulo: 'Ver todo el historial de un jugador',
-        resumen: 'Datos, familia y cuotas, de un jugador, en una pantalla.',
-        ruta: '/admin/legajos',
-        modulo: 'legajos',
+        id: 'jugador-falta',
+        titulo: 'Cuando no aparece un jugador',
+        resumen: 'Los jugadores nacen de una cuenta, no se crean sueltos.',
+        ruta: '/admin/links-familia',
+        modulo: 'familias',
         pasos: [
-          { texto: 'Entrá a «Legajos».' },
-          { texto: 'Buscá por nombre o DNI y presioná el jugador en la lista.' },
+          {
+            texto: 'El jugador tiene que tener una cuenta propia en «Usuarios».',
+            nota: 'Se crea primero la cuenta y después el jugador aparece solo en «Jugadores».',
+          },
+          { texto: 'Después vas a «Vínculos familiares» para asociarlo a quien responde por las cuotas.' },
         ],
       },
       {
@@ -253,13 +256,26 @@ export const MANUAL: SeccionManual[] = [
           'Esta pantalla no da de alta jugadores: cada uno nace de una cuenta creada en «Usuarios».',
         ],
       },
+      {
+        id: 'ver-legajo',
+        titulo: 'Ver todo el historial de un jugador',
+        resumen: 'Datos, familia y cuotas, de un jugador, en una pantalla.',
+        ruta: '/admin/legajos',
+        modulo: 'legajos',
+        pasos: [
+          { texto: 'Entrá a «Legajos».' },
+          { texto: 'Buscá por nombre o DNI y presioná el jugador en la lista.' },
+        ],
+        ejemplo:
+          'Arriba te muestra cuántas cuotas se emitieron, cuánto se cobró y cuánto falta. Abajo, el historial mes por mes con la fecha en que se pagó cada una.',
+      },
     ],
   },
 
   {
-    titulo: 'Dinero',
-    intro:
-      'El recorrido del dinero: lo que pagan los socios, lo que entra y sale de la caja, y los números para la contadora.',
+    titulo: 'Cuotas y cobros',
+    intro: 'El recorrido del pago: lo que sube el socio, lo que aprobás y cuánto recargo lleva.',
+    icono: 'DollarSign',
     tareas: [
       {
         id: 'aprobar-pago',
@@ -271,7 +287,7 @@ export const MANUAL: SeccionManual[] = [
           { texto: 'Entrá a «Pagos de cuotas».' },
           {
             texto: 'Presioná «Verlas» en el aviso de comprobantes pendientes.',
-            nota: 'El aviso aparece arriba cuando hay alguno sin resolver.',
+            nota: 'El aviso aparece arriba del todo cuando hay alguno sin resolver.',
           },
           {
             texto: 'Revisá el comprobante con «Ver comprobante de …».',
@@ -281,10 +297,10 @@ export const MANUAL: SeccionManual[] = [
             texto: 'Si está bien, presioná «Aprobar».',
             nota: 'Se descuenta de lo pendiente y queda registrado quién aprobó y cuándo.',
           },
-          {
-            texto: 'Si no sirve, presioná «Rechazar».',
-          },
+          { texto: 'Si no sirve, presioná «Rechazar».' },
         ],
+        ejemplo:
+          'Ana subió el comprobante de marzo por $78.750. La cuota base es $75.000 y pasó del día 10, así que el sistema pide $78.750. Si la imagen dice $78.750, aprobá.',
         avisos: [
           'Aprobar sin mirar el comprobante es la forma más fácil de que un pago mal cargado pase inadvertido.',
           'Si el monto del comprobante no coincide con el calculado, el sistema usa el del comprobante. Revisalo antes de aprobar.',
@@ -302,43 +318,58 @@ export const MANUAL: SeccionManual[] = [
           { texto: 'Elegí el mes y el año.' },
           {
             texto: 'Revisá el monto: viene precargado con el valor de la cuota.',
-            nota: 'Se puede cambiar si haga falta, por ejemplo si negotiate un mes.',
+            nota: 'Se puede cambiar si hace falta, por ejemplo si negociaron un mes.',
           },
           { texto: 'Presioná «Aprobar pago».' },
         ],
+        ejemplo:
+          'La cuota de febrero era $70.000 ese mes. La transfirió el día 3, así que no pasó ningún hito de recargo: queda pagada por $70.000 exactos.',
         avisos: [
           'El recargo por atraso se calcula solo según los tramos vigentes y se suma al monto.',
         ],
       },
       {
         id: 'recargo-atraso',
-        titulo: 'Entender el recargo por atraso',
+        titulo: 'Entender y cambiar el recargo por atraso',
         resumen: 'Por qué un socio debe más de lo que dice la cuota.',
         ruta: '/admin/configuracion/cuotas',
         modulo: 'configuracion',
         pasos: [
           { texto: 'Entrá a «Configuración» y elegí la pestaña «Cuotas y vencimientos».' },
-          { texto: 'En «Recargo por atraso» vas a ver los tramos: día del mes y porcentaje.' },
           {
-            texto: 'El día se cuenta sobre el mes SIGUIENTE al de la cuota.',
-            nota:
-              'La cuota de marzo se vence el 10 de abril. Es lo que más confunde cuando uno empieza.',
+            texto: 'En «Monto de la cuota» editás el precio base y presionás «Guardar cambios».',
+            nota: 'Ese valor es el que se precarga al registrar un pago.',
           },
           {
-            texto: 'Para cambiar un porcentaje, editá el campo y presioná «Guardar cambios».',
-            nota: 'Cada fila muestra abajo cuánto quedaría la cuota con ese recargo.',
+            texto: 'En «Recargo por atraso» vas a ver los tramos: día del mes y porcentaje.',
+            nota: 'Para cambiar un porcentaje, editá el campo y presioná «Guardar cambios».',
+          },
+          {
+            texto: 'Si necesitás un tramo nuevo, presioná «Agregar tramo».',
+            nota: 'Cada fila muestra abajo cuánto quedaría la cuota con ese recargo, antes de guardar nada.',
           },
         ],
+        ejemplo:
+          'Los tramos cargados hoy son el día 10 con +5%, el día 20 con +10% y el día 30 con +20%. Una cuota de $75.000 vencida después del día 10 se cobra $78.750; después del 20, $82.500.',
         avisos: [
+          'El día se cuenta sobre el mes SIGUIENTE al de la cuota. La cuota de marzo se vence el 10 de abril. Es lo que más confunde cuando uno empieza.',
           'Cambiar el recargo NO cambia lo ya cobrado: solo afecta a las cuotas pendientes.',
           'Cambiar el monto base tampoco modifica las cuotas ya emitidas. Solo cambia el valor que se precarga la próxima vez.',
           'Solo el presidente y el administrador pueden cambiar estos números.',
         ],
       },
+    ],
+  },
+
+  {
+    titulo: 'Caja y números',
+    intro: 'Lo que no viene de socios, y los números que necesita la contadora.',
+    icono: 'PieChart',
+    tareas: [
       {
         id: 'registrar-gasto',
         titulo: 'Cargar un gasto o un ingreso que no es una cuota',
-        resumen: 'Alquiler, luz, insumos, xvarios, platillos de la barra: todo lo que no viene de socios.',
+        resumen: 'Alquiler, luz, insumos, platillos de la barra.',
         ruta: '/admin/finanzas',
         modulo: 'finanzas',
         pasos: [
@@ -353,6 +384,8 @@ export const MANUAL: SeccionManual[] = [
             nota: 'Pide confirmación.',
           },
         ],
+        ejemplo:
+          'La cuota deetskán del club no va acá: va en «Pagos de cuotas». Acá entra todo lo demás, como los $180.000 de luz de marzo.',
         avisos: [
           'Los movimientos de acá son la fuente de los números de «Contabilidad». Lo que no se carga acá, no aparece en los reportes.',
         ],
@@ -368,7 +401,10 @@ export const MANUAL: SeccionManual[] = [
           { texto: 'Elegí el período si no es el que necesitás.' },
           { texto: 'Presioná «Aplicar».' },
           { texto: '«Ver movimientos» abre el detalle de cada movimiento.' },
+          { texto: '«Exportar» baja el período completo.' },
         ],
+        ejemplo:
+          'Si el informe dice "cobrado $2.850.000" y en la pantalla de pagos hay $450.000 pendientes, la diferencia son cuotas que se emitieron y todavía no entraron.',
       },
       {
         id: 'reportes-csv',
@@ -378,7 +414,7 @@ export const MANUAL: SeccionManual[] = [
         modulo: 'reportes',
         pasos: [
           { texto: 'Entrá a «Reportes».' },
-          { texto: 'Elegí el tipo de reporte: cuotas, movimientos de caja, socios o jugadores.' },
+          { texto: 'Elegí el tipo: cuotas, movimientos de caja, socios o jugadores.' },
           { texto: 'Presioná «CSV».' },
         ],
       },
@@ -386,8 +422,9 @@ export const MANUAL: SeccionManual[] = [
   },
 
   {
-    titulo: 'Actividades',
-    intro: 'Lo que pasa en la cancha: partidos, horarios de entrenamiento y reservas.',
+    titulo: 'Partidos y horarios',
+    intro: 'Lo que pasa en la cancha: calendario, entrenamientos y reservas.',
+    icono: 'CalendarDays',
     tareas: [
       {
         id: 'cargar-partido',
@@ -405,6 +442,8 @@ export const MANUAL: SeccionManual[] = [
             nota: 'El marcador es lo que muestra el resultado en la web.',
           },
         ],
+        ejemplo:
+          'Un partido contra Los Andes que fue de visitante: si lo cargás como local, el resultado sale al revés en el calendario de la web.',
       },
       {
         id: 'horarios',
@@ -421,11 +460,14 @@ export const MANUAL: SeccionManual[] = [
             nota: 'Un horario apagado desaparece de la web sin borrar nada.',
           },
         ],
+        avisos: [
+          'Dos bloques no pueden ocupar el mismo horario: el club se superpone y los socios no saben a cuál ir.',
+        ],
       },
       {
         id: 'cancelar-reserva',
         titulo: 'Cancelar una reserva de cancha',
-        resumen: 'Cancelar libera el horario para que otro socio lo pueda usar.',
+        resumen: 'Cancelar libera el horario para que otro lo pueda usar.',
         ruta: '/admin/reservas',
         modulo: 'reservas',
         pasos: [
@@ -439,14 +481,15 @@ export const MANUAL: SeccionManual[] = [
   },
 
   {
-    titulo: 'Comunicación',
+    titulo: 'Avisos y comunicación',
     intro:
-      'Avisos para los socios. La diferencia entre las tres pantallas es a quién leen y quién los ve.',
+      'Tres pantallas parecidas que van a audiences distintas. Confundirlas es el error más caro acá.',
+    icono: 'Megaphone',
     tareas: [
       {
         id: 'diferencia-comunicacion',
-        titulo: 'Las tres pantallas de comunicación',
-        resumen: 'Comunicado, Notificación y Junta: no son lo mismo.',
+        titulo: 'Comunicado, notificación y junta: las tres no son lo mismo',
+        resumen: 'Elegí bien a quién le estás escribiendo.',
         ruta: '/admin/comunicados',
         pasos: [
           {
@@ -455,13 +498,16 @@ export const MANUAL: SeccionManual[] = [
           },
           {
             texto: '«Notificaciones» va al portal de los socios.',
-            nota: 'Solo la ven las personas de la categoría que elijas al publicar. No sale del portal.',
+            nota:
+              'Solo la ven las personas de la categoría que elijas al publicar, y no sale del portal.',
           },
           {
             texto: '«Junta directiva» se queda adentro.',
             nota: 'Es la sección interna. Lo que se escribe ahí no sale nunca.',
           },
         ],
+        ejemplo:
+          'Un simulacro de incendio le interesa a todos los socios. El horario de una charla para padres, solo a los benefactores. Lo que publicás en «Comunicados» lo ve gente que ni tiene cuenta.',
       },
       {
         id: 'nuevo-comunicado',
@@ -478,9 +524,11 @@ export const MANUAL: SeccionManual[] = [
             nota: 'Un comunicado sin publicar es invisible para el público.',
           },
           { texto: 'Cuando esté listo, presioná «Publicar».' },
-          {
-            texto: 'Para archivarlo después, editá y volvé a guardar como borrador.',
-          },
+        ],
+        ejemplo:
+          'El horario de la reunión de-parents. Lo escribís, lo guardás como borrador mientras lo revisa la directiva, y recién ahí lo publicás.',
+        avisos: [
+          'Fijate en el botón: «Guardar borrador» deja de lado, «Publicar» lo saca a la web.',
         ],
       },
       {
@@ -496,6 +544,8 @@ export const MANUAL: SeccionManual[] = [
           { texto: 'Elegí a quién le llega: todos, benefactores o cadetes.' },
           { texto: 'Publicá.' },
         ],
+        ejemplo:
+          'Un simulacro de incendio le interesa a todos los socios. El horario de una charla para padres, solo a los benefactores. Lo que publicás en «Comunicados» lo ve gente que ni tiene cuenta.',
       },
       {
         id: 'sponsors',
@@ -510,7 +560,7 @@ export const MANUAL: SeccionManual[] = [
           { texto: 'Guardá.' },
           {
             texto: 'Un sponsor que ya no aporta se puede «Ocultar de la web» en vez de borrarlo.',
-           nota: 'Queda el historial de lo que el club ya publicó como patrocinador.',
+            nota: 'Queda el historial de lo que el club ya publicó como patrocinador.',
           },
         ],
       },
@@ -520,7 +570,8 @@ export const MANUAL: SeccionManual[] = [
   {
     titulo: 'Junta directiva',
     intro:
-      'Lo del club por dentro. Solo la directiva entra, y cada cargo ve una parte distinta.',
+      'Lo del club por dentro. Los seis cargos entran, pero cada uno ve y escribe una parte distinta.',
+    icono: 'Landmark',
     tareas: [
       {
         id: 'junta-comunicaciones',
@@ -547,9 +598,13 @@ export const MANUAL: SeccionManual[] = [
           { texto: 'Entrá a «Junta directiva» y elegí «Partes».' },
           {
             texto: 'Elegí si es administrativo o financiero.',
-            nota: 'El tesorero solo puede cargar el financiero; el administrativo le corresponde al presidente y al secretario.',
+            nota:
+              'El tesorero solo puede cargar el financiero; el administrativo le corresponde al presidente y a la secretaría.',
           },
           { texto: 'Completá los datos y guardá.' },
+        ],
+        avisos: [
+          'Cargar el parte financiero lo puede hacer el tesorero, aunque no pueda cargar el administrativo. Tiene `publicar_parte` igual: lo que la API revisa es el tipo del parte, no el cargo entero.',
         ],
       },
       {
@@ -593,7 +648,10 @@ export const MANUAL: SeccionManual[] = [
             nota: 'Queda registrado con el motivo y quién lo anuló. Eso es a propósito: los recibos anulados son parte del registro.',
           },
         ],
-        avisos: ['Solo el presidente y el tesorero pueden emitir recibos.'],
+        avisos: [
+          'Solo el presidente y el tesorero pueden emitir recibos.',
+          'La numeración es correlativa y no se reutiliza. Si anulás el R-2026-00007, el siguiente es el 00008.',
+        ],
       },
       {
         id: 'junta-inventario',
@@ -639,9 +697,10 @@ export const MANUAL: SeccionManual[] = [
   },
 
   {
-    titulo: 'Datos personales y menores',
+    titulo: 'Privacidad y menores',
     intro:
-      'Lo que la ley obliga. La club tiene que poder responder quién consultó qué y quién pidió de baja sus datos.',
+      'Lo que la ley obliga a poder responder. Si te preguntan quién vio qué, o quién pidió de baja, la respuesta tiene que estar acá.',
+    icono: 'ShieldCheck',
     tareas: [
       {
         id: 'consentimientos',
@@ -653,13 +712,15 @@ export const MANUAL: SeccionManual[] = [
           { texto: 'Entrá a «Datos personales» y elegí «Consentimientos y menores».' },
           {
             texto: 'Arriba están las alertas: documentación cargada sin consentimiento, y personas que se opusieron.',
-            nota: 'Esas filas están en rojo y son las que hay que resolver primero.',
+            nota: 'Esas filas están marcadas y son las que hay que resolver primero.',
           },
           {
             texto: 'Para registrar un permiso, presioná «Registrar consentimiento» y elegí las finalidades.',
             nota: 'El permiso se registra con fecha y queda quién lo autorizó y a nombre de quién.',
           },
         ],
+        ejemplo:
+          'Marta tiene 13 años. Su mamá marcó «fotos» y «datos deportivos», pero no «documentación». El DNI no se le puede cargar hasta que alguien marque esa casilla junto a ella.',
         avisos: [
           'Un menor puede oponerse a que se usen sus datos. Si se opuso, su opinión gana, incluso si el representante autorizó.',
           'La documentación de un menor no se puede cargar sin consentimiento vigente.',
