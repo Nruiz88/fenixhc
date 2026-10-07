@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fenix Roller Hockey
 
-## Getting Started
+Gestión de socios, jugadores, cuotas y consentimientos de un club de roller
+hockey. Next.js 16 (App Router) sobre MariaDB, desplegado con Coolify.
 
-First, run the development server:
+## Qué hace
+
+- **Socios**: alta de benefactores y cadetes, portal propio para cada uno.
+- **Cuotas**: monto configurable, tramos de recargo por vencimiento, comprobantes
+  que sube la familia y aprueba tesorería.
+- **Cuota unificada**: el padre paga la de sus hijos; el jugador no tiene que
+  tener una cuenta para estar federado.
+- **Junta directiva**: partes, inventario, seguros, recibos en PDF, documentos
+  del legajo y avisos a las familias.
+- **Privacidad**: consentimientos por finalidad, opinión del menor, bitácora de
+  accesos a documentación y solicitudes de baja.
+
+## Arranque local
+
+Requiere Node >= 22 y una MariaDB (o Docker).
 
 ```bash
+docker run -d --name fenix-mariadb \
+  -e MARIADB_ROOT_PASSWORD=root123 \
+  -e MARIADB_DATABASE=club_fenix \
+  -e MARIADB_USER=fenix \
+  -e MARIADB_PASSWORD=una-clave-local \
+  -p 3306:3306 mariadb:11
+
+cp .env.example .env.local   # y completar
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+La base se crea con los archivos de `mariadb/`, en orden:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+mariadb -h localhost -u fenix -p'...' < mariadb/01_schema.sql
+mariadb -h localhost -u fenix -p'...' < mariadb/02_seed.sql
+mariadb -h localhost -u fenix -p'...' < mariadb/03_drop_chat.sql
+# ... hasta 13. Cada uno es idempotente: se pueden volver a correr.
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**El detalle completo de cada migración está en [SETUP-LOCAL.md](SETUP-LOCAL.md)**,
+junto con los roles, el diseño del sistema y las decisiones que no conviene
+revertir sin pensarlas. Ese archivo es la referencia; este es el índice.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run dev     # desarrollo
+npm run build   # build de producción
+npm start       # servidor de producción
+npm test        # tests (vitest)
+npm run lint    # eslint
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Dónde está cada cosa
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Ruta | Qué |
+|---|---|
+| `src/app/api/auth/register` | Alta de socio. El bloque del hijo se valida contra sus propios consentimientos |
+| `src/app/api/user/query` | Queries del portal del socio. Autorización por fila (reemplaza la RLS de Supabase) |
+| `src/app/api/admin/query` | Queries del panel. Autorización por módulo y rol |
+| `src/app/api/files/[...path]` | Sirve los archivos. Chequea permisos y deja bitácora ANTES de leer |
+| `src/proxy.ts` | Protección de rutas por sesión y módulo |
+| `src/lib/roles.ts` | Los 8 roles y la matriz de módulos |
+| `src/lib/capacidades.ts` | Permisos finos de la sección de junta directiva |
+| `src/lib/consentimientos.ts` | Reglas de consentimiento de menores. Lógica pura y testeada |
+| `src/lib/almacen.ts` | Archivos: disco o S3/R2. La URL no depende del backend |
+| `emails/` | HTML de referencia de los correos. La directiva los edita en Resend |
+| `mariadb/` | Migraciones, en orden. Todas idempotentes |
+| `tests/` | Tests de lógica: fechas, importes, roles, consentimiento, seguridad |
 
-## Deploy on Vercel
+## Decisiones que conviene conocer antes de tocar algo
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **El consentimiento se presta por persona, no por familia.** El padre firma
+  para sus datos y aparte para los de su hijo, y son registros distintos. La
+  opinión del menor, cuando él habla, gana sobre la del representante.
+- **La puerta del DNI está en la API, no en la pantalla.** Una pantalla se puede
+  saltar; `POST /api/user/query` es la única línea por la que pasa el dato.
+- **Subir la foto del DNI no se rechaza por falta de consentimiento.** Decir que
+  no es un derecho. Lo que se cierra es la operación, no el alta.
+- **Los archivos se sirven siempre por proxy**, nunca con una URL directa: así la
+  bitácora de accesos puede registrar quién abrió qué.
+- **`script-src` lleva `'unsafe-inline'`** porque Next hidrata con scripts en
+  línea y no usa nonces. Pasarlo a strict sin nonces rompe la app.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Advertencia
+
+El módulo de menores y consentimientos implementa un **criterio técnico**, no una
+opinión legal. Las referencias a la Ley 25.326 y al Código Civil están para que
+quien revise rastree el fundamento. **El texto que ve la familia, el catálogo de
+finalidades y los plazos necesitan firma profesional antes de operar con
+menores de verdad.** Ver la advertencia en `src/lib/consentimientos.ts`.
+
+## Estado
+
+Ramas: `main` es la que se despliega. Sin CI: el build corre en el deploy de
+Coolify.
