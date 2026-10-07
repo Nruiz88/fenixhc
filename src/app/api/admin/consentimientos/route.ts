@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireModulo } from '@/lib/auth';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
-import { query, queryOne } from '@/lib/db';
+import { query, queryOne, execute } from '@/lib/db';
 import {
   estadoConsentimientos,
   registrarConsentimientos,
@@ -10,7 +10,7 @@ import {
   opinionVigente,
   alertasConsentimientos,
 } from '@/lib/consentimientos-db';
-import { opinionVeda, type Finalidad, type Opinion } from '@/lib/consentimientos';
+import { opinionVeda, fechaNacimientoValida, type Finalidad, type Opinion } from '@/lib/consentimientos';
 import { clientIp } from '@/lib/rateLimit';
 
 // Bandeja de consentimientos: quién autorizó qué, y qué hay que mirar.
@@ -89,12 +89,14 @@ export async function POST(request: NextRequest) {
     }
 
     const leido = await leerJson<{
-      accion?: 'otorgar' | 'revocar' | 'opinion';
+      accion?: 'otorgar' | 'revocar' | 'opinion' | 'fecha_nacimiento';
       perfil_id?: string;
       finalidad?: Finalidad;
       consentimiento_id?: string;
       opinion?: Opinion;
       motivo?: string;
+      /** Solo para la acción fecha_nacimiento. */
+      fecha_nacimiento?: string;
       /** Quién autoriza, cuando no es el titular. */
       otorgante_perfil_id?: string | null;
       otorgante_tipo?: string;
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
     }>(request);
     if (!leido.ok) return RESP_BAD_JSON();
 
-    const { accion, perfil_id, finalidad, consentimiento_id, opinion } = leido.data;
+    const { accion, perfil_id, finalidad, consentimiento_id, opinion, fecha_nacimiento } = leido.data;
 
     if (!accion || !perfil_id) {
       return NextResponse.json({ error: 'Falta la acción o la persona' }, { status: 400 });
@@ -117,6 +119,52 @@ export async function POST(request: NextRequest) {
     );
     if (!persona) {
       return NextResponse.json({ error: 'La persona no existe' }, { status: 404 });
+    }
+
+    // --- Fecha de nacimiento -----------------------------------------------
+    //
+    // Va ACÁ y no en /admin/jugadores por dos razones.
+    //
+    // Una: es el dato que decide el resto. `otorgar` calcula la edad con esta
+    // fecha, y sin ella `menorAlOtorgar` queda en false: el club anotaba
+    // "otorgado, persona adulta" de alguien que puede tener 12 años. Un
+    // registro así no puede sostener nada.
+    //
+    // Dos: la pantalla de consentimiento ya está avisando que falta. Poner el
+    // campo donde aparece el aviso hace que cargar el dato y otorgar el
+    // consentimiento sean el mismo gesto, en vez de dos datos separados en dos
+    // pantallas que una secretaria puede no relacionar.
+    if (accion === 'fecha_nacimiento') {
+      if (!fechaNacimientoValida(fecha_nacimiento)) {
+        return NextResponse.json(
+          {
+            error:
+              'La fecha no es válida. Tiene que ser una fecha real y corresponden a alguien de menos de 100 años.',
+          },
+          { status: 400 }
+        );
+      }
+
+      const affected = await execute(
+        'UPDATE deportistas SET fecha_nacimiento = ? WHERE perfil_id = ?',
+        [fecha_nacimiento, perfil_id]
+      );
+
+      if (affected.affectedRows === 0) {
+        return NextResponse.json(
+          {
+            error:
+              'Esta persona no tiene ficha de jugador. Creala desde /admin/jugadores antes de cargar una fecha.',
+            sinFicha: true,
+          },
+          { status: 409 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        mensaje: `Fecha de nacimiento de ${persona.nombre} ${persona.apellido} cargada.`,
+      });
     }
 
     // --- Registrar la opinión del menor ------------------------------------

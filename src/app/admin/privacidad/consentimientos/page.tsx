@@ -6,6 +6,7 @@ import { PageHeader, Panel, Hint, StatusPill, EmptyState, Toolbar } from '@/comp
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { FINALIDADES, type Finalidad } from '@/lib/consentimientos';
 import { fecha, fechaHora } from '@/lib/format';
@@ -78,6 +79,10 @@ export default function ConsentimientosPage() {
   const [busqueda, setBusqueda] = useState('');
 
   const [detalle, setDetalle] = useState<{ persona: Persona; estado: EstadoItem[]; opiniones: any[] } | null>(null);
+  // Borrador de la fecha de nacimiento. Se mantiene separado del detalle para
+  // poder escribir sin guardar en cada tecla, y compararse contra lo que hay
+  // para no dejar el botón "Guardar fecha" habilitado sin nada que guardar.
+  const [fechaBorrador, setFechaBorrador] = useState('');
   const [aRevocar, setARevocar] = useState<{ item: EstadoItem; nombre: string } | null>(null);
   const [motivo, setMotivo] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -106,6 +111,7 @@ export default function ConsentimientosPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
       setDetalle({ persona: json.data.persona, estado: json.data.estado, opiniones: json.data.opiniones ?? [] });
+      setFechaBorrador(json.data.persona.fecha_nacimiento ?? '');
     } catch (err: any) {
       toast.error('No se pudo cargar el detalle', { description: err.message });
     } finally {
@@ -130,6 +136,15 @@ export default function ConsentimientosPage() {
       return false;
     } finally {
       setOcupado(false);
+    }
+  }
+
+  async function recargar() {
+    if (!detalle) return;
+    const res = await fetch(`/api/admin/consentimientos?perfil=${detalle.persona.id}`);
+    if (res.ok) {
+      const json = await res.json();
+      setDetalle(json.data);
     }
   }
 
@@ -322,6 +337,52 @@ export default function ConsentimientosPage() {
               </DialogHeader>
 
               <div className="max-h-[60vh] space-y-2.5 overflow-y-auto pr-1">
+                {/*
+                  La fecha va arriba de todo y BLOQUEA el registro de consentimientos.
+
+                  No es una comodidad. `otorgar` calcula la edad con esta fecha, y
+                  sin ella `menor_al_otorgar` queda en false: el club anotaba
+                  "otorgado, persona adulta" sobre alguien que puede tener 12
+                  años. Un registro así no sirve para responder nada. El campo
+                  está acá porque es esta pantalla la que ya está avisando que
+                  falta.
+                */}
+                <div className="rounded-lg border border-line bg-surface-2 p-3">
+                  <p className="text-sm font-medium text-main">Fecha de nacimiento</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-dim">
+                    Define si el club lo trata como menor de edad, quién tiene que
+                    consentir y cuándo hay que volver a pedirle la autorización a
+                    él. Sin esta fecha no se puede registrar ningún consentimiento.
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Input
+                      type="date"
+                      value={fechaBorrador}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFechaBorrador(e.target.value)}
+                      className="h-9 w-44"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={ocupado || !fechaBorrador || fechaBorrador === detalle.persona.fecha_nacimiento}
+                      onClick={async () => {
+                        const ok = await accion(
+                          { accion: 'fecha_nacimiento', perfil_id: detalle?.persona.id, fecha_nacimiento: fechaBorrador },
+                          'Fecha cargada. Ya podés registrar los consentimientos.'
+                        );
+                        if (ok) recargar();
+                      }}
+                    >
+                      Guardar fecha
+                    </Button>
+                    {detalle.persona.fecha_nacimiento && (
+                      <StatusPill tone="ok">
+                        Cargada: {fecha(detalle.persona.fecha_nacimiento)}
+                      </StatusPill>
+                    )}
+                  </div>
+                </div>
+
                 {detalle.estado.map((e) => {
                   const def = FINALIDADES[e.finalidad];
                   const opuesta = detalle.opiniones?.find((o) => o.consulta === e.finalidad && o.opinion === 'en_contra');
@@ -420,7 +481,12 @@ export default function ConsentimientosPage() {
                         ) : (
                           <button
                             type="button"
-                            disabled={ocupado}
+                            disabled={ocupado || !detalle.persona.fecha_nacimiento}
+                            title={
+                              detalle.persona.fecha_nacimiento
+                                ? undefined
+                                : 'Cargá primero la fecha de nacimiento: sin ella el registro no puede afirmar si era menor.'
+                            }
                             onClick={() => otorgar(e.finalidad)}
                             className="rounded border border-ok/40 px-2 py-1 text-[10px] text-ok transition-colors hover:bg-ok/10 disabled:opacity-40"
                           >
