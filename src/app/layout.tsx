@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Club Deportivo Hockey | CDH",
-  description: "Club de hockey sobre hierba dedicado a la formación deportiva y personal. Unite a nuestra familia deportiva.",
+  description: "Hockey sobre patines en línea en Neuquén. Escuela deportiva, categorías formativas y competitivas, y comunidad de familias.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

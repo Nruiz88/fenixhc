@@ -1,29 +1,55 @@
 'use client';
 import { Card, CardContent } from '@/components/ui/card';
-import { Trophy, Users, MapPin, Calendar, Heart, Target, Shield, Star, ChevronRight } from 'lucide-react';
+import { Trophy, Users, Calendar, Heart, Target, Shield, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
+/**
+ * Línea de tiempo.
+ *
+ * ANTES ACÁ HABÍA SIETE HITOS INVENTADOS: fundación en 1995, primera cancha en
+ * 2000, subcampeonato regional en 2005, cancha auxiliar en 2010, bodas de oro en
+ * 2015 y "lanzamiento de la plataforma digital" en 2020. Ninguno ocurrió: el
+ * club se fundó en 2026.
+ *
+ * Los cuatro hitos de abajo salen de la historia que escribió el club, no de
+ * criterio propio. Lo que no se puede verificar no se pone: preferimos cuatro
+ * fechas reales a siete imaginarias.
+ */
 const TIMELINE = [
-  { year: '1995', title: 'Fundación', desc: 'Un grupo de familias funda el Fenix Roller Hockey con el sueño de practicar hockey sobre hierba.', icon: '🏗️' },
-  { year: '2000', title: 'Primera Cancha', desc: 'Inauguración de la cancha principal con césped sintético y dimensiones reglamentarias.', icon: '🏟️' },
-  { year: '2005', title: 'Primer Campeonato', desc: 'Participación en el campeonato regional con resultado histórico: subcampeones.', icon: '🏆' },
-  { year: '2010', title: 'Cancha Auxiliar', desc: 'Construcción de la cancha auxiliar para entrenamientos tácticos y técnicos.', icon: '⚽' },
-  { year: '2015', title: '20 Años', desc: 'Celebración de las bodas de oro del club con más de 50 jugadores activos.', icon: '🎉' },
-  { year: '2020', title: 'Era Digital', desc: 'Lanzamiento de la plataforma digital para socios, pagos y gestión del club.', icon: '💻' },
-  { year: '2026', title: 'Temporada Actual', desc: '15+ jugadores activos, 10+ familias y un equipo que crece cada año.', icon: '🚀' },
+  {
+    year: '2026',
+    title: 'Nace Fénix',
+    desc: 'Un grupo de familias y jugadores crea el club en Neuquén con el sueño de darle un lugar donde desarrollarse al hockey sobre patines en línea.',
+    icon: '🏗️',
+  },
+  {
+    year: '2026',
+    title: 'Categorías formativas',
+    desc: 'Se incorporan distintas categorías formativas y competitivas, desde los más pequeños hasta jóvenes y adultos.',
+    icon: '🏟️',
+  },
+  {
+    year: 'Marzo 2026',
+    title: 'Formalización',
+    desc: 'La institución se constituye como Simple Asociación Hockey Roller Confluencia, consolidando jurídicamente el proyecto.',
+    icon: '⚖️',
+  },
+  {
+    year: 'Hoy',
+    title: 'Hockey neuquino',
+    desc: 'Acompañamos a deportistas que alcanzaron instancias de Selección Argentina y trabajamos en el desarrollo del hockey neuquino.',
+    icon: '🏆',
+  },
 ];
 
 const VALORES = [
   { title: 'Respeto', desc: 'Valoramos a cada integrante del club, jugadores, familias y cuerpo técnico.', icon: Heart, color: '#DC2626' },
-  { title: 'Disciplina', desc: 'El esfuerzo constante y la dedication son la base del crecimiento deportivo.', icon: Target, color: '#3B82F6' },
+  { title: 'Disciplina', desc: 'El esfuerzo constante y la dedicación son la base del crecimiento deportivo.', icon: Target, color: '#3B82F6' },
   { title: 'Compañerismo', desc: 'El hockey es un deporte de equipo. Enseñamos a ganar y perder juntos.', icon: Users, color: '#10B981' },
-  { title: 'Integridad', desc: 'Formamos personas íntegras que llevan los valores del deporte a su vida diaria.', icon: Shield, color: '#F59E0B' },
+  { title: 'Solidaridad', desc: 'Nos acompañan las familias que hacen posible que cada jugador llegue a su objetivo.', icon: Shield, color: '#F59E0B' },
 ];
 
-const INSTALACIONES = [
-  { name: 'Cancha Principal', specs: ['91x55m reglamentario', 'Césped sintético', 'Iluminación artificial', 'Vestuarios completos'], color: 'from-[#DC2626] to-[#B91C1C]' },
-  { name: 'Cancha Auxiliar', specs: ['60x40m', 'Entrenamiento táctico', 'Zona de calentamiento', 'Almacén de equipamiento'], color: 'from-blue-600 to-indigo-700' },
-];
+
 
 export default function SobreNosotrosPage() {
   return (
@@ -41,13 +67,13 @@ export default function SobreNosotrosPage() {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-[#DC2626]/10 border border-[#DC2626]/20 rounded-full px-4 py-2 mb-6">
               <Trophy className="h-4 w-4 text-[#DC2626]" />
-              <span className="text-sm text-gray-300 font-medium">Más de 25 años de historia</span>
+              <span className="text-sm text-gray-300 font-medium">Hockey sobre patines en línea</span>
             </div>
             <h1 className="text-5xl md:text-7xl font-black text-white leading-[0.95] mb-6 tracking-tight">
               Sobre <span className="text-[#DC2626]">Nosotros</span>
             </h1>
             <p className="text-lg md:text-xl text-gray-400 mb-8 max-w-lg leading-relaxed">
-              Conocé la historia del Fenix Roller Hockey, un club dedicado a formar campeones dentro y fuera de la cancha desde 1995.
+              Conocé la historia del Fenix Roller Hockey, un club de hockey sobre patines en línea de Neuquén.
             </p>
           </div>
         </div>
@@ -58,10 +84,10 @@ export default function SobreNosotrosPage() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-gray-800">
             {[
-              { value: '1995', label: 'Fundación', icon: Calendar },
-              { value: '25+', label: 'Años de Historia', icon: Trophy },
-              { value: '15+', label: 'Jugadores Activos', icon: Users },
-              { value: '10+', label: 'Familias', icon: Heart },
+              { value: '2026', label: 'Fundación', icon: Calendar },
+              { value: '1', label: 'Año de historia', icon: Trophy },
+              { value: 'Inline', label: 'Disciplina', icon: Users },
+              { value: 'Neuquén', label: 'Ciudad', icon: Heart },
             ].map((s, i) => (
               <div key={i} className="py-6 px-6 flex items-center gap-4">
                 <div className="h-10 w-10 rounded-xl bg-[#DC2626]/10 flex items-center justify-center">
@@ -83,13 +109,13 @@ export default function SobreNosotrosPage() {
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-16">
               <p className="text-sm text-[#DC2626] font-semibold uppercase tracking-wider mb-2">Nuestra Historia</p>
-              <h2 className="text-3xl font-bold text-white">Más de 25 años de pasión</h2>
+              <h2 className="text-3xl font-bold text-white">Un club que recién empieza</h2>
             </div>
 
             <div className="space-y-6 text-gray-400 leading-relaxed text-lg">
-              <p>Fundado en 1995, el <span className="text-white font-semibold">Fenix Roller Hockey</span> nació del sueño de un grupo de familias que querían brindar la oportunidad de practicar hockey sobre hierba a los jóvenes de la zona.</p>
-              <p>A lo largo de más de dos décadas, hemos formado no solo jugadores, sino también <span className="text-[#DC2626] font-semibold">personas íntegras</span> que llevan los valores del deporte a todas las áreas de sus vidas.</p>
-              <p>Hoy contamos con más de 15 jugadores activos, dos canchas de primer nivel y una comunidad unida que crece cada año. Nuestro objetivo sigue siendo el mismo: formar campeones dentro y fuera de la cancha.</p>
+              <p><span className="text-white font-semibold">Fénix Roller Hockey Neuquén</span> nació de una idea sencilla pero ambiciosa: crear en Neuquén un espacio donde niños, jóvenes y adultos pudieran aprender, entrenar y desarrollarse en el hockey sobre patines en línea.</p>
+              <p>En marzo de 2026 alcanzamos un paso fundamental en nuestra historia con la formalización de nuestra institución como <span className="text-[#DC2626] font-semibold">Simple Asociación Hockey Roller Confluencia</span>.</p>
+              <p>Hoy trabajamos para ampliar nuestra escuela deportiva, fortalecer nuestras categorías competitivas y avanzar hacia uno de nuestros grandes objetivos: contar con un espacio deportivo propio.</p>
             </div>
           </div>
         </div>
@@ -152,38 +178,6 @@ export default function SobreNosotrosPage() {
                     </div>
                     <h3 className="text-lg font-bold text-white mb-2">{v.title}</h3>
                     <p className="text-sm text-gray-400">{v.desc}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Instalaciones */}
-      <section className="py-20 bg-gray-900/50">
-        <div className="container mx-auto px-4">
-          <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-16">
-              <p className="text-sm text-[#DC2626] font-semibold uppercase tracking-wider mb-2">Instalaciones</p>
-              <h2 className="text-3xl font-bold text-white">Nuestras Canchas</h2>
-              <p className="text-gray-400 mt-3 max-w-lg mx-auto">Espacios de primer nivel para el mejor desarrollo deportivo</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {INSTALACIONES.map((inst, i) => (
-                <Card key={i} className="bg-gray-900 border-gray-800 overflow-hidden group hover:border-gray-700 transition-all">
-                  <div className={`h-3 bg-gradient-to-r ${inst.color}`} />
-                  <CardContent className="p-6">
-                    <h3 className="text-xl font-bold text-white mb-4">{inst.name}</h3>
-                    <ul className="space-y-3">
-                      {inst.specs.map((spec, j) => (
-                        <li key={j} className="flex items-center gap-3 text-sm text-gray-400">
-                          <div className="h-1.5 w-1.5 rounded-full bg-[#DC2626]" />
-                          {spec}
-                        </li>
-                      ))}
-                    </ul>
                   </CardContent>
                 </Card>
               ))}

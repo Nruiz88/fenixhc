@@ -34,7 +34,7 @@ export default function ClubPage() {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-[#DC2626]/10 border border-[#DC2626]/20 rounded-full px-4 py-2 mb-6">
               <Trophy className="h-4 w-4 text-[#DC2626]" />
-              <span className="text-sm text-gray-300 font-medium">Desde 1995</span>
+              <span className="text-sm text-gray-300 font-medium">Desde 2026</span>
             </div>
 
             <h1 className="text-5xl md:text-7xl font-black text-white leading-[0.95] mb-6 tracking-tight">
@@ -42,7 +42,7 @@ export default function ClubPage() {
             </h1>
 
             <p className="text-lg md:text-xl text-gray-400 mb-8 max-w-lg leading-relaxed">
-              Conocé nuestra historia, instalaciones y categorías. Más de 25 años formando campeones dentro y fuera de la cancha.
+              Conocé nuestra historia, categorías y valores. Hockey sobre patines en línea en Neuquén.
             </p>
 
             <Link href="/contacto" className="inline-flex">
@@ -60,19 +60,19 @@ export default function ClubPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center max-w-6xl mx-auto">
             <div>
               <p className="text-sm text-[#DC2626] font-semibold uppercase tracking-wider mb-2">Nuestra Historia</p>
-              <h2 className="text-3xl font-bold text-white mb-6">Más de 25 años de pasión</h2>
+              <h2 className="text-3xl font-bold text-white mb-6">Un club que recién empieza</h2>
               <div className="space-y-4 text-gray-400 leading-relaxed">
-                <p>Fundado en 1995, el Fenix Roller Hockey nació del sueño de un grupo de familias que querían brindar la oportunidad de practicar hockey sobre hierba a los jóvenes de la zona.</p>
-                <p>A lo largo de más de dos décadas, hemos formado no solo jugadores, sino también personas íntegras que llevan los valores del deporte a todas las áreas de sus vidas.</p>
-                <p>Hoy contamos con más de 15 jugadores activos, dos canchas de primer nivel y una comunidad unida que crece cada año.</p>
+                <p>Fénix Roller Hockey Neuquén nació de una idea sencilla pero ambiciosa: crear en Neuquén un espacio donde niños, jóvenes y adultos pudieran aprender, entrenar y desarrollarse en el hockey sobre patines en línea.</p>
+                <p>En marzo de 2026 alcanzamos un paso fundamental en nuestra historia con la formalización de nuestra institución como Simple Asociación Hockey Roller Confluencia.</p>
+                <p>Hoy trabajamos para ampliar nuestra escuela deportiva, fortalecer nuestras categorías competitivas y organizar encuentros y torneos. Uno de nuestros grandes objetivos es contar con un espacio deportivo propio.</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { value: '1995', label: 'Fundación', icon: Calendar },
-                { value: '15+', label: 'Jugadores', icon: Users },
-                { value: '2', label: 'Canchas', icon: MapPin },
-                { value: '25+', label: 'Años', icon: Trophy },
+                { value: '2026', label: 'Fundación', icon: Calendar },
+                { value: 'Inline', label: 'Disciplina', icon: Users },
+                { value: 'Neuquén', label: 'Ciudad', icon: MapPin },
+                { value: '1', label: 'Año', icon: Trophy },
               ].map((s, i) => (
                 <Card key={i} className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-all group">
                   <CardContent className="p-6 text-center">
@@ -85,45 +85,6 @@ export default function ClubPage() {
                 </Card>
               ))}
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Instalaciones */}
-      <section className="py-20 bg-gray-900/50">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <p className="text-sm text-[#DC2626] font-semibold uppercase tracking-wider mb-2">Instalaciones</p>
-            <h2 className="text-3xl font-bold text-white">Nuestras Canchas</h2>
-            <p className="text-gray-400 mt-3 max-w-lg mx-auto">Espacios de primer nivel para el mejor desarrollo deportivo</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-            <Card className="bg-gray-900 border-gray-800 overflow-hidden group hover:border-gray-700 transition-all">
-              <div className="h-48 bg-gradient-to-br from-[#DC2626] to-[#B91C1C] flex items-center justify-center relative overflow-hidden">
-                <div className="absolute inset-0 opacity-20">
-                  <div className="absolute top-10 right-10 w-32 h-32 bg-white rounded-full blur-[60px]" />
-                </div>
-                <Target className="h-16 w-16 text-white/30 group-hover:text-white/50 transition-all" />
-              </div>
-              <CardContent className="p-6">
-                <h3 className="text-xl font-bold text-white mb-2">Cancha Principal</h3>
-                <p className="text-sm text-gray-400 mb-4">Cancha de hockey sobre césped sintético de última generación, con medidas reglamentarias (91x55m) y iluminación artificial.</p>
-                <div className="flex items-center gap-2 text-sm text-gray-500"><MapPin className="h-4 w-4" />Capacidad: 30 personas</div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gray-900 border-gray-800 overflow-hidden group hover:border-gray-700 transition-all">
-              <div className="h-48 bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center relative overflow-hidden">
-                <div className="absolute inset-0 opacity-20">
-                  <div className="absolute top-10 left-10 w-32 h-32 bg-white rounded-full blur-[60px]" />
-                </div>
-                <Target className="h-16 w-16 text-white/30 group-hover:text-white/50 transition-all" />
-              </div>
-              <CardContent className="p-6">
-                <h3 className="text-xl font-bold text-white mb-2">Cancha Auxiliar</h3>
-                <p className="text-sm text-gray-400 mb-4">Cancha de entrenamiento ideal para prácticas tácticas y técnicas. Dimensiones 60x40m.</p>
-                <div className="flex items-center gap-2 text-sm text-gray-500"><MapPin className="h-4 w-4" />Capacidad: 20 personas</div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </section>
