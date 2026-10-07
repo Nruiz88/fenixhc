@@ -4,7 +4,7 @@ import {
   agruparParaAvisar, componerAviso,
   type CuotaParaAvisar, type FamiliarParaAvisar, type Responsable, type SeguroParaAvisar,
 } from './avisos';
-import { sendEmail, emailAviso } from './email';
+import { sendEmail, emailAviso, idPlantilla } from './email';
 
 // Lectura de a quién hay que avisarle y escritura del aviso.
 //
@@ -283,6 +283,15 @@ export async function enviarAviso(params: {
         subject: correo.subject,
         html: correo.html,
         text: correo.text,
+        // La plantilla lleva el DISEÑO. El texto sigue viniendo del código:
+        // `detalle` guarda exactamente lo que salió, y si el html de la
+        // plantilla armanara la frase, el registro y el correo dejarían de
+        // decir lo mismo. Para eso está el `white-space: pre-line` en el
+        // contenedor de {{mensaje}}.
+        plantilla: {
+          id: idPlantilla('RESEND_TEMPLATE_AVISO'),
+          variables: { nombre: familia.nombre, mensaje },
+        },
       });
 
       if (r.sent) email = 'enviado';

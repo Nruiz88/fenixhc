@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<!--
+  PLANTILLA RESEND — Aviso de cuota (o seguro) pendiente
+  ---------------------------------------------------------------
+  Variables:
+    {{nombre}}   nombre del socio responsable
+    {{mensaje}}  texto YA COMPUESTO por src/lib/avisos.ts, con los montos
+                 resueltos y con saltos de línea
+
+  Para usar: resend.com -> Templates -> Create -> pegá este HTML.
+  ID -> variable de entorno RESEND_TEMPLATE_AVISO.
+
+  ────────────────────────────────────────────────────────────────
+  POR QUÉ EL MENSAJE VIENE COMPUESTO DESDE EL CÓDIGO Y NO SE ESCRIBE
+  ACÁ
+  ────────────────────────────────────────────────────────────────
+  `avisos_familias.detalle` guarda EXACTAMENTE el texto que salió. Si el
+  HTML de la plantilla armanara la frase y el registro guardara otra cosa,
+  el club no podría mostrar después lo que realmente se le mandó a una
+  familia que pregunta "nunca nos avisaste".
+
+  O sea: el texto es de la app, el diseño es de la plantilla. No al revés.
+
+  ────────────────────────────────────────────────────────────────
+  LOS SALTOS DE LÍNEA
+  ────────────────────────────────────────────────────────────────
+  {{mensaje}} llega con \n, no con <br>. Por eso el contenedor de abajo lleva
+  `white-space: pre-line`: es lo que convierte los saltos en renglones sin
+  necesidad de que el texto traiga HTML adentro. Si sacás ese estilo, el
+  correo entero llega en una sola línea y hay que adivinar dónde corta.
+
+  ────────────────────────────────────────────────────────────────
+  EL MONTO
+  ────────────────────────────────────────────────────────────────
+  Va congelado en {{mensaje}} a propósito. El recargo sigue subiendo: el
+  aviso de hoy y el de la semana que viene no pueden decir el mismo número.
+-->
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tenés algo pendiente en el club</title>
+</head>
+<body style="margin:0; padding:0; background:#f4f4f5; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f4f5; padding:24px 12px;">
+    <tr>
+      <td align="center">
+
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; background:#ffffff; border-radius:12px; border:1px solid #e4e4e7; overflow:hidden;">
+
+          <tr>
+            <td style="background:#dc2626; padding:14px 28px;">
+              <span style="color:#ffffff; font-size:15px; font-weight:700; letter-spacing:1px;">FENIX ROLLER HOCKEY</span>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:28px;">
+              <!-- white-space: pre-line — sin esto los \n del mensaje no se -->
+              <!-- ven y el correo llega como un bloque único. -->
+              <div style="font-size:15px; line-height:1.65; color:#3f3f46; white-space: pre-line;">{{mensaje}}</div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 28px 28px 28px;">
+              <p style="margin:0; padding-top:20px; border-top:1px solid #e4e4e7; font-size:12px; line-height:1.6; color:#a1a1aa; text-align:center;">
+                Este correo te lo manda el club porque tenés algo pendiente.<br>
+                Si ya lo pagaste, contestá este mensaje y lo registramos.
+              </p>
+              <!-- Firma al pie, como en las otras dos plantillas. Un correo que
+                   pide plata sin decir de quién viene es lo que hace que una
+                   familia no pague, y es lo primero que mira cualquiera que
+                   sospeche que es phishing. -->
+              <p style="margin:16px 0 0 0; font-size:11px; line-height:1.6; color:#a1a1aa; text-align:center;">
+                Fenix Roller Hockey
+              </p>
+            </td>
+          </tr>
+
+        </table>
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

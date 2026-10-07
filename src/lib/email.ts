@@ -29,11 +29,41 @@ export interface SendResult {
   error?: string;
 }
 
+/**
+ * Plantilla de Resend, si es que hay una cargada.
+ *
+ * El HTML de cada correo vive en dos lugares a propósito: el archivo de
+ * `emails/` (versionado, revisable) y el dashboard de Resend (editable por la
+ * directiva sin deploy). El archivo es la fuente de la verdad para reproducir
+ * o auditar; el dashboard es donde se toca.
+ */
+export interface Plantilla {
+  /** ID de la plantilla en Resend. Si falta, se manda el HTML embebido. */
+  id?: string;
+  variables: Record<string, string>;
+}
+
+/**
+ * Lee el ID de una plantilla del entorno.
+ *
+ * El fallback a `undefined` es lo que hace segura esta función: sin ID se usa
+ * el HTML embebido, así que si nadie crea la plantilla —o si alguien la rompe
+ * en el dashboard y hay que sacarla del medio— la app sigue mandando correo.
+ *
+ * Pasa esto con el enlace de verificación y el de recuperación de clave: son
+ * lo único que activa una cuenta. Si el botón del correo se rompe, nadie se
+ * registra y el club no sabe ni por qué.
+ */
+export function idPlantilla(nombre: string): string | undefined {
+  return process.env[nombre]?.trim() || undefined;
+}
+
 export async function sendEmail(opts: {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  plantilla?: Plantilla;
 }): Promise<SendResult> {
   const resend = getClient();
   if (!resend) {
@@ -41,14 +71,30 @@ export async function sendEmail(opts: {
     return { sent: false, motivo: 'sin-key' };
   }
 
+  // Con plantilla cargada manda el diseño de Resend y NO se manda `subject` ni
+  // `html`: esos campos pasan a estar dentro de la plantilla y mandarlos también
+  // acá es un conflicto. El `text` tampoco: el SDK lo prohíbe explícitamente
+  // cuando hay `template` (la versión con template declara `text?: undefined`).
+  //
+  // Lo que significa eso para la parte de texto plano: cuando hay plantilla,
+  // la genera Resend a partir del HTML. Sin plantilla se manda `text`, que es
+  // el que armamos acá y del que depende que un correo no llegue vacío.
+  const cuerpo = opts.plantilla?.id
+    ? ({
+        from: FROM,
+        to: opts.to,
+        template: { id: opts.plantilla.id, variables: opts.plantilla.variables },
+      } as const)
+    : ({
+        from: FROM,
+        to: opts.to,
+        subject: opts.subject,
+        html: opts.html,
+        ...(opts.text ? { text: opts.text } : {}),
+      } as const);
+
   try {
-    const { error } = await resend.emails.send({
-      from: FROM,
-      to: opts.to,
-      subject: opts.subject,
-      html: opts.html,
-      ...(opts.text ? { text: opts.text } : {}),
-    });
+    const { error } = await resend.emails.send(cuerpo as Parameters<typeof resend.emails.send>[0]);
     if (error) {
       console.error('Resend error:', error);
       return { sent: false, motivo: 'error', error: error.message };

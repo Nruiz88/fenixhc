@@ -7,7 +7,7 @@
 
 import { randomBytes, createHash } from 'crypto';
 import { execute, query, type Ejecutable } from './db';
-import { sendEmail, verificacionEmail } from './email';
+import { sendEmail, verificacionEmail, idPlantilla } from './email';
 
 const TTL_HORAS = 24;
 
@@ -60,7 +60,18 @@ export async function enviarVerificacion(opts: {
 }): Promise<{ ok: boolean }> {
   const link = `${opts.baseUrl}/verificar?token=${opts.token}`;
   const { subject, html, text } = verificacionEmail({ nombre: opts.nombre, link });
-  const res = await sendEmail({ to: opts.email, subject, html, text });
+  const res = await sendEmail({
+    to: opts.email,
+    subject,
+    html,
+    text,
+    // Si no hay RESEND_TEMPLATE_VERIFICACION, esto queda undefined y se manda
+    // el html de arriba. Ese camino es el que no puede romperse.
+    plantilla: {
+      id: idPlantilla('RESEND_TEMPLATE_VERIFICACION'),
+      variables: { nombre: opts.nombre, link },
+    },
+  });
   return { ok: res.sent };
 }
 

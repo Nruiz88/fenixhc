@@ -36,7 +36,7 @@
 import { randomBytes, createHash, timingSafeEqual } from 'crypto';
 import { execute, query } from './db';
 import { hashPassword } from './auth';
-import { sendEmail, recuperacionEmail } from './email';
+import { sendEmail, recuperacionEmail, idPlantilla } from './email';
 
 /** Una hora. Ver la regla 2. */
 const TTL_MINUTOS = 60;
@@ -119,7 +119,23 @@ export async function solicitarRecuperacion(params: {
     link,
     minutos: TTL_MINUTOS,
   });
-  const res = await sendEmail({ to: email, subject, html, text });
+  const res = await sendEmail({
+    to: email,
+    subject,
+    html,
+    text,
+    // Sin RESEND_TEMPLATE_RECUPERACION se manda el html embebido de arriba.
+    // Es el camino que no puede romperse: este correo es el único que le
+    // permite a alguien recuperar una clave que olvidó.
+    plantilla: {
+      id: idPlantilla('RESEND_TEMPLATE_RECUPERACION'),
+      variables: {
+        nombre: usuario.nombre,
+        link,
+        minutos: String(TTL_MINUTOS),
+      },
+    },
+  });
 
   return {
     aceptado: true,
