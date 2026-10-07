@@ -76,7 +76,7 @@ export default function RegistroPage() {
     // Si es padre y quiso crear hijo, lo enviamos junto con el registro.
     // El email del hijo es obligatorio: la verificación se manda a esa
     // casilla, así que un email inventado dejaría al chico sin poder entrar.
-    if (form.rol === 'socio_benefactor' && form.hijo_nombre && form.hijo_apellido && form.hijo_dni) {
+    if (cargaHijo) {
       if (!form.hijo_email) {
         toast.error('Falta el email del hijo', { description: 'Necesitamos su email para enviarle la verificación.' });
         setLoading(false);
@@ -94,9 +94,13 @@ export default function RegistroPage() {
       payload.hijo_password = form.hijo_password;
       payload.hijo_fecha_nacimiento = form.hijo_fecha_nacimiento;
       payload.hijo_opinion = opinionHijo;
-      // El jugador se inscribe con sus propias finalidades, no con las del
-      // adulto: el consentimiento se presta por persona, no por familia.
-      payload.consentimientos = [...consentimientos, ...consentimientosHijo];
+      // Las finalidades del JUEGOR van en su propio campo, NO sumadas a las del
+      // titular. Antes se mandaba una lista sola con las dos mezcladas, y el
+      // backend no podía saber cuál era de quién: si el padre había marcado
+      // "guardar fotos del DNI" para sí mismo y el menor decía que no, el
+      // registro se rechazaba por una finalidad que el padre nunca autorizó
+      // para el hijo, y el mensaje le pedía desmarcar algo que sí había marcado.
+      payload.consentimientosHijo = consentimientosHijo;
     }
 
     const result = await register(payload);
@@ -124,6 +128,21 @@ export default function RegistroPage() {
   };
 
   const update = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
+
+  // Si el titular empezó a cargar los datos del hijo, el bloque pasa a ser
+  // obligatorio completo. Antes bastaba nombre + apellido + DNI para entrar en
+  // la rama del payload, y las tres cosas que faltaban (email, contraseña y
+  // fecha de nacimiento) se descubrían del lado del servidor, con un mensaje
+  // que no señalaba el campo. La fecha además estaba marcada con un asterisco
+  // pero sin `required`, así que el navegador la aceptaba vacía.
+  //
+  // El bloque entero se renderiza para todo benefactor, incluso el que no
+  // quiere dar de alta a nadie: por eso el `required` va con esta condición y
+  // no fijo, o se le pediría la fecha de nacimiento a un padre que solo quiere
+  // su propia cuenta.
+  const cargaHijo =
+    form.rol === 'socio_benefactor' &&
+    !!(form.hijo_nombre && form.hijo_apellido && form.hijo_dni);
 
   // Post-registro: la cuenta existe pero falta verificar el email.
   if (pendingVerify) {
@@ -302,11 +321,13 @@ export default function RegistroPage() {
                       value={form.hijo_fecha_nacimiento}
                       onChange={e => update('hijo_fecha_nacimiento', e.target.value)}
                       className="bg-gray-800 border-gray-700 text-white text-sm"
+                      required={cargaHijo}
                     />
                     <p className="text-[11px] text-gray-500">
                       El club la necesita para saber si es menor de edad. Guarda
                       también la fecha en que cumple 18, para poder avisarte
-                      cuando eso pase y pedirle su consentimiento a él.
+                      cuando eso pase y pedirle su consentimiento a él. Sin este
+                      dato el registro completo no se puede guardar.
                     </p>
                   </div>
 

@@ -6,7 +6,7 @@
 // mal cargado, se agrega un consentimiento nuevo y se revoca el anterior: el
 // historial queda entero.
 
-import { query, execute, transaccion, uuid } from './db';
+import { query, execute, transaccion, uuid, type Ejecutable } from './db';
 import { fechaDesdeDb } from './junta-validacion';
 import {
   VERSION_AVISO,
@@ -116,18 +116,28 @@ export async function registrarConsentimientos(params: {
   userAgent?: string | null;
   canal?: 'registro' | 'panel' | 'presencial';
   registradoPor?: string | null;
+  /**
+   * Conexión de una transacción en curso.
+   *
+   * Sin esto, esta función abre la suya y el INSERT del consentimiento se
+   * confirma por su cuenta aunque el alta que la llamó después se revierta: el
+   * club queda con un padre sin cuenta y un consentimiento que dice que
+   * consintió. Es exactamente el estado que el comentario de arriba dice que no
+   * puede existir, pero repartido en dos transacciones.
+   */
+  conn?: Ejecutable | null;
 }): Promise<void> {
   const {
     titularPerfilId, otorgantePerfilId = null, otorganteTipo, vinculo = null,
     finalidades, edadAlOtorgar = null, ip = null, userAgent = null,
-    canal = 'registro', registradoPor = null,
+    canal = 'registro', registradoPor = null, conn = null,
   } = params;
 
   const menorAlOtorgar = edadAlOtorgar !== null && edadAlOtorgar < EDAD_MAYORIA;
 
-  await transaccion(async (conn) => {
+  const escribir = async (e: Ejecutable) => {
     for (const finalidad of finalidades) {
-      await conn.execute(
+      await e.execute(
         `INSERT INTO consentimientos
            (id, titular_perfil_id, otorgante_perfil_id, otorgante_tipo, vinculo_tipo,
             finalidad, base_legal, menor_al_otorgar, edad_al_otorgar,
@@ -143,7 +153,13 @@ export async function registrarConsentimientos(params: {
         ]
       );
     }
-  });
+  };
+
+  if (conn) {
+    await escribir(conn);
+    return;
+  }
+  await transaccion(escribir);
 }
 
 /**
@@ -159,15 +175,25 @@ export async function registrarOpinionMenor(params: {
   origen: 'propia' | 'transmitida_por_representante';
   recogidaPor?: string | null;
   edadAlConsultar?: number | null;
+  /** Misma razón que en `registrarConsentimientos`: para que la opinión del
+   *  menor se confirme o se revierta junto con el alta que la contiene. */
+  conn?: Ejecutable | null;
 }): Promise<void> {
-  const { menorPerfilId, consulta, opinion, origen, recogidaPor = null, edadAlConsultar = null } = params;
+  const {
+    menorPerfilId, consulta, opinion, origen, recogidaPor = null,
+    edadAlConsultar = null, conn = null,
+  } = params;
 
-  await execute(
-    `INSERT INTO opiniones_menor
+  const sql = `INSERT INTO opiniones_menor
        (id, menor_perfil_id, consulta, opinion, recogida_por, origen, edad_al_consultar, registrada_en)
-     VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-    [uuid(), menorPerfilId, consulta, opinion, recogidaPor, origen, edadAlConsultar]
-  );
+     VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`;
+  const params2 = [uuid(), menorPerfilId, consulta, opinion, recogidaPor, origen, edadAlConsultar];
+
+  if (conn) {
+    await conn.execute(sql, params2);
+    return;
+  }
+  await execute(sql, params2);
 }
 
 /**

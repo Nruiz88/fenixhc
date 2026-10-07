@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
-import { queryOne, insert, uuid } from '@/lib/db';
+import { queryOne, uuid, transaccion } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
-import { generarYEnviarVerificacion } from '@/lib/verification';
+import { generarTokenVerificacion, enviarVerificacion } from '@/lib/verification';
 import { getBaseUrl } from '@/lib/url';
 import { z } from 'zod';
 import {
@@ -58,6 +58,13 @@ export async function POST(request: NextRequest) {
       // lo que efectivamente aceptó, porque es lo que se guarda como prueba
       // y no se puede guardar "aceptó todo".
       consentimientos: consentimientosRaw = [],
+      // Finalidades del JUEGOR a cargo. Van separadas de las del titular y NO se
+      // suman: antes el formulario mandaba una sola lista mezclada, y eso hacía
+      // que una casilla marcada por el padre para sí mismo llegara como si la
+      // hubiera marcado para el hijo. Con el menor diciendo "no", el padre quedaba
+      // bloqueado por una finalidad que nunca autorizó para el otro, y el
+      // mensaje le pedía desmarcar algo que él sí había marcado.
+      consentimientosHijo: consentimientosHijoRaw = [],
       // Vínculo con el jugador que se inscribe. Antes el código ponía
       // 'padre' fijo: una madre quedaba asentada como padre.
       vinculo: vinculoRaw = null,
@@ -200,7 +207,7 @@ export async function POST(request: NextRequest) {
 
       consHijo = validarConsentimientos({
         consentimiento: {
-          marcadas: Array.isArray(consentimientosRaw) ? consentimientosRaw : [],
+          marcadas: Array.isArray(consentimientosHijoRaw) ? consentimientosHijoRaw : [],
         },
         menor: {
           nombre: hijoNombreVal,
@@ -255,138 +262,168 @@ export async function POST(request: NextRequest) {
     // El perfil comparte el mismo id que el usuario para mantener
     // la compatibilidad con las queries existentes (perfiles.id == usuario id)
     const perfilId = userId;
+    const hijoUserId = uuid();
+    const hijoPerfilId = hijoUserId;
+    const hijoHash = registraHijo ? await hashPassword(hijoPasswordVal) : null;
+    const base = getBaseUrl(request);
 
-    // Create usuario
-    await insert(
-      'INSERT INTO usuarios (id, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-      [userId, emailVal, hash, rol]
-    );
-
-    // Create perfil
-    await insert(
-      'INSERT INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, cuil, correo, telefono, direccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        perfilId, userId, rol,
-        nombre, apellido, dniVal, cuilRaw || null, emailVal,
-        telefono, direccion,
-      ]
-    );
-
-    // Constancia del consentimiento del titular. Va después de crear el
-    // perfil porque necesita su id, pero antes que nada del hijo.
-    await registrarConsentimientos({
-      titularPerfilId: perfilId,
-      otorganteTipo: 'titular',
-      finalidades: consAdulto.finalidades,
-      edadAlOtorgar: null,
-      ip,
-      userAgent,
-      canal: 'registro',
-    });
-
-    // Un jugador que se registra por su cuenta también necesita ficha de
-    // deportista. Antes no se creaba, y el resultado era una cuenta con rol
-    // de cadete que no estaba en ninguna lista: invisible para el panel de
-    // jugadores y sin lugar donde guardar nada.
-    if (rol === 'socio_cadete') {
-      await insert(
-        'INSERT INTO deportistas (id, perfil_id, fecha_nacimiento) VALUES (?, ?, ?)',
-        [uuid(), perfilId, fechaNacimientoPropia]
-      );
-    }
-
-    // If padre and child data provided
-    let childId = null;
-    if (registraHijo && consHijo?.ok) {
-      const hijoUserId = uuid();
-      const hijoPerfilId = hijoUserId;
-      const hijoHash = await hashPassword(hijoPasswordVal);
-
-      await insert(
+    // -------------------------------------------------------------------------
+    // UNA SOLA TRANSACCIÓN
+    // -------------------------------------------------------------------------
+    // Todo lo que escribe va adentro, incluidas las dos actas de consentimiento
+    // y la opinión del menor. Antes cada INSERT iba por el pool: si el alta del
+    // hijo fallaba, el padre ya estaba insertado y con su consentimiento
+    // registrado, y el reintento moría con "El email ya está registrado".
+    // Quedaba una cuenta que el club no puede usar y que el padre no puede
+    // recuperar.
+    //
+    // Los tokens de verificación entran acá porque son una escritura. El CORREO
+    // se manda después del commit: un email que salió no se deshace con un
+    // rollback, y mandarlo desde adentro dejaría la transacción abierta durante
+    // una llamada a la red.
+    const { tokenPadre, tokenHijo } = await transaccion(async (conn) => {
+      await conn.execute(
         'INSERT INTO usuarios (id, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-        [hijoUserId, hijoEmailVal, hijoHash, 'socio_cadete']
+        [userId, emailVal, hash, rol]
       );
 
-      await insert(
-        'INSERT INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, correo) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      await conn.execute(
+        'INSERT INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, cuil, correo, telefono, direccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
-          hijoPerfilId, hijoUserId, 'socio_cadete',
-          hijoNombreVal, hijoApellidoVal, hijoDniFinal, hijoEmailVal,
+          perfilId, userId, rol,
+          nombre, apellido, dniVal, cuilRaw || null, emailVal,
+          telefono, direccion,
         ]
       );
 
-      await insert(
-        'INSERT INTO deportistas (id, perfil_id, fecha_nacimiento) VALUES (?, ?, ?)',
-        [uuid(), hijoPerfilId, hijo_fecha_nacimiento]
-      );
-
-      // Link parent-child. Ojo: tipo_vinculo describe la RELACION familiar
-      // ('padre'|'madre'|'tutor'), no el rol del usuario, asi que no se renombra.
-      // Y ahora se guarda la que declaró el titular, no una fija: antes una
-      // madre quedaba asentada como si fuera el padre.
-      await insert(
-        'INSERT INTO familias (id, padre_perfil_id, deportista_perfil_id, tipo_vinculo) VALUES (?, ?, ?, ?)',
-        [uuid(), perfilId, hijoPerfilId, vinculo]
-      );
-
-      // Constancia del consentimiento DEL JUEGOR, otorgado por el
-      // representante. El titular es el menor; el otorgante es el adulto.
-      // Confundir esos dos campos es justo el error que hace imposible
-      // responder quién consintió qué.
+      // Constancia del consentimiento del titular.
       await registrarConsentimientos({
-        titularPerfilId: hijoPerfilId,
-        otorgantePerfilId: perfilId,
-        otorganteTipo: vinculo as 'padre' | 'madre' | 'tutor',
-        vinculo,
-        finalidades: consHijo.finalidades,
-        edadAlOtorgar: edadHijo,
+        titularPerfilId: perfilId,
+        otorganteTipo: 'titular',
+        finalidades: consAdulto.finalidades,
+        edadAlOtorgar: null,
         ip,
         userAgent,
         canal: 'registro',
+        conn,
       });
 
-      // La opinión del menor se guarda SIEMPRE, incluso cuando no se le
-      // preguntó. "No se le preguntó" es información: dice que el club no
-      // detectó a alguien que tenía derecho a opinar.
-      await registrarOpinionMenor({
-        menorPerfilId: hijoPerfilId,
-        consulta: 'documentacion_dni',
-        opinion: (hijo_opinion as Opinion) ?? 'no_consultado',
-        origen: 'transmitida_por_representante',
-        recogidaPor: perfilId,
-        edadAlConsultar: edadHijo,
+      // Un jugador que se registra por su cuenta también necesita ficha de
+      // deportista. Antes no se creaba, y el resultado era una cuenta con rol
+      // de cadete que no estaba en ninguna lista: invisible para el panel de
+      // jugadores y sin lugar donde guardar nada.
+      if (rol === 'socio_cadete') {
+        await conn.execute(
+          'INSERT INTO deportistas (id, perfil_id, fecha_nacimiento) VALUES (?, ?, ?)',
+          [uuid(), perfilId, fechaNacimientoPropia]
+        );
+      }
+
+      // If padre and child data provided
+      let tokenHijo: string | null = null;
+      if (registraHijo && consHijo?.ok) {
+        await conn.execute(
+          'INSERT INTO usuarios (id, email, password_hash, rol) VALUES (?, ?, ?, ?)',
+          [hijoUserId, hijoEmailVal, hijoHash, 'socio_cadete']
+        );
+
+        await conn.execute(
+          'INSERT INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, correo) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            hijoPerfilId, hijoUserId, 'socio_cadete',
+            hijoNombreVal, hijoApellidoVal, hijoDniFinal, hijoEmailVal,
+          ]
+        );
+
+        await conn.execute(
+          'INSERT INTO deportistas (id, perfil_id, fecha_nacimiento) VALUES (?, ?, ?)',
+          [uuid(), hijoPerfilId, hijo_fecha_nacimiento]
+        );
+
+        // Link parent-child. Ojo: tipo_vinculo describe la RELACION familiar
+        // ('padre'|'madre'|'tutor'), no el rol del usuario, asi que no se renombra.
+        // Y ahora se guarda la que declaró el titular, no una fija: antes una
+        // madre quedaba asentada como si fuera el padre.
+        await conn.execute(
+          'INSERT INTO familias (id, padre_perfil_id, deportista_perfil_id, tipo_vinculo) VALUES (?, ?, ?, ?)',
+          [uuid(), perfilId, hijoPerfilId, vinculo]
+        );
+
+        // Constancia del consentimiento DEL JUEGOR, otorgado por el
+        // representante. El titular es el menor; el otorgante es el adulto.
+        // Confundir esos dos campos es justo el error que hace imposible
+        // responder quién consintió qué.
+        await registrarConsentimientos({
+          titularPerfilId: hijoPerfilId,
+          otorgantePerfilId: perfilId,
+          otorganteTipo: vinculo as 'padre' | 'madre' | 'tutor',
+          vinculo,
+          finalidades: consHijo.finalidades,
+          edadAlOtorgar: edadHijo,
+          ip,
+          userAgent,
+          canal: 'registro',
+          conn,
+        });
+
+        // La opinión del menor se guarda SIEMPRE, incluso cuando no se le
+        // preguntó. "No se le preguntó" es información: dice que el club no
+        // detectó a alguien que tenía derecho a opinar.
+        await registrarOpinionMenor({
+          menorPerfilId: hijoPerfilId,
+          consulta: 'documentacion_dni',
+          opinion: (hijo_opinion as Opinion) ?? 'no_consultado',
+          origen: 'transmitida_por_representante',
+          recogidaPor: perfilId,
+          edadAlConsultar: edadHijo,
+          conn,
+        });
+
+        // El token del hijo se anota acá, pero el correo se manda después del
+        // commit. Es el mismo camino que el del padre, por eso no hay dos finales
+        // distintos que recordar.
+        tokenHijo = await generarTokenVerificacion(hijoUserId, conn);
+      }
+
+      const tokenPadre = await generarTokenVerificacion(userId, conn);
+      return { tokenPadre, tokenHijo };
+    });
+
+    // -------------------------------------------------------------------------
+    // Commit hecho. Ahora sí se manda el correo.
+    // -------------------------------------------------------------------------
+    // El hijo también tiene que verificar su email para poder entrar.
+    if (tokenHijo) {
+      await enviarVerificacion({
+        email: hijoEmailVal,
+        nombre: hijoNombreVal,
+        token: tokenHijo,
+        baseUrl: base,
       });
-
-      // El hijo también tiene que verificar su email para poder entrar.
-      await generarYEnviarVerificacion(
-        hijoUserId, hijoEmailVal, hijoNombreVal, getBaseUrl(request)
-      );
-
-      childId = hijoPerfilId;
     }
 
-    // Verificación de email: se manda el link pero NO se abre sesión.
-    // El usuario tiene que confirmar su email antes de poder entrar.
-    const base = getBaseUrl(request);
-    const { ok: emailEnviado, devToken } = await generarYEnviarVerificacion(
-      userId, emailVal, nombre, base
-    );
+    const padre = await enviarVerificacion({
+      email: emailVal,
+      nombre,
+      token: tokenPadre,
+      baseUrl: base,
+    });
 
     // Si el envío falló de verdad (no es lo mismo que "no hay API key"), la
     // cuenta queda creada pero bloqueada: se loguea para que el club lo
     // resuelva con /api/auth/resend-verification o desde el panel.
-    if (!emailEnviado && !devToken) {
+    if (!padre.ok) {
       console.error(`No se pudo enviar la verificación a ${emailVal} (usuario ${userId})`);
     }
 
     const response = NextResponse.json({
       success: true,
       userId,
-      childId,
+      childId: registraHijo ? hijoPerfilId : null,
       requiresVerification: true,
       // Solo si RESEND_API_KEY no está configurado (dev): se muestra el link
       // en pantalla para poder completar la verificación sin email.
-      devVerificationUrl: devToken ? `${base}/verificar?token=${devToken}` : undefined,
+      devVerificationUrl: padre.ok ? undefined : `${base}/verificar?token=${tokenPadre}`,
     });
     return response;
   } catch (err: any) {

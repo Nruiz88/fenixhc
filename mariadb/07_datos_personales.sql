@@ -17,6 +17,8 @@
 --
 -- Idempotente: se puede correr más de una vez.
 
+USE club_fenix;
+
 -- ------------------------------------------------------------
 -- Bitácora de accesos a documentos sensibles
 -- ------------------------------------------------------------

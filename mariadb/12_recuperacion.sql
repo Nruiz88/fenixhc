@@ -23,6 +23,8 @@
 
 SET NAMES utf8mb4;
 
+USE club_fenix;
+
 -- SHA-256 del token, nunca el token en claro. Alguien que lea esta tabla no
 -- puede abrir la cuenta de nadie.
 ALTER TABLE usuarios
@@ -44,20 +46,25 @@ ALTER TABLE usuarios
 -- El lookup principal es `WHERE reset_token = ?`. Sin índice propio, MySQL
 -- recorre la tabla entera en cada intento de recuperación: se vuelven a
 -- preguntar todos los que perdieron la clave, juntos.
-SET @idx := (
-  SELECT IFNULL(
-    (SELECT CONCAT('ALTER TABLE usuarios ADD INDEX idx_usuarios_reset (reset_token)')
-       FROM information_schema.STATISTICS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = 'usuarios'
-        AND INDEX_NAME = 'idx_usuarios_reset'
-      LIMIT 1),
-    'SELECT 1'
-  )
-);
-PREPARE stmt FROM @idx;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
+--
+-- El orden de las dos ramas importa y antes estaba invertido. El patrón
+-- correcto es el de 04: si el índice YA existe, no se hace nada; si NO existe,
+-- se crea. La versión anterior elegía las ramas al revés, así que:
+--
+--   - con el índice presente, intentaba volver a crearlo y fallaba;
+--   - con el índice ausente (el caso normal), caía en 'SELECT 1' y no creaba
+--     nada, en silencio.
+--
+-- O sea: el índice nunca se creaba y el script todavía decía que había salido
+-- bien. Se detectó mirando SHOW INDEX en la base de producción.
+SET @sql = (SELECT IF(
+  (SELECT COUNT(*) FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'usuarios'
+      AND INDEX_NAME = 'idx_usuarios_reset') > 0,
+  'SELECT 1',
+  'ALTER TABLE usuarios ADD INDEX idx_usuarios_reset (reset_token)'
+));
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ------------------------------------------------------------
 -- Verificación

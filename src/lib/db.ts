@@ -54,6 +54,17 @@ export async function closePool() {
 }
 
 /**
+ * Lo mínimo que hace falta para correr un INSERT/UPDATE/DELETE.
+ *
+ * Sirve para que una función acepte "o el pool o una conexión de una
+ * transacción" sin importar cuál. Es lo que permite que algo que hoy abre su
+ * propia transacción pase a formar parte de la de otro sin reescribir su SQL.
+ */
+export interface Ejecutable {
+  execute(sql: string, values?: any[]): Promise<any>;
+}
+
+/**
  * Corre una función dentro de una transacción: si lanza, se revierte todo.
  *
  * Existe por la baja de datos personales. Ese procedimiento toca seis tablas

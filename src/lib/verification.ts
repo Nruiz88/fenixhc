@@ -6,7 +6,7 @@
 // verificar) y expira.
 
 import { randomBytes, createHash } from 'crypto';
-import { execute, query } from './db';
+import { execute, query, type Ejecutable } from './db';
 import { sendEmail, verificacionEmail } from './email';
 
 const TTL_HORAS = 24;
@@ -21,8 +21,55 @@ export interface VerifyResult {
 }
 
 /**
+ * Genera el token y lo deja anotado en la base. NO envía nada.
+ *
+ * Existe separada del envío a propósito. El alta de un socio escribe en cinco
+ * tablas y tiene que ir en una transacción; mandar el correo desde adentro
+ * significa mantener esa transacción abierta durante una llamada a la red, y
+ * que un correo lento o caído haga perder el alta entera. También al revés: un
+ * correo que salió no se puede deshacer con un ROLLBACK.
+ *
+ * El orden correcto es: transacción con las escrituras (incluido el token),
+ * commit, y recién ahí el envío. Si el envío falla, la cuenta queda creada y
+ * bloqueada, que es un estado que la secretaría puede resolver; lo que nunca
+ * puede pasar es una cuenta a medio crear.
+ */
+export async function generarTokenVerificacion(
+  usuarioId: string,
+  conn?: Ejecutable | null
+): Promise<string> {
+  const token = randomBytes(32).toString('hex');
+  const sql = `UPDATE usuarios
+      SET verification_token = ?, verification_expires_at = DATE_ADD(NOW(), INTERVAL ? HOUR), verification_sent_at = NOW()
+    WHERE id = ?`;
+
+  if (conn) {
+    await conn.execute(sql, [hashToken(token), TTL_HORAS, usuarioId]);
+  } else {
+    await execute(sql, [hashToken(token), TTL_HORAS, usuarioId]);
+  }
+  return token;
+}
+
+/** Manda el correo de verificación. No toca la base. */
+export async function enviarVerificacion(opts: {
+  email: string;
+  nombre: string;
+  token: string;
+  baseUrl: string;
+}): Promise<{ ok: boolean }> {
+  const link = `${opts.baseUrl}/verificar?token=${opts.token}`;
+  const { subject, html, text } = verificacionEmail({ nombre: opts.nombre, link });
+  const res = await sendEmail({ to: opts.email, subject, html, text });
+  return { ok: res.sent };
+}
+
+/**
  * Genera un token, lo hashea en la base y envía el email con el link.
  * Devuelve el token en claro solo para poder armar el link en el email.
+ *
+ * Es la composición de las dos de arriba, para los llamadores que no tienen
+ * una transacción abierta (resend-verification, /api/auth/me).
  */
 export async function generarYEnviarVerificacion(
   usuarioId: string,
@@ -30,23 +77,12 @@ export async function generarYEnviarVerificacion(
   nombre: string,
   baseUrl: string
 ): Promise<{ ok: boolean; devToken?: string }> {
-  const token = randomBytes(32).toString('hex');
-  const hash = hashToken(token);
-
-  await execute(
-    `UPDATE usuarios
-        SET verification_token = ?, verification_expires_at = DATE_ADD(NOW(), INTERVAL ? HOUR), verification_sent_at = NOW()
-      WHERE id = ?`,
-    [hash, TTL_HORAS, usuarioId]
-  );
-
-  const link = `${baseUrl}/verificar?token=${token}`;
-  const { subject, html, text } = verificacionEmail({ nombre, link });
-  const res = await sendEmail({ to: email, subject, html, text });
+  const token = await generarTokenVerificacion(usuarioId);
+  const { ok } = await enviarVerificacion({ email, nombre, token, baseUrl });
 
   // Si no hay API key (dev / deploy sin configurar) devolvemos el token para
   // poder mostrar el link en pantalla en vez de dejar al usuario sin salida.
-  return { ok: res.sent, devToken: res.sent ? undefined : token };
+  return { ok, devToken: ok ? undefined : token };
 }
 
 /** Verifica el token recibido y marca el email como verificado. */

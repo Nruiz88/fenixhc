@@ -27,6 +27,8 @@
 
 SET NAMES utf8mb4;
 
+USE club_fenix;
+
 -- El DNI de quien pide la baja. Llega en texto porque a veces se escribe con
 -- puntos o guiones, y el objetivo es que el admin lo use para encontrar la
 -- ficha, no para validarlo automáticamente.

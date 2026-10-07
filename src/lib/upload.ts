@@ -42,9 +42,22 @@ export async function uploadAvatar(_userId: string, file: File): Promise<string 
   return uploadFile('fotos-perfil', `avatar.${ext}`, file);
 }
 
-export async function uploadDni(_userId: string, file: File, side: 'frente' | 'fondo'): Promise<string | null> {
+/**
+ * Sube una cara del DNI de un jugador.
+ *
+ * `perfilId` es el perfil del JUGADOR, no el del usuario que escribe. Va en el
+ * nombre a propósito: los archivos cuelgan de la carpeta del usuario que sube
+ * (`uploadFile` antepone `me.id`), así que sin esto un padre con dos hijos
+ * escribía en el mismo archivo — `dni-frente.jpg` — y el segundo pisaba al
+ * primero. `deportistas.dni_frente_url` quedaba apuntando a la misma URL para
+ * los dos, y el club veía la cara de un hermano en el legajo del otro.
+ *
+ * La carpeta sigue siendo la del padre, y por eso la autorización no cambia:
+ * `/api/upload` valida el primer segmento contra el usuario autenticado.
+ */
+export async function uploadDni(perfilId: string, file: File, side: 'frente' | 'fondo'): Promise<string | null> {
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  return uploadFile('fotos-dni', `dni-${side}.${ext}`, file);
+  return uploadFile('fotos-dni', `dni-${perfilId}-${side}.${ext}`, file);
 }
 
 export async function uploadComprobante(cuotaId: string, file: File): Promise<string | null> {

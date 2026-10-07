@@ -33,6 +33,8 @@
 --
 -- Idempotente: se puede correr más de una vez sin romper nada.
 
+USE club_fenix;
+
 -- ------------------------------------------------------------
 -- Configuración general del club (clave/valor)
 -- ------------------------------------------------------------

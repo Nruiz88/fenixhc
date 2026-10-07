@@ -26,6 +26,8 @@
 
 SET NAMES utf8mb4;
 
+USE club_fenix;
+
 -- Las FK y los índices tienen nombres que cambian entre instalaciones, así
 -- que en vez de asumirlos sesucelen primero.
 SELECT CONSTRAINT_NAME AS fk_de_usuario

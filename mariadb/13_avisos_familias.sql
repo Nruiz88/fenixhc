@@ -37,6 +37,8 @@
 
 SET NAMES utf8mb4;
 
+USE club_fenix;
+
 CREATE TABLE IF NOT EXISTS avisos_familias (
   id CHAR(36) PRIMARY KEY,
 
