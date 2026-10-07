@@ -28,6 +28,11 @@ const FICTICIOS: Array<{ patron: RegExp; motivo: string }> = [
   { patron: /sobre\s*hierba/i, motivo: 'deporte que el club no practica' },
   { patron: /\b1995\b/, motivo: 'fundacion inventada, el club se fundo en 2026' },
   { patron: /25\s*a[nñ]os\s+de\s+historia/i, motivo: 'antiguedad inventada' },
+  { patron: /admin@club\.com/i, motivo: 'correo de ejemplo, no es del club' },
+  { patron: /\+54\s*11\b/, motivo: 'prefijo de Buenos Aires, el club esta en Neuquen' },
+  // "CABA" sola, sin domicilio: aparecio en el placeholder de un input de
+  // contacto y en un comentario de ejemplo de rateLimit.
+  { patron: /\bCABA\b/, motivo: 'referencia a Ciudad de Buenos Aires, el club esta en Neuquen' },
 ];
 
 function archivosSrc(dir: string = SRC, acc: string[] = []): string[] {

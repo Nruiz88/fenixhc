@@ -353,7 +353,7 @@ export default function RegistroPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-gray-400 text-sm">Teléfono</Label>
-                    <Input value={form.telefono} onChange={e => update('telefono', e.target.value)} placeholder="+54 11 5555 0000" className="bg-gray-800 border-gray-700 text-white" />
+                    <Input value={form.telefono} onChange={e => update('telefono', e.target.value)} placeholder="+54 9 299 000-0000" className="bg-gray-800 border-gray-700 text-white" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-gray-400 text-sm">Dirección</Label>

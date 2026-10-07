@@ -28,7 +28,7 @@ function cleanup(now: number) {
 
 /**
  * Devuelve true si la petición está permitida, false si superó el límite.
- * @param key    identificador único (ej: "login:1.2.3.4" o "login:admin@club.com")
+ * @param key    identificador único (ej: "login:1.2.3.4" o "login:socio@ejemplo.com")
  * @param limit  cantidad máxima de intentos en la ventana
  * @param windowMs duración de la ventana en ms
  */

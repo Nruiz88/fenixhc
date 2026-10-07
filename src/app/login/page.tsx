@@ -72,7 +72,7 @@ function LoginForm() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="admin@club.com"
+                placeholder="tu@email.com"
                 required
                 autoComplete="email"
                 className="w-full h-12 px-4 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder:text-gray-600 focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none"
