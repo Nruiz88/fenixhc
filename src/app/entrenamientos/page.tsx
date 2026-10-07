@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Clock, MapPin, Calendar, ChevronRight, Target, Zap, Brain, Swords, Trophy, Dumbbell, Timer, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
+import { CLUB_INFO } from '@/lib/constants';
 
 const TIPOS_CONFIG: Record<string, { icon: any; color: string; bgLight: string; accent: string; gradient: string }> = {
   'Técnico': { icon: Target, color: '#DC2626', bgLight: 'bg-[#DC2626]/10', accent: '#DC2626', gradient: 'from-[#DC2626] to-[#B91C1C]' },
@@ -289,14 +290,12 @@ export default function EntrenamientosPage() {
                       <MapPin className="h-6 w-6 text-[#DC2626]" />
                     </div>
                     <div>
-                      <h3 className="font-bold text-white text-lg mb-1">Cancha Principal</h3>
-                      <p className="text-sm text-gray-400">Av. Libertador 1234, CABA</p>
-                      <p className="text-xs text-gray-500 mt-2">Césped sintético de última generación con iluminación artificial para entrenamientos nocturnos.</p>
-                      <div className="flex gap-2 mt-4">
-                        <span className="px-2.5 py-1 rounded-lg bg-gray-800 text-[10px] text-gray-400 uppercase tracking-wider">91x55m</span>
-                        <span className="px-2.5 py-1 rounded-lg bg-gray-800 text-[10px] text-gray-400 uppercase tracking-wider">Iluminación</span>
-                        <span className="px-2.5 py-1 rounded-lg bg-gray-800 text-[10px] text-gray-400 uppercase tracking-wider">Vestuarios</span>
-                      </div>
+                      <h3 className="font-bold text-white text-lg mb-1">Dónde entrenamos</h3>
+                      <p className="text-sm text-gray-400">{CLUB_INFO.address}</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Entrenamos en el Estadio Ruca Che. Contar con un espacio
+                        deportivo propio es uno de los objetivos del club.
+                      </p>
                     </div>
                   </div>
                 </CardContent>

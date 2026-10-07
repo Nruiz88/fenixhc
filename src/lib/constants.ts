@@ -93,11 +93,25 @@ export const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
-// Club info
+/**
+ * Datos de contacto del club.
+ *
+ * FUENTE ÚNICA. Antes cada página tenía su copia, y por eso el sitio mostraba
+ * direcciones distintas según dónde se mirara: la de acá, la del pie de la
+ * home (escrito a mano dentro de page.tsx) y las de /contacto y /entrenamientos.
+ * Cuando un dato del club cambia hay que cambiarlo acá y en ningún otro lado.
+ */
 export const CLUB_INFO = {
   name: 'Fenix Roller Hockey',
-  whatsapp: 'https://wa.me/+541155512345',
-  email: 'info@clubhockey.com.ar',
-  address: 'Av. Libertador 1234, CABA',
-  phone: '+54 11 5551 2345',
+  /** Domicilio del club. Es donde se lo contacta por correo. */
+  address: 'Castelli 4306, Neuquén Capital',
+  /** Sede de los entrenamientos. NO es del club: por eso su historia habla de
+   *  "contar con un espacio deportivo propio" como objetivo pendiente. */
+  trainingVenue: 'Estadio Ruca Che',
+  phone: '+54 9 299 416-9607',
+  email: 'accfenixroller@gmail.com',
+  // Formato internacional para wa.me, sin signos.
+  whatsapp: 'https://wa.me/542994169607',
+  foundedYear: 2026,
+  discipline: 'Hockey sobre patines en línea',
 };

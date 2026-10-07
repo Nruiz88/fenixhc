@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { MapPin, Phone, Mail, Clock, Send, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { CLUB_INFO } from '@/lib/constants';
 
 export default function ContactoPage() {
   const [form, setForm] = useState({ nombre: '', correo: '', telefono: '', mensaje: '' });
@@ -118,9 +119,9 @@ export default function ContactoPage() {
             {/* Info */}
             <div className="lg:col-span-2 space-y-4">
               {[
-                { icon: MapPin, label: 'Dirección', value: 'Av. Libertador 1234, CABA', color: 'text-[#DC2626]', bg: 'bg-[#DC2626]/10' },
-                { icon: Phone, label: 'Teléfono', value: '+54 11 5551 2345', color: 'text-blue-400', bg: 'bg-blue-500/10' },
-                { icon: Mail, label: 'Email', value: 'info@clubhockey.com.ar', color: 'text-violet-400', bg: 'bg-violet-500/10' },
+                { icon: MapPin, label: 'Dirección', value: CLUB_INFO.address, color: 'text-[#DC2626]', bg: 'bg-[#DC2626]/10' },
+                { icon: Phone, label: 'Teléfono', value: CLUB_INFO.phone, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+                { icon: Mail, label: 'Email', value: CLUB_INFO.email, color: 'text-violet-400', bg: 'bg-violet-500/10' },
                 { icon: Clock, label: 'Horarios', value: 'Lun-Sáb 10:00 - 18:00', color: 'text-amber-400', bg: 'bg-amber-500/10' },
               ].map((info, i) => (
                 <Card key={i} className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-all">
