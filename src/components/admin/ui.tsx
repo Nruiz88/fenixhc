@@ -139,16 +139,6 @@ export function EmptyState({
 // ------------------------------------------------------------------
 // Estado de carga: placeholder con la forma aproximada del contenido
 // ------------------------------------------------------------------
-export function LoadingRows({ filas = 3 }: { filas?: number }) {
-  return (
-    <div className="space-y-2 p-4" aria-busy="true" aria-label="Cargando">
-      {Array.from({ length: filas }).map((_, i) => (
-        <div key={i} className="h-10 animate-pulse rounded-lg bg-surface-2" />
-      ))}
-    </div>
-  );
-}
-
 // ------------------------------------------------------------------
 // Etiqueta de estado con color semántico
 // ------------------------------------------------------------------

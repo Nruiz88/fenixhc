@@ -42,18 +42,6 @@ export const apellidoSchema = z
   .min(1, 'El apellido es obligatorio')
   .max(100, 'El apellido es demasiado largo');
 
-export const telefonoSchema = z.string().trim().max(30, 'El teléfono es demasiado largo');
-
-export const direccionSchema = z.string().trim().max(255, 'La dirección es demasiado larga');
-
-export const cuilSchema = z
-  .string()
-  .trim()
-  .max(20, 'El CUIL es demasiado largo')
-  .optional()
-  .or(z.literal(''))
-  .transform((v) => (v ? v : null));
-
 /**
  * Esquemas de rol.
  */

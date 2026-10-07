@@ -49,10 +49,6 @@ export function uuid(): string {
 }
 
 // Close pool (for tests)
-export async function closePool() {
-  await pool.end();
-}
-
 /**
  * Lo mínimo que hace falta para correr un INSERT/UPDATE/DELETE.
  *

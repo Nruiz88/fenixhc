@@ -1,4 +1,4 @@
-// Client-side helper to query Supabase through the admin API endpoint
+// Client-side helper to query via the admin API endpoint
 
 interface QueryOptions {
   table: string;

@@ -85,8 +85,5 @@ function createDb(endpoint: string) {
   };
 }
 
-/** Admin API client (requires admin role) */
-export const adminDb = createDb('/api/admin/query');
-
 /** User API client (requires authentication) */
 export const userDb = createDb('/api/user/query');

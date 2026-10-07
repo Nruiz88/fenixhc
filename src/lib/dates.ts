@@ -31,7 +31,3 @@ export function monthEndISO(offset = 0): string {
   d.setMonth(d.getMonth() + offset + 1, 0); // día 0 del mes siguiente = último del actual
   return aISO(d);
 }
-
-export function yearStartISO(): string {
-  return `${new Date().getFullYear()}-01-01`;
-}

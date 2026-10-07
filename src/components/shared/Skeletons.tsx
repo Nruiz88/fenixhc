@@ -18,27 +18,6 @@ export function StatsSkeleton({ count = 4 }: { count?: number }) {
   );
 }
 
-export function TableSkeleton({ rows = 5 }: { rows?: number }) {
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-      <div className="divide-y divide-gray-800">
-        {Array.from({ length: rows }).map((_, i) => (
-          <div key={i} className="px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-10 rounded-xl bg-gray-800 animate-pulse" />
-              <div>
-                <div className="h-4 w-32 bg-gray-800 rounded animate-pulse mb-2" />
-                <div className="h-3 w-48 bg-gray-800 rounded animate-pulse" />
-              </div>
-            </div>
-            <div className="h-8 w-20 bg-gray-800 rounded animate-pulse" />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function CardSkeleton() {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl">
@@ -63,15 +42,6 @@ export function DashboardSkeleton() {
         <CardSkeleton />
         <CardSkeleton />
       </div>
-    </div>
-  );
-}
-
-export function PageHeaderSkeleton() {
-  return (
-    <div className="space-y-2">
-      <div className="h-8 w-64 bg-gray-800 rounded animate-pulse" />
-      <div className="h-4 w-96 bg-gray-800 rounded animate-pulse" />
     </div>
   );
 }

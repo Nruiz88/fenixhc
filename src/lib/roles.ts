@@ -47,29 +47,7 @@ export const ROLES_DIRECTIVA: Rol[] = [
 /** Roles que el publico puede elegir al registrarse (nunca un cargo). */
 export const ROLES_PUBLICOS: Rol[] = ['socio_benefactor', 'socio_cadete'];
 
-export const ROL_ICONO: Record<Rol, string> = {
-  admin: '⚙️',
-  presidente: '🎖️',
-  secretario: '📋',
-  tesorero: '💰',
-  vocal_titular: '🗳️',
-  vocal_suplente: '🗳️',
-  socio_benefactor: '🤝',
-  socio_cadete: '🏃',
-};
-
 /** Colores para el badge del rol en el panel. */
-export const ROL_COLOR: Record<Rol, { bg: string; fg: string }> = {
-  admin: { bg: 'bg-[#DC2626]/20', fg: 'text-[#DC2626]' },
-  presidente: { bg: 'bg-[#DC2626]/15', fg: 'text-[#DC2626]' },
-  secretario: { bg: 'bg-amber-500/20', fg: 'text-amber-400' },
-  tesorero: { bg: 'bg-emerald-500/20', fg: 'text-emerald-400' },
-  vocal_titular: { bg: 'bg-violet-500/20', fg: 'text-violet-400' },
-  vocal_suplente: { bg: 'bg-violet-500/15', fg: 'text-violet-300' },
-  socio_benefactor: { bg: 'bg-blue-500/20', fg: 'text-blue-400' },
-  socio_cadete: { bg: 'bg-cyan-500/20', fg: 'text-cyan-400' },
-};
-
 export const ROL_DESCRIPCION: Record<Rol, string> = {
   admin: 'Acceso total, incluido el panel de configuración.',
   presidente: 'Acceso total a todos los módulos del club.',

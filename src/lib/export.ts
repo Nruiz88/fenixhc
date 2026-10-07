@@ -38,16 +38,6 @@ export function descargarCSV(
   descargarBlob(blob, `${nombreArchivo}_${fechaArchivo()}.csv`);
 }
 
-export function descargarJSON(
-  datos: unknown,
-  nombreArchivo: string,
-) {
-  const blob = new Blob([JSON.stringify(datos, null, 2)], {
-    type: 'application/json;charset=utf-8;',
-  });
-  descargarBlob(blob, `${nombreArchivo}_${fechaArchivo()}.json`);
-}
-
 function descargarBlob(blob: Blob, nombre: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

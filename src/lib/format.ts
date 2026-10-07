@@ -12,11 +12,6 @@ export function money(n: number | string | null | undefined, opts: { decimales?:
 }
 
 /** Importe con signo explícito, para movimientos de caja. */
-export function moneySigned(n: number): string {
-  const v = Number(n ?? 0);
-  return `${v < 0 ? '-' : '+'}${money(Math.abs(v))}`;
-}
-
 /** Porcentaje: 0.153 -> "15,3%" */
 export function percent(n: number | string | null | undefined, decimales = 1): string {
   const v = Number(n ?? 0);

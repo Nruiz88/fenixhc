@@ -59,39 +59,30 @@ export const TABLES_BY_ROLE: Record<Rol, string[]> = {
   socio_cadete: TABLAS_CADETE,
 };
 
-// Validacion rules
-export const VALIDATION = {
-  MIN_PASSWORD_LENGTH: 6,
-  MAX_QUERY_LIMIT: 1000,
-  MAX_FILE_SIZE_MB: 10,
-  ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/webp'],
-  ALLOWED_VIDEO_TYPES: ['video/mp4', 'video/webm'],
-  ALLOWED_PDF_TYPES: ['application/pdf'],
-} as const;
-
 // Route protection: los socios van a su portal, la directiva al panel.
 export const PROTECTED_ROUTES = ['/admin', '/socio-benefactor', '/socio-cadete'];
 
 export function isProtectedRoute(pathname: string): boolean {
   return PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
 }
-
-/** Que tipo de portal corresponde a una ruta. */
-export function getRoleFromPath(pathname: string): Rol | null {
-  if (pathname.startsWith('/admin')) return 'admin';
-  if (pathname.startsWith('/socio-benefactor')) return 'socio_benefactor';
-  if (pathname.startsWith('/socio-cadete')) return 'socio_cadete';
-  return null;
-}
+// Se fueron VALIDATION, getRoleFromPath y MESES, que nadie importaba.
+//
+// VALIDATION era una trampa: sus limites viven donde se aplican, no en un
+// objeto que nadie leia. El minimo de contrasena esta en schemas.ts
+// (MIN_PASSWORD_LENGTH), el tope de consulta en la whitelist de tablas, y el
+// limite de tamano y los tipos de archivo en la ruta que valida la subida.
+// Tenerlos en un solo objeto daba la falsa impresion de que cambiar ahi
+// alcanzaba.
+//
+// getRoleFromPath quedo reemplazado por moduloDeRutaCompleto en lib/roles.ts,
+// que ademas no tiene el caso "ruta que no es de un portal".
+//
+// MESES nunca se importo: cada modulo que necesita meses tiene su lista
+// local, con el formato que necesita (mayusculas o minusculas).
 
 export { ROLES, ROLES_DIRECTIVA };
 export type { Rol };
 
-// Month names
-export const MESES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
-];
 
 /**
  * Datos de contacto del club.

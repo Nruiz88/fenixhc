@@ -72,6 +72,31 @@ npm run lint    # eslint
 | `mariadb/` | Migraciones, en orden. Todas idempotentes |
 | `tests/` | Tests de lógica: fechas, importes, roles, consentimiento, seguridad |
 
+## Lo que no está, y por qué
+
+- **`supabase/`**: se borró. La app pasó de Supabase a MariaDB y quedaron 19
+  archivos con el esquema viejo, la RLS y una lista de socios de ejemplo con DNI
+  y CUIL. Nada los referenciaba. El esquema real está en `mariadb/`.
+- **`generate-all.js`**: se borró. Sobreescribía seis páginas con una versión
+  obsoleta del club (roles `padre`/`deportista`, datos de contacto que ya no
+  existen) y no estaba en ningún script de `package.json`.
+- **Primitivas de UI sin uso** (`tabs`, `table`, `separator`, `dropdown-menu`):
+  ~500 líneas de componentes de shadcn que nadie importaba.
+- **`src/hooks/useUser.ts` y `src/types/index.ts`**: borrados; lo único que los
+  usaba era cada uno del otro.
+- **`VALIDATION` en `constants.ts`**: era una trampa. Sus límites viven donde se
+  aplican (el mínimo de contraseña en `schemas.ts`, el tope de consulta en la
+  whitelist de tablas, el límite de tamaño en la ruta de subida). Tenerlos en un
+  objeto que nadie leía daba la falsa impresión de que cambiar ahí alcanzaba.
+- **`createClient` y `buildQuery` en `auth-client.ts`**: emulaban la API del
+  cliente de Supabase para que el código viejo siguiera andando. Ya no queda
+  código viejo.
+- **Dependencias sin uso**: `@react-pdf/renderer`, `date-fns`, `tw-animate-css`,
+  `web-push`, `xlsx`, `next-themes`.
+
+`tests/sin-codigo-muerto.test.ts` vigila que nada de esto vuelva a aparecer y
+que cada import con alias `@/` apunte a un archivo existente.
+
 ## Decisiones que conviene conocer antes de tocar algo
 
 - **El consentimiento se presta por persona, no por familia.** El padre firma

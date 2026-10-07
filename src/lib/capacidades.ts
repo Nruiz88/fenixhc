@@ -208,9 +208,4 @@ export function esTesorero(rol: string | undefined | null): boolean {
  *    deja de ser interna.
  *  - `ver_parte_financiero`: los números del club.
  *  - `gestionar_seguro`: los datos de salud de los pibes.
- */
-export const NO_CONFIGURABLES: readonly Capacidad[] = [
-  'ver_comunicacion_interna',
-  'ver_parte_financiero',
-  'gestionar_seguro',
-];
+ */

@@ -24,10 +24,6 @@ function getClient(): Resend | null {
   return client;
 }
 
-export function emailEnabled(): boolean {
-  return !!process.env.RESEND_API_KEY;
-}
-
 export interface SendResult {
   sent: boolean;
   /** 'enviado' = entregado a Resend. 'sin-key' = no había API key. */

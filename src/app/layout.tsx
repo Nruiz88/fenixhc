@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,7 +21,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
-      <body className="min-h-full flex flex-col bg-gray-950 text-white" suppressHydrationWarning>{children}</body>
+      <body className="min-h-full flex flex-col bg-gray-950 text-white" suppressHydrationWarning>
+        {children}
+        {/* Sin esto ningun toast() de la app se ve: los avisos de "guardado" y
+            de "error" se disparan pero no se renderizan. */}
+        <Toaster />
+      </body>
     </html>
   );
 }

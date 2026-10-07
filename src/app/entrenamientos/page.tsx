@@ -43,7 +43,7 @@ export default function EntrenamientosPage() {
     const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     setHoy(dias[new Date().getDay()]);
 
-    // Fetch from Supabase
+    // Horarios de entrenamiento, via la API publica
     fetch('/api/public/query', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

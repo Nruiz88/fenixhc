@@ -39,10 +39,6 @@ export async function obtenerConfigCuotas(): Promise<ConfigCuotasCliente> {
   }
 }
 
-export function limpiarCacheConfigCuotas() {
-  cache = null;
-}
-
 /**
  * Hook que devuelve la función de cálculo del recargo.
  *

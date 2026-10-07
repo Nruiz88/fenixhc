@@ -122,6 +122,25 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Avisos emergentes (toast). Son los "guardado" y los "error" de toda la app.
+   El icono lo pone el componente; acá solo el marco. Sin esto el aviso aparece
+   sin fondo sobre el fondo del panel y no se distingue. */
+.cn-toast {
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-weight: 500;
+}
+.cn-toast[data-type="error"] {
+  border-color: var(--danger);
+}
+.cn-toast[data-type="success"] {
+  border-color: var(--ok);
+}
+.cn-toast[data-type="warning"] {
+  border-color: var(--warn);
+}
+
 /* Impresión: el panel a veces se imprime o se exporta a PDF. */
 @media print {
   .no-print {
