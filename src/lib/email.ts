@@ -8,7 +8,13 @@
 
 import { Resend } from 'resend';
 
-const FROM = process.env.EMAIL_FROM || 'Fenix Roller Hockey <noreply@clubhockey.com.ar>';
+// El dominio por defecto tiene que ser el verificado en Resend. Antes caía en
+// clubhockey.com.ar, un dominio que el club no tiene: si faltaba EMAIL_FROM,
+// los correos salían de un remitente que nadie podía autenticar y Resend los
+// rechazaba. En producción EMAIL_FROM está seteado, así que el cambio solo
+// afecta al fallback, pero ese fallback es justamente el que se usa cuando algo
+// sale mal.
+const FROM = process.env.EMAIL_FROM || 'Fenix Roller Hockey <noreply@fenixhockey.com.ar>';
 
 let client: Resend | null = null;
 function getClient(): Resend | null {

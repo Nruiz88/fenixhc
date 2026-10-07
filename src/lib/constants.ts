@@ -101,6 +101,26 @@ export const MESES = [
  * home (escrito a mano dentro de page.tsx) y las de /contacto y /entrenamientos.
  * Cuando un dato del club cambia hay que cambiarlo acá y en ningún otro lado.
  */
+/**
+ * Convierte el teléfono mostrado en un enlace de wa.me.
+ *
+ * El "9" que se pone después del código de país (+54 9 299...) es solo para
+ * discado nacional: dentro del país se marca 0299 416-9607. En la URL de
+ * WhatsApp sobra, y si se deja el enlace mal armado el club deja de recibir
+ * mensajes.
+ *
+ * Se deriva del teléfono en vez de escribirse aparte para que cambiar uno
+ * cambie el otro.
+ */
+function whatsappDe(telefono: string): string {
+  const digitos = telefono.replace(/\D/g, '');
+  // "54" + "9" + "299..." -> se saca el 9, que ocupa el índice 2.
+  const sinPrefijoMovil = digitos.startsWith('549') ? digitos.slice(0, 2) + digitos.slice(3) : digitos;
+  return `https://wa.me/${sinPrefijoMovil}`;
+}
+
+const TELEFONO = '+54 9 299 416-9607';
+
 export const CLUB_INFO = {
   name: 'Fenix Roller Hockey',
   /** Domicilio del club. Es donde se lo contacta por correo. */
@@ -108,10 +128,9 @@ export const CLUB_INFO = {
   /** Sede de los entrenamientos. NO es del club: por eso su historia habla de
    *  "contar con un espacio deportivo propio" como objetivo pendiente. */
   trainingVenue: 'Estadio Ruca Che',
-  phone: '+54 9 299 416-9607',
+  phone: TELEFONO,
   email: 'accfenixroller@gmail.com',
-  // Formato internacional para wa.me, sin signos.
-  whatsapp: 'https://wa.me/542994169607',
+  whatsapp: whatsappDe(TELEFONO),
   foundedYear: 2026,
   discipline: 'Hockey sobre patines en línea',
 };
