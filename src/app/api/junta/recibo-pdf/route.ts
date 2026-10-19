@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { puede } from '@/lib/capacidades';
+import { rolesDeUsuario } from '@/lib/roles';
 import { obtenerRecibo, marcarReciboDescargado } from '@/lib/junta-db';
 import PDFDocument from 'pdfkit';
 import { fechaLargaDesdeDb } from '@/lib/junta-validacion';
@@ -184,7 +185,7 @@ export async function GET(request: NextRequest) {
     if ('error' in auth) {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
-    if (!puede(auth.user.rol, 'emitir_recibos')) {
+    if (!puede(rolesDeUsuario(auth.user), 'emitir_recibos')) {
       return NextResponse.json(
         { error: 'Tu cargo no tiene permiso para emitir recibos.' },
         { status: 403 }

@@ -3,14 +3,14 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
-  ROLES, ROL_LABEL, ROL_DESCRIPCION, ROLES_DIRECTIVA, type Rol,
+  ROLES, ROL_LABEL, ROL_DESCRIPCION, esDirectiva, tieneRol, type Rol,
 } from '@/lib/roles';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Hint } from '@/components/admin/ui';
-import { Save, KeyRound, AlertTriangle, Loader2 } from 'lucide-react';
+import { Save, KeyRound, AlertTriangle, Loader2, Check } from 'lucide-react';
 
 export interface UsuarioEditable {
   id: string;
@@ -21,7 +21,10 @@ export interface UsuarioEditable {
   cuil: string | null;
   telefono: string | null;
   direccion: string | null;
+  /** Rol principal (compatibilidad con filas viejas). */
   rol: Rol;
+  /** Lista completa de roles. */
+  roles: Rol[];
   email_verificado: number;
   created_at: string;
 }
@@ -34,23 +37,27 @@ const FORM_VACIO = {
   cuil: '',
   telefono: '',
   direccion: '',
-  rol: 'socio_benefactor' as Rol,
+  roles: ['socio_benefactor'] as Rol[],
   password: '',
 };
 
-/** Qué le pasa a la persona cuando se le cambia el rol. */
-function consecuencia(anterior: Rol, nuevo: Rol): string | null {
-  if (anterior === nuevo) return null;
-  if (nuevo === 'socio_cadete' && ROLES_DIRECTIVA.includes(anterior)) {
-    return 'Deja de tener acceso al panel y entra por su propio portal como socio cadete.';
-  }
-  if (ROLES_DIRECTIVA.includes(nuevo) && !ROLES_DIRECTIVA.includes(anterior)) {
+function mismosRoles(a: readonly Rol[], b: readonly Rol[]): boolean {
+  return a.length === b.length && a.every((r) => b.includes(r));
+}
+
+/** Qué le pasa a la persona cuando se le cambian los roles. */
+function consecuencia(anterior: readonly Rol[], nuevo: readonly Rol[]): string | null {
+  if (mismosRoles(anterior, nuevo)) return null;
+  if (!esDirectiva(anterior) && esDirectiva(nuevo)) {
     return 'Empieza a tener acceso al panel de administración.';
   }
-  if (ROL_LABEL[nuevo] !== anterior) {
-    return 'Va a ver las pantallas de su nuevo rol en lugar de las del anterior.';
+  if (esDirectiva(anterior) && !esDirectiva(nuevo)) {
+    return 'Deja de tener acceso al panel y vuelve a su portal de socio.';
   }
-  return null;
+  if (!tieneRol(anterior, 'socio_cadete') && tieneRol(nuevo, 'socio_cadete')) {
+    return 'Se le crea la ficha de jugador para que pueda usar el portal de socio cadete.';
+  }
+  return 'Va a ver las pantallas de sus nuevos roles en lugar de las de los anteriores.';
 }
 
 export function DialogoEditarUsuario({
@@ -82,7 +89,7 @@ export function DialogoEditarUsuario({
       cuil: usuario.cuil ?? '',
       telefono: usuario.telefono ?? '',
       direccion: usuario.direccion ?? '',
-      rol: usuario.rol,
+      roles: usuario.roles?.length ? usuario.roles : [usuario.rol],
       password: '',
     });
     setCambioPassword(false);
@@ -90,7 +97,26 @@ export function DialogoEditarUsuario({
 
   if (!usuario) return null;
 
-  const consecuenciaRol = consecuencia(usuario.rol, form.rol);
+  const rolesActuales = usuario.roles?.length ? usuario.roles : [usuario.rol];
+  // El rol de admin no se puede desmarcar ni en la propia cuenta ni cuando es
+  // el único del club. Sí se pueden agregar otros roles alrededor.
+  const adminBloqueado =
+    tieneRol(rolesActuales, 'admin') && (soyYo || soyElUnicoAdmin);
+
+  function alternarRol(r: Rol) {
+    if (r === 'admin' && adminBloqueado) return;
+    setForm((f) => {
+      const activo = f.roles.includes(r);
+      // Nunca dejar la cuenta sin ningún rol.
+      if (activo && f.roles.length === 1) return f;
+      return {
+        ...f,
+        roles: activo ? f.roles.filter((x) => x !== r) : [...f.roles, r],
+      };
+    });
+  }
+
+  const consecuenciaRol = consecuencia(rolesActuales, form.roles);
   const emailCambiado = form.correo.trim() !== (usuario.correo ?? '');
   const sinCambios =
     form.nombre === (usuario.nombre ?? '') &&
@@ -100,7 +126,7 @@ export function DialogoEditarUsuario({
     form.cuil === (usuario.cuil ?? '') &&
     form.telefono === (usuario.telefono ?? '') &&
     form.direccion === (usuario.direccion ?? '') &&
-    form.rol === usuario.rol &&
+    mismosRoles(form.roles, usuario.roles ?? [usuario.rol]) &&
     !cambioPassword;
 
   async function guardar(e: React.FormEvent) {
@@ -121,7 +147,7 @@ export function DialogoEditarUsuario({
           cuil: form.cuil.trim(),
           telefono: form.telefono.trim(),
           direccion: form.direccion.trim(),
-          rol: form.rol,
+          roles: form.roles,
           // Solo se manda la contraseña si el admin decidió cambiarla; si no,
           // mandar string vacío le borraría la clave actual.
           ...(cambioPassword ? { password: form.password } : {}),
@@ -160,38 +186,44 @@ export function DialogoEditarUsuario({
         <DialogHeader>
           <DialogTitle>Editar {usuario.nombre} {usuario.apellido}</DialogTitle>
           <DialogDescription>
-            Cambiar el rol define qué pantallas ve la persona y dónde entra al
-            iniciar sesión.
+            Los roles definen qué pantallas ve la persona y dónde entra al
+            iniciar sesión. Se pueden combinar.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={guardar} className="space-y-4">
-          {/* Rol */}
+          {/* Roles */}
           <div className="space-y-1.5">
-            <Label>Rol *</Label>
+            <Label>Roles *</Label>
+            <p className="text-[11px] text-dim">
+              Podés asignar más de uno. Los permisos del panel se suman.
+            </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {ROLES.map((r) => {
-                const bloqueado = soyYo && usuario.rol === 'admin';
+                const activo = form.roles.includes(r);
+                const bloqueado = r === 'admin' && adminBloqueado;
                 return (
                   <button
                     key={r}
                     type="button"
                     disabled={bloqueado}
-                    onClick={() => setForm({ ...form, rol: r })}
+                    onClick={() => alternarRol(r)}
+                    aria-pressed={activo}
                     title={
                       bloqueado
-                        ? 'No podés cambiar tu propio rol'
+                        ? 'No se puede quitar el rol de administrador'
                         : ROL_DESCRIPCION[r]
                     }
                     className={
-                      form.rol === r
+                      activo
                         ? 'min-w-0 rounded-lg border border-brand bg-brand/10 p-2.5 text-left transition-colors'
                         : bloqueado
                           ? 'min-w-0 cursor-not-allowed rounded-lg border border-line bg-surface-2 p-2.5 text-left opacity-40'
                           : 'min-w-0 rounded-lg border border-line bg-surface-2 p-2.5 text-left transition-colors hover:border-line-strong'
                     }
                   >
-                    <span className="block text-sm font-semibold leading-tight text-main">
+                    <span className="flex items-center gap-1.5 text-sm font-semibold leading-tight text-main">
+                      {activo && <Check className="h-3.5 w-3.5 shrink-0 text-brand" />}
                       {ROL_LABEL[r]}
                     </span>
                     <span className="mt-0.5 block text-[10px] leading-tight text-dim">
@@ -201,6 +233,9 @@ export function DialogoEditarUsuario({
                 );
               })}
             </div>
+            {form.roles.length === 0 && (
+              <p className="text-[11px] text-danger">Elegí al menos un rol.</p>
+            )}
           </div>
 
           {consecuenciaRol && (
@@ -214,16 +249,16 @@ export function DialogoEditarUsuario({
             </div>
           )}
 
-          {soyYo && usuario.rol === 'admin' && (
+          {soyYo && tieneRol(rolesActuales, 'admin') && (
             <Hint>
-              Estás editando tu propia cuenta. El botón queda bloqueado para
-              que no te quedes sin permisos por error.
+              Estás editando tu propia cuenta. No podés quitarte el rol de
+              administrador, pero sí sumar otros roles.
             </Hint>
           )}
 
-          {!soyYo && usuario.rol === 'admin' && soyElUnicoAdmin && (
+          {!soyYo && tieneRol(rolesActuales, 'admin') && soyElUnicoAdmin && (
             <Hint tone="warn">
-              Es el único administrador del club. Para bajarle el rol, primero
+              Es el único administrador del club. Para quitarle ese rol, primero
               creá otro administrador.
             </Hint>
           )}
@@ -308,7 +343,7 @@ export function DialogoEditarUsuario({
 
           <DialogFooter className="!mx-0 !mb-0 !rounded-none !border-0 !bg-transparent !p-0">
             <Button type="button" variant="outline" onClick={onCerrar}>Cancelar</Button>
-            <Button type="submit" disabled={guardando || sinCambios}>
+            <Button type="submit" disabled={guardando || sinCambios || form.roles.length === 0}>
               {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {guardando ? 'Guardando…' : 'Guardar cambios'}
             </Button>

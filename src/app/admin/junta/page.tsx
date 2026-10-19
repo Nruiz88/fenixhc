@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { getCurrentUser } from '@/lib/auth-client';
-import { puede, ETIQUETA_CAPACIDAD, type Capacidad } from '@/lib/capacidades';
+import { puede, esTesorero, ETIQUETA_CAPACIDAD, type Capacidad } from '@/lib/capacidades';
+import { rolesDeUsuario } from '@/lib/roles';
 import { PageHeader, Panel, Hint } from '@/components/admin/ui';
 import { cn } from '@/lib/utils';
 import { TabComunicaciones } from './tabs/comunicaciones';
@@ -88,14 +89,14 @@ const TABS: Tab[] = [
 ];
 
 export default function JuntaDirectiva() {
-  const [rol, setRol] = useState<string | null>(null);
+  const [roles, setRoles] = useState<string[] | null>(null);
   const [cargando, setCargando] = useState(true);
   const [pestana, setPestana] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       const user = await getCurrentUser();
-      setRol(user?.rol ?? null);
+      setRoles(user ? rolesDeUsuario(user) : null);
       setCargando(false);
     })();
   }, []);
@@ -106,12 +107,15 @@ export default function JuntaDirectiva() {
   const visibles = useMemo(
     () =>
       TABS.filter((t) => {
-        if (rol === 'tesorero' && t.clave === 'partes') {
-          return puede(rol, 'ver_parte_financiero');
+        // El tesorero no tiene el parte administrativo, pero sí el financiero.
+        // Si además tiene otro cargo (por ejemplo secretario), los permisos se
+        // suman y la pestaña sigue siendo la misma.
+        if (roles && esTesorero(roles) && t.clave === 'partes') {
+          return puede(roles, 'ver_parte_financiero');
         }
-        return puede(rol, t.capacidad);
+        return puede(roles, t.capacidad);
       }),
-    [rol]
+    [roles]
   );
 
   // Si la pestaña elegida deja de estar disponible —porque el usuario cambió o

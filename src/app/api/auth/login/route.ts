@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryOne } from '@/lib/db';
 import { verifyPassword, createToken, setAuthCookie } from '@/lib/auth';
+import { normalizarRoles, rolPrincipal } from '@/lib/roles';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
 import { emailSchema } from '@/lib/schemas';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await queryOne(
-      'SELECT id, email, password_hash, rol, email_verificado, verification_sent_at, password_changed_at FROM usuarios WHERE email = ?',
+      'SELECT id, email, password_hash, rol, roles, email_verificado, verification_sent_at, password_changed_at FROM usuarios WHERE email = ?',
       [emailLimpio]
     );
 
@@ -63,10 +64,16 @@ export async function POST(request: NextRequest) {
       [user.id]
     );
 
+    // La lista completa manda: si la cuenta quedó con más de un rol, el token
+    // lleva todos y `rol` es solo el principal para el portal de entrada.
+    const roles = normalizarRoles(user.roles, user.rol);
+    const rolPrincipalUsuario = rolPrincipal(roles);
+
     const token = createToken(
       {
         id: user.id,
-        rol: user.rol,
+        rol: rolPrincipalUsuario,
+        roles,
         nombre: perfil?.nombre || '',
         apellido: perfil?.apellido || '',
         email: user.email,
@@ -81,7 +88,8 @@ export async function POST(request: NextRequest) {
       success: true,
       user: {
         id: user.id,
-        rol: user.rol,
+        rol: rolPrincipalUsuario,
+        roles,
         nombre: perfil?.nombre,
         apellido: perfil?.apellido,
         email: user.email,

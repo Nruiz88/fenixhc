@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, execute } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
+import { rolesDeUsuario } from '@/lib/roles';
 
 // Marca notificaciones como leídas para el usuario autenticado.
 //
@@ -21,12 +22,14 @@ export async function POST(request: NextRequest) {
       ? body.ids.filter((i: unknown): i is string => typeof i === 'string')
       : [];
 
-    // Solo se pueden marcar notificaciones dirigidas a este rol: sin este
-    // filtro un usuario podría "leer" avisos de otro grupo y contabilizarlos.
+    // Solo se pueden marcar notificaciones dirigidas a alguno de sus roles:
+    // sin este filtro un usuario podría "leer" avisos de otro grupo y
+    // contabilizarlos.
+    const roles = rolesDeUsuario(user);
     const visibles = await query<{ id: string }>(
       `SELECT id FROM notificaciones
-       WHERE destinatario_rol = 'todos' OR destinatario_rol = ?`,
-      [user.rol]
+       WHERE destinatario_rol = 'todos' OR FIND_IN_SET(destinatario_rol, ?)`,
+      [roles.join(',')]
     );
     const permitidas = new Set(visibles.map((r) => r.id));
 

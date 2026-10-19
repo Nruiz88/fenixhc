@@ -5,6 +5,8 @@ import type { Rol } from './roles';
 export interface AuthUser {
   id: string;
   rol: Rol;
+  /** Lista completa. Puede faltar en respuestas viejas o tokens previos. */
+  roles?: Rol[];
   nombre: string;
   apellido: string;
   email: string;

@@ -3,7 +3,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/adminQuery';
 import { getCurrentUser } from '@/lib/auth-client';
-import { ROLES, ROL_LABEL, ROL_DESCRIPCION, ROLES_DIRECTIVA, type Rol } from '@/lib/roles';
+import {
+  ROLES, ROL_LABEL, ROL_DESCRIPCION, esDirectiva, tieneRol,
+  normalizarRoles, rolPrincipal, type Rol,
+} from '@/lib/roles';
 import { iniciales, fecha } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +18,8 @@ import { DialogoEditarUsuario, type UsuarioEditable } from '@/components/admin/e
 import { Users, UserCheck, Shield, UserPlus, Search, X, Check, Copy, Pencil, MailWarning } from 'lucide-react';
 
 const FORM_VACIO = {
-  rol: 'socio_benefactor' as Rol,
+  // Toda cuenta arranca con un rol; se pueden marcar más antes de crearla.
+  roles: ['socio_benefactor'] as Rol[],
   email: '',
   password: '',
   nombre: '',
@@ -57,14 +61,28 @@ export default function AdminUsuariosPage() {
     // que el club se pregunte después por qué alguien no puede entrar.
     const { data } = await db.select<any>('perfiles', '*', undefined, { limit: 1000 });
 
-    let verificados: Record<string, number> = {};
+    // `usuarios.roles` es la fuente de verdad (la que también edita la API).
+    // Si una cuenta vieja todavía no tiene la lista, se cae a `perfiles.roles`
+    // y, por último, al rol único.
+    let cuentas: Record<string, any> = {};
     if ((data ?? []).length) {
-      const { data: usr } = await db.select<any>('usuarios', 'id, email_verificado', undefined, { limit: 1000 });
-      verificados = Object.fromEntries((usr ?? []).map((u: any) => [u.id, u.email_verificado]));
+      const { data: usr } = await db.select<any>(
+        'usuarios', 'id, email_verificado, rol, roles', undefined, { limit: 1000 }
+      );
+      cuentas = Object.fromEntries((usr ?? []).map((u: any) => [u.id, u]));
     }
 
     setUsers(
-      ((data ?? []) as any[]).map((p) => ({ ...p, email_verificado: verificados[p.id] ?? 0 }))
+      ((data ?? []) as any[]).map((p) => {
+        const cuenta = cuentas[p.id];
+        const roles = normalizarRoles(cuenta?.roles ?? p.roles, cuenta?.rol ?? p.rol);
+        return {
+          ...p,
+          roles,
+          rol: rolPrincipal(roles),
+          email_verificado: cuenta?.email_verificado ?? 0,
+        };
+      })
     );
     setCargando(false);
   }
@@ -76,14 +94,14 @@ export default function AdminUsuariosPage() {
 
   useEffect(() => { cargar(); cargarMiId(); }, []);
 
-  const directiva = users.filter((u) => ROLES_DIRECTIVA.includes(u.rol));
-  const benefactores = users.filter((u) => u.rol === 'socio_benefactor');
-  const cadetes = users.filter((u) => u.rol === 'socio_cadete');
+  const directiva = users.filter((u) => esDirectiva(u.roles));
+  const benefactores = users.filter((u) => tieneRol(u.roles, 'socio_benefactor'));
+  const cadetes = users.filter((u) => tieneRol(u.roles, 'socio_cadete'));
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return users
-      .filter((u) => (filtroRol === 'todos' ? true : u.rol === filtroRol))
+      .filter((u) => (filtroRol === 'todos' ? true : tieneRol(u.roles, filtroRol)))
       .filter((u) =>
         !q
           ? true
@@ -122,6 +140,18 @@ export default function AdminUsuariosPage() {
     } finally {
       setCreando(false);
     }
+  }
+
+  /** Marca o desmarca un rol sin dejar la cuenta sin ninguno. */
+  function alternarRol(r: Rol) {
+    setForm((f) => {
+      const activo = f.roles.includes(r);
+      if (activo && f.roles.length === 1) return f;
+      return {
+        ...f,
+        roles: activo ? f.roles.filter((x) => x !== r) : [...f.roles, r],
+      };
+    });
   }
 
   function cerrarTodo() {
@@ -239,9 +269,11 @@ export default function AdminUsuariosPage() {
                     <p className="truncate text-sm font-medium text-main">
                       {u.nombre} {u.apellido}
                     </p>
-                    <StatusPill tone={TONO_ROL[u.rol as Rol] ?? 'neutral'} title={ROL_DESCRIPCION[u.rol as Rol]}>
-                      {ROL_LABEL[u.rol as Rol] ?? u.rol}
-                    </StatusPill>
+                    {(u.roles as Rol[]).map((r) => (
+                      <StatusPill key={r} tone={TONO_ROL[r] ?? 'neutral'} title={ROL_DESCRIPCION[r]}>
+                        {ROL_LABEL[r] ?? r}
+                      </StatusPill>
+                    ))}
                   </div>
                   {/* truncate + title: los emails son cadenas largas sin
                       puntos de corte y revientan la fila en pantallas angostas. */}
@@ -282,7 +314,7 @@ export default function AdminUsuariosPage() {
         onCerrar={() => setEditando(null)}
         onGuardado={cargar}
         soyYo={!!editando && editando.id === miId}
-        soyElUnicoAdmin={directiva.filter((d) => d.rol === 'admin').length <= 1}
+        soyElUnicoAdmin={directiva.filter((d) => tieneRol(d.roles, 'admin')).length <= 1}
       />
 
       {/* Diálogo de alta */}
@@ -300,28 +332,37 @@ export default function AdminUsuariosPage() {
 
               <form onSubmit={crear} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label>Rol *</Label>
+                  <Label>Roles *</Label>
+                  <p className="text-[11px] text-dim">
+                    Podés elegir más de uno (por ejemplo, socio benefactor y secretario).
+                    El primero de la jerarquía define el portal de entrada.
+                  </p>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {ROLES.map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => setForm({ ...form, rol: r })}
-                        title={ROL_DESCRIPCION[r]}
-                        className={
-                          form.rol === r
-                            ? 'min-w-0 rounded-lg border border-brand bg-brand/10 p-2.5 text-left transition-colors'
-                            : 'min-w-0 rounded-lg border border-line bg-surface-2 p-2.5 text-left transition-colors hover:border-line-strong'
-                        }
-                      >
-                        <span className="block text-sm font-semibold leading-tight text-main">
-                          {ROL_LABEL[r]}
-                        </span>
-                        <span className="mt-0.5 block text-[10px] leading-tight text-dim">
-                          {ROL_DESCRIPCION[r]}
-                        </span>
-                      </button>
-                    ))}
+                    {ROLES.map((r) => {
+                      const activo = form.roles.includes(r);
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => alternarRol(r)}
+                          aria-pressed={activo}
+                          title={ROL_DESCRIPCION[r]}
+                          className={
+                            activo
+                              ? 'min-w-0 rounded-lg border border-brand bg-brand/10 p-2.5 text-left transition-colors'
+                              : 'min-w-0 rounded-lg border border-line bg-surface-2 p-2.5 text-left transition-colors hover:border-line-strong'
+                          }
+                        >
+                          <span className="flex items-center gap-1.5 text-sm font-semibold leading-tight text-main">
+                            {activo && <Check className="h-3.5 w-3.5 shrink-0 text-brand" />}
+                            {ROL_LABEL[r]}
+                          </span>
+                          <span className="mt-0.5 block text-[10px] leading-tight text-dim">
+                            {ROL_DESCRIPCION[r]}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -368,7 +409,7 @@ export default function AdminUsuariosPage() {
 
                 <DialogFooter className="!mx-0 !mb-0 !rounded-none !border-0 !bg-transparent !p-0 pt-2">
                   <Button type="button" variant="outline" onClick={cerrarTodo}>Cancelar</Button>
-                  <Button type="submit" disabled={creando}>
+                  <Button type="submit" disabled={creando || form.roles.length === 0}>
                     <Check className="h-4 w-4" />
                     {creando ? 'Creando…' : 'Crear usuario'}
                   </Button>

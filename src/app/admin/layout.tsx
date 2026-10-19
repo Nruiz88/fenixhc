@@ -13,7 +13,10 @@ import {
   Megaphone, Star, Clock, TrendingUp, BarChart3, Shield, ShieldCheck, Landmark,
   BookOpen,
 } from 'lucide-react';
-import { tieneModulo, ROL_LABEL, type Modulo, type Rol } from '@/lib/roles';
+import {
+  tieneModulo, tieneRol, rolesDeUsuario, etiquetasDeRoles,
+  type Modulo, type Rol,
+} from '@/lib/roles';
 import { iniciales } from '@/lib/format';
 
 // Secciones: en vez de 16 items sueltos, agruparlos ayuda a que alguien
@@ -98,21 +101,24 @@ interface NavItem {
 function Sidebar({
   currentPath,
   onLogout,
-  rol,
+  roles,
   onNavigate,
 }: {
   currentPath: string;
   onLogout: () => void;
-  rol?: Rol;
+  roles?: Rol[];
   onNavigate?: () => void;
 }) {
   const visibles = SECCIONES
     .map((s) => ({
       ...s,
       // Un ítem sin módulo es visible para todos; uno con `soloAdmin` espera a
-      // saber quién es, porque el menú se dibuja recién con el rol cargado.
+      // saber quién es, porque el menú se dibuja recién con los roles cargados.
+      // Los permisos se suman entre todos los roles.
       items: s.items.filter(
-        (i) => (!i.modulo || (rol && tieneModulo(rol, i.modulo))) && (!i.soloAdmin || rol === 'admin')
+        (i) =>
+          (!i.modulo || (roles && tieneModulo(roles, i.modulo))) &&
+          (!i.soloAdmin || tieneRol(roles ?? [], 'admin'))
       ),
     }))
     .filter((s) => s.items.length > 0);
@@ -267,7 +273,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             panel insinúe lo que no está permitido es exactamente el tipo de cosa
             que hace que alguien intente y se frustre. */}
         {user ? (
-          <Sidebar currentPath={pathname} onLogout={handleLogout} rol={user.rol} />
+          <Sidebar currentPath={pathname} onLogout={handleLogout} roles={rolesDeUsuario(user)} />
         ) : (
           <EsqueletoSidebar />
         )}
@@ -289,7 +295,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <Sidebar
                     currentPath={pathname}
                     onLogout={handleLogout}
-                    rol={user.rol}
+                    roles={rolesDeUsuario(user)}
                     onNavigate={() => setAbierto(false)}
                   />
                 ) : (
@@ -321,7 +327,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   </p>
                   <p className="inline-flex items-center gap-1 text-[11px] text-dim">
                     <Shield className="h-3 w-3" />
-                    {ROL_LABEL[user.rol as Rol] ?? user.rol}
+                    {etiquetasDeRoles(rolesDeUsuario(user))}
                   </p>
                 </div>
                 <Link href="/admin/configuracion" aria-label="Mi configuración">

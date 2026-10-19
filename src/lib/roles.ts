@@ -64,6 +64,87 @@ export function isRol(v: unknown): v is Rol {
 }
 
 // ---------------------------------------------------------------------------
+// Varios roles por persona
+// ---------------------------------------------------------------------------
+//
+// Una persona puede ser, por ejemplo, socio benefactor y secretario a la vez.
+// `usuarios.rol` y `perfiles.rol` siguen existiendo como rol PRINCIPAL (para
+// compatibilidad y para el login), y `roles` (JSON) guarda la lista completa.
+// El rol principal es el de mayor jerarquía de la lista; ver ORDEN_PRINCIPAL.
+
+/**
+ * Orden de prioridad para elegir el rol principal.
+ *
+ * No es alfabético a propósito: si alguien es secretario y socio benefactor,
+ * al entrar tiene que ir al panel (secretario), no al portal de socio. El
+ * orden también define qué rol se muestra primero en las listas.
+ */
+export const ORDEN_PRINCIPAL: readonly Rol[] = [
+  'admin',
+  'presidente',
+  'secretario',
+  'tesorero',
+  'vocal_titular',
+  'vocal_suplente',
+  'socio_benefactor',
+  'socio_cadete',
+];
+
+/**
+ * Normaliza lo que venga de la base o del cliente a una lista de roles válidos.
+ *
+ * Acepta un array, un string JSON (MariaDB puede devolver así una columna JSON)
+ * o un rol suelto. Descarta valores desconocidos y duplicados. Si no queda
+ * ninguno usa `fallback` (normalmente el rol principal de la fila) y, como
+ * último recurso, socio_benefactor: una cuenta sin roles válidos no puede
+ * quedar sin portal.
+ */
+export function normalizarRoles(valor: unknown, fallback?: string | null): Rol[] {
+  let crudo: unknown = valor;
+
+  if (typeof crudo === 'string') {
+    try {
+      crudo = JSON.parse(crudo);
+    } catch {
+      crudo = [crudo];
+    }
+  }
+
+  const vistos = new Set<Rol>();
+  if (Array.isArray(crudo)) {
+    for (const r of crudo) if (isRol(r)) vistos.add(r);
+  }
+  if (vistos.size === 0 && isRol(fallback)) vistos.add(fallback);
+  if (vistos.size === 0) vistos.add('socio_benefactor');
+
+  return ORDEN_PRINCIPAL.filter((r) => vistos.has(r));
+}
+
+/** Rol principal de una lista: el de mayor jerarquía. */
+export function rolPrincipal(roles: readonly Rol[]): Rol {
+  return ORDEN_PRINCIPAL.find((r) => roles.includes(r)) ?? 'socio_benefactor';
+}
+
+/** Lista de roles de un usuario de sesión, con compatibilidad para tokens viejos. */
+export function rolesDeUsuario(user: { rol?: string | null; roles?: unknown }): Rol[] {
+  return normalizarRoles(user.roles, user.rol);
+}
+
+/** ¿El usuario tiene este rol puntual? Acepta un rol suelto o una lista. */
+export function tieneRol(
+  valor: string | readonly string[] | null | undefined,
+  objetivo: Rol
+): boolean {
+  const lista = Array.isArray(valor) ? valor : valor ? [valor] : [];
+  return lista.includes(objetivo);
+}
+
+/** Etiquetas legibles de varios roles, para mostrar en una línea. */
+export function etiquetasDeRoles(roles: readonly Rol[]): string {
+  return roles.map((r) => ROL_LABEL[r]).join(' · ');
+}
+
+// ---------------------------------------------------------------------------
 // Modulos del panel
 // ---------------------------------------------------------------------------
 
@@ -178,13 +259,25 @@ export const PERMISOS: Record<Rol, readonly Modulo[]> = {
   socio_cadete: SIN_PERMISOS,
 };
 
-export function esDirectiva(rol: string): boolean {
-  return ROLES_DIRECTIVA.includes(rol as Rol);
+/**
+ * ¿Alguno de los roles es de directiva?
+ *
+ * Acepta un rol suelto o la lista completa. Con varios roles alcanza con que
+ * UNO sea de directiva: un socio benefactor que además es secretario entra al
+ * panel por el rol de secretario y conserva su portal de socio.
+ */
+export function esDirectiva(rol: string | readonly string[] | null | undefined): boolean {
+  const lista = Array.isArray(rol) ? rol : rol ? [rol] : [];
+  return lista.some((r) => ROLES_DIRECTIVA.includes(r as Rol));
 }
 
-export function tieneModulo(rol: string, modulo: Modulo): boolean {
-  const p = PERMISOS[rol as Rol];
-  return !!p && p.includes(modulo);
+/** ¿Alguno de los roles tiene permiso sobre el módulo? */
+export function tieneModulo(
+  rol: string | readonly string[] | null | undefined,
+  modulo: Modulo
+): boolean {
+  const lista = Array.isArray(rol) ? rol : rol ? [rol] : [];
+  return lista.some((r) => !!PERMISOS[r as Rol]?.includes(modulo));
 }
 
 /** Modulo al que pertenece una ruta del panel, para protegerla. */
@@ -250,3 +343,17 @@ export const PORTAL_POR_ROL: Record<Rol, string> = {
   socio_benefactor: '/socio-benefactor/dashboard',
   socio_cadete: '/socio-cadete/dashboard',
 };
+
+/**
+ * Portal de entrada según la lista completa de roles.
+ *
+ * Si hay un cargo de directiva, entra al panel. Si no, al portal del rol de
+ * socio que tenga. Con ambos roles puede navegar a los dos portales: el proxy
+ * valida por la lista, no por un único rol.
+ */
+export function portalDeRoles(roles: readonly Rol[]): string {
+  if (esDirectiva(roles)) return PORTAL_POR_ROL[rolPrincipal(roles)];
+  if (roles.includes('socio_benefactor')) return PORTAL_POR_ROL.socio_benefactor;
+  if (roles.includes('socio_cadete')) return PORTAL_POR_ROL.socio_cadete;
+  return '/';
+}

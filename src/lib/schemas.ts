@@ -50,6 +50,19 @@ export const rolSchema = z.enum(ROLES, { message: 'Rol inválido' });
 /** Alta desde el panel: cualquier rol, incluido un cargo de directiva. */
 export const rolAdminSchema = rolSchema;
 
+/**
+ * Roles de una cuenta desde el panel: uno o varios, sin repetir.
+ *
+ * El orden no importa: el rol principal se calcula por jerarquía en
+ * lib/roles.ts. No se acepta una lista vacía: toda cuenta tiene que entrar a
+ * algún portal.
+ */
+export const rolesAdminSchema = z
+  .array(rolSchema)
+  .min(1, 'Elegí al menos un rol')
+  .max(ROLES.length, 'Hay más roles de los permitidos')
+  .transform((roles) => [...new Set(roles)]);
+
 /** Registro público: solo socios, nunca un cargo (ver register/route.ts). */
 export const rolPublicoSchema = z.enum(ROLES_PUBLICOS as [string, ...string[]], {
   message: 'Rol inválido',

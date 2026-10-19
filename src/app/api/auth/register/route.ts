@@ -282,15 +282,17 @@ export async function POST(request: NextRequest) {
     // rollback, y mandarlo desde adentro dejaría la transacción abierta durante
     // una llamada a la red.
     const { tokenPadre, tokenHijo } = await transaccion(async (conn) => {
+      const rolesJson = JSON.stringify([rol]);
+
       await conn.execute(
-        'INSERT INTO usuarios (id, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-        [userId, emailVal, hash, rol]
+        'INSERT INTO usuarios (id, email, password_hash, rol, roles) VALUES (?, ?, ?, ?, ?)',
+        [userId, emailVal, hash, rol, rolesJson]
       );
 
       await conn.execute(
-        'INSERT INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, cuil, correo, telefono, direccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO perfiles (id, usuario_id, rol, roles, nombre, apellido, dni, cuil, correo, telefono, direccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
-          perfilId, userId, rol,
+          perfilId, userId, rol, rolesJson,
           nombre, apellido, dniVal, cuilRaw || null, emailVal,
           telefono, direccion,
         ]
@@ -322,15 +324,17 @@ export async function POST(request: NextRequest) {
       // If padre and child data provided
       let tokenHijo: string | null = null;
       if (registraHijo && consHijo?.ok) {
+        const rolesHijoJson = JSON.stringify(['socio_cadete']);
+
         await conn.execute(
-          'INSERT INTO usuarios (id, email, password_hash, rol) VALUES (?, ?, ?, ?)',
-          [hijoUserId, hijoEmailVal, hijoHash, 'socio_cadete']
+          'INSERT INTO usuarios (id, email, password_hash, rol, roles) VALUES (?, ?, ?, ?, ?)',
+          [hijoUserId, hijoEmailVal, hijoHash, 'socio_cadete', rolesHijoJson]
         );
 
         await conn.execute(
-          'INSERT INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, correo) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO perfiles (id, usuario_id, rol, roles, nombre, apellido, dni, correo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
           [
-            hijoPerfilId, hijoUserId, 'socio_cadete',
+            hijoPerfilId, hijoUserId, 'socio_cadete', rolesHijoJson,
             hijoNombreVal, hijoApellidoVal, hijoDniFinal, hijoEmailVal,
           ]
         );

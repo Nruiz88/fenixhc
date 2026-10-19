@@ -22,7 +22,8 @@ describe('quién puede mandar avisos', () => {
   it('las dos operaciones exigen la capacidad, no solo el GET', () => {
     // El filtro solo en el GET deja el POST abierto: era el error clásico de
     // poner la autorización donde se lee y no donde se escribe.
-    const permisos = codigo(RUTA).match(/puede\(user\.rol, 'comunicar_padres'\)/g) ?? [];
+    // Los permisos se evalúan contra la lista completa de roles.
+    const permisos = codigo(RUTA).match(/puede\(rolesDeUsuario\(user\), 'comunicar_padres'\)/g) ?? [];
     expect(permisos.length).toBeGreaterThanOrEqual(2);
   });
 

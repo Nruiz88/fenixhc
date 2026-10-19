@@ -3,10 +3,10 @@ import { queryOne, execute, insert, uuid } from '@/lib/db';
 import { requireModulo, hashPassword } from '@/lib/auth';
 import { reenviarVerificacion } from '@/lib/verification';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
-import { ROL_LABEL, type Rol } from '@/lib/roles';
+import { ROL_LABEL, normalizarRoles, rolPrincipal } from '@/lib/roles';
 import {
   emailSchema, passwordSchema, dniSchema, nombreSchema, apellidoSchema,
-  rolAdminSchema, firstError,
+  rolesAdminSchema, firstError,
 } from '@/lib/schemas';
 
 // Edición de usuarios y cambio de rol desde el panel.
@@ -44,8 +44,10 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Falta el usuario a editar' }, { status: 400 });
     }
 
-    const usuario = await queryOne<{ id: string; email: string; rol: string; email_verificado: number }>(
-      'SELECT id, email, rol, email_verificado FROM usuarios WHERE id = ?',
+    const usuario = await queryOne<{
+      id: string; email: string; rol: string; roles: unknown; email_verificado: number;
+    }>(
+      'SELECT id, email, rol, roles, email_verificado FROM usuarios WHERE id = ?',
       [id]
     );
     if (!usuario) {
@@ -61,40 +63,52 @@ export async function PATCH(request: NextRequest) {
     }
     const perfilActual = perfil;
 
-    // --- Rol -------------------------------------------------------------
-    let rolNuevo: string = usuario.rol;
+    // --- Roles -----------------------------------------------------------
+    // Se acepta `roles` (lista) y también `rol` (un solo valor) para no romper
+    // clientes viejos. `rol` en la base queda como rol principal.
+    const rolesActuales = normalizarRoles(usuario.roles, usuario.rol);
+    let rolesNuevos = rolesActuales;
 
-    if (body.rol !== undefined) {
-      const parsed = rolAdminSchema.safeParse(body.rol);
+    if (body.roles !== undefined || body.rol !== undefined) {
+      const parsed = rolesAdminSchema.safeParse(
+        body.roles !== undefined ? body.roles : [body.rol]
+      );
       if (!parsed.success) {
-        return NextResponse.json({ error: 'Rol inválido' }, { status: 400 });
+        return NextResponse.json({ error: firstError(parsed.error) }, { status: 400 });
       }
-      rolNuevo = parsed.data;
+      rolesNuevos = normalizarRoles(parsed.data, usuario.rol);
+    }
 
-      if (rolNuevo !== usuario.rol) {
-        // Nadie se quita su propio admin. Sin esto, un admin abre su ficha,
-        // se degrada a vocal por error y el club puede quedar sin nadie que
-        // administre los usuarios. Que otro admin lo haga si hace falta.
-        if (usuario.rol === 'admin' && id === auth.user.id) {
-          return NextResponse.json(
-            { error: 'No podés cambiar tu propio rol. Pedile a otro administrador que lo haga.' },
-            { status: 400 }
-          );
-        }
+    const mismosRoles =
+      rolesNuevos.length === rolesActuales.length &&
+      rolesNuevos.every((r) => rolesActuales.includes(r));
+    const huboCambioRoles = !mismosRoles;
+    const rolPrincipalNuevo = rolPrincipal(rolesNuevos);
 
-        // Tiene que quedar al menos un admin en el club.
-        if (usuario.rol === 'admin') {
-          const otros = await queryOne<{ c: number }>(
-            "SELECT COUNT(*) AS c FROM usuarios WHERE rol = 'admin' AND id != ?",
-            [id]
-          );
-          if (Number(otros?.c ?? 0) === 0) {
-            return NextResponse.json(
-              { error: 'No se puede dejar el club sin administradores. Creá otro admin primero.' },
-              { status: 400 }
-            );
-          }
-        }
+    if (huboCambioRoles && rolesActuales.includes('admin') && !rolesNuevos.includes('admin')) {
+      // Nadie se quita su propio admin. Sin esto, un admin abre su ficha,
+      // se degrada a vocal por error y el club puede quedar sin nadie que
+      // administre los usuarios. Que otro admin lo haga si hace falta.
+      if (id === auth.user.id) {
+        return NextResponse.json(
+          { error: 'No podés quitarte tu propio rol de administrador. Pedile a otro administrador que lo haga.' },
+          { status: 400 }
+        );
+      }
+
+      // Tiene que quedar al menos un admin en el club. Se mira la lista
+      // completa, no solo el rol principal.
+      const otros = await queryOne<{ c: number }>(
+        `SELECT COUNT(*) AS c FROM usuarios
+          WHERE id != ?
+            AND (rol = 'admin' OR JSON_CONTAINS(COALESCE(roles, JSON_ARRAY()), '"admin"'))`,
+        [id]
+      );
+      if (Number(otros?.c ?? 0) === 0) {
+        return NextResponse.json(
+          { error: 'No se puede dejar el club sin administradores. Creá otro admin primero.' },
+          { status: 400 }
+        );
       }
     }
 
@@ -199,10 +213,16 @@ export async function PATCH(request: NextRequest) {
     if (emailNuevo !== usuario.email) {
       await execute('UPDATE usuarios SET email = ? WHERE id = ?', [emailNuevo, id]);
     }
-    if (rolNuevo !== usuario.rol) {
-      // Las dos columnas, siempre juntas.
-      await execute('UPDATE usuarios SET rol = ? WHERE id = ?', [rolNuevo, id]);
-      await execute('UPDATE perfiles SET rol = ? WHERE id = ?', [rolNuevo, perfil.id]);
+    if (huboCambioRoles) {
+      // Las cuatro columnas, siempre juntas: `rol` es el principal y `roles`
+      // la lista completa, tanto en la cuenta como en la ficha.
+      const rolesJson = JSON.stringify(rolesNuevos);
+      await execute('UPDATE usuarios SET rol = ?, roles = ? WHERE id = ?', [
+        rolPrincipalNuevo, rolesJson, id,
+      ]);
+      await execute('UPDATE perfiles SET rol = ?, roles = ? WHERE id = ?', [
+        rolPrincipalNuevo, rolesJson, perfil.id,
+      ]);
     }
 
     if (Object.keys(cambios).length) {
@@ -220,7 +240,7 @@ export async function PATCH(request: NextRequest) {
     // Un socio cadete necesita su fila en `deportistas` para que el portal y
     // las cuotas funcionen. Al pasarlo a un cargo de directiva, la fila se
     // conserva: borrarla tiraría abajo el historial del jugador.
-    if (rolNuevo === 'socio_cadete' && usuario.rol !== 'socio_cadete') {
+    if (rolesNuevos.includes('socio_cadete') && !rolesActuales.includes('socio_cadete')) {
       const existente = await queryOne<{ id: string }>(
         'SELECT id FROM deportistas WHERE perfil_id = ?',
         [perfil.id]
@@ -238,10 +258,12 @@ export async function PATCH(request: NextRequest) {
           : `Se cambió el email y no se pudo enviar el correo de verificación. Pedile que entre y la reenvíe desde su portal.`
       );
     }
-    if (rolNuevo !== usuario.rol) {
+    if (huboCambioRoles) {
+      const antes = rolesActuales.map((r) => ROL_LABEL[r] ?? r).join(', ');
+      const despues = rolesNuevos.map((r) => ROL_LABEL[r] ?? r).join(', ');
       avisos.push(
-        `El rol pasó de ${ROL_LABEL[usuario.rol as Rol] ?? usuario.rol} a ${ROL_LABEL[rolNuevo as Rol] ?? rolNuevo}. ` +
-          'La persona tiene que cerrar sesión y volver a entrar para que el cambio le aplique.'
+        `Los roles pasaron de ${antes} a ${despues}. ` +
+          'La persona tiene que cerrar sesión y volver a entrar para que el cambio le aplique en el menú.'
       );
     }
 
@@ -249,7 +271,8 @@ export async function PATCH(request: NextRequest) {
       success: true,
       cambios: {
         email: emailNuevo,
-        rol: rolNuevo,
+        rol: rolPrincipalNuevo,
+        roles: rolesNuevos,
         password: !!hashNuevo,
         perfil: cambios,
       },

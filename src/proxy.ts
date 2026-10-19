@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { authenticateFromRequest } from '@/lib/auth';
 import { isProtectedRoute } from '@/lib/constants';
-import { esDirectiva, moduloDeRutaCompleto, tieneModulo, PORTAL_POR_ROL } from '@/lib/roles';
+import {
+  esDirectiva, moduloDeRutaCompleto, tieneModulo, tieneRol,
+  rolesDeUsuario, portalDeRoles,
+} from '@/lib/roles';
 
 // URLs viejas -> nuevas. Se redirige con 308 para no romper links guardados
 // ni perder el metodo en un POST.
@@ -37,40 +40,45 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Con sesion en /login -> su portal.
+  const roles = user ? rolesDeUsuario(user) : [];
+
+  // Con sesion en /login -> su portal principal.
   if (pathname === '/login' && user) {
-    return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
+    return NextResponse.redirect(new URL(portalDeRoles(roles), request.url));
   }
 
   if (!user) return NextResponse.next();
 
-  // El panel es solo para la directiva.
+  // El panel es solo para la directiva. Con varios roles alcanza con que uno
+  // sea de directiva.
   if (pathname.startsWith('/admin')) {
-    if (!esDirectiva(user.rol)) {
-      return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
+    if (!esDirectiva(roles)) {
+      return NextResponse.redirect(new URL(portalDeRoles(roles), request.url));
     }
-    // Recorte por modulo: un tesorero no entra a /admin/usuarios.
+    // Recorte por modulo: un tesorero no entra a /admin/usuarios. Los permisos
+    // se suman entre todos los roles de la persona.
     const modulo = moduloDeRutaCompleto(pathname);
-    if (modulo && !tieneModulo(user.rol, modulo)) {
+    if (modulo && !tieneModulo(roles, modulo)) {
       return NextResponse.redirect(new URL('/admin/dashboard?sinPermiso=1', request.url));
     }
     return NextResponse.next();
   }
 
-  // Portales de socios.
+  // Portales de socios. Un secretario que además es socio benefactor puede
+  // entrar a los dos: se mira la lista, no el rol principal.
   if (
     pathname.startsWith('/socio-benefactor') &&
-    user.rol !== 'socio_benefactor' &&
-    !esDirectiva(user.rol)
+    !tieneRol(roles, 'socio_benefactor') &&
+    !esDirectiva(roles)
   ) {
-    return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
+    return NextResponse.redirect(new URL(portalDeRoles(roles), request.url));
   }
   if (
     pathname.startsWith('/socio-cadete') &&
-    user.rol !== 'socio_cadete' &&
-    !esDirectiva(user.rol)
+    !tieneRol(roles, 'socio_cadete') &&
+    !esDirectiva(roles)
   ) {
-    return NextResponse.redirect(new URL(PORTAL_POR_ROL[user.rol] ?? '/', request.url));
+    return NextResponse.redirect(new URL(portalDeRoles(roles), request.url));
   }
 
   return NextResponse.next();

@@ -59,7 +59,7 @@ export async function ejecutarBaja(params: {
   return transaccion(async (conn) => {
     // --- Verificaciones dentro de la transacción ------------------------
     const [personas] = await conn.execute<any[]>(
-      'SELECT id, nombre, apellido, dni, cuil, correo, rol, usuario_id FROM perfiles WHERE id = ?',
+      'SELECT id, nombre, apellido, dni, cuil, correo, rol, roles, usuario_id FROM perfiles WHERE id = ?',
       [perfilId]
     );
     const persona = personas[0];
@@ -68,10 +68,28 @@ export async function ejecutarBaja(params: {
       throw new ErrorBaja('La persona no existe o ya fue dada de baja', 'perfil_inexistente');
     }
 
-    // El club no puede quedar sin nadie que lo administre.
-    if (persona.rol === 'admin') {
+    // El club no puede quedar sin nadie que lo administre. Se mira la lista
+    // completa de roles, no solo el principal: un admin puede tener además un
+    // rol de socio.
+    const esAdmin =
+      persona.rol === 'admin' ||
+      (() => {
+        try {
+          const lista = typeof persona.roles === 'string'
+            ? JSON.parse(persona.roles)
+            : persona.roles;
+          return Array.isArray(lista) && lista.includes('admin');
+        } catch {
+          return false;
+        }
+      })();
+
+    if (esAdmin) {
       const [otros] = await conn.execute<any[]>(
-        "SELECT COUNT(*) AS c FROM usuarios WHERE rol = 'admin' AND id != ? AND email_verificado = 1",
+        `SELECT COUNT(*) AS c FROM usuarios
+          WHERE id != ? AND email_verificado = 1
+            AND (rol = 'admin'
+                 OR JSON_CONTAINS(COALESCE(roles, JSON_ARRAY()), '"admin"'))`,
         [persona.usuario_id]
       );
       if (Number(otros?.[0]?.c ?? 0) === 0) {
@@ -116,10 +134,11 @@ export async function ejecutarBaja(params: {
       const nuevoId = uuid();
       await conn.execute(
         `INSERT INTO perfiles
-           (id, usuario_id, rol, nombre, apellido, dni, cuil, correo, telefono, direccion)
-         VALUES (?, NULL, ?, ?, 'DADO DE BAJA', ?, NULL, ?, NULL, NULL)`,
+           (id, usuario_id, rol, roles, nombre, apellido, dni, cuil, correo, telefono, direccion)
+         VALUES (?, NULL, ?, JSON_ARRAY(?), ?, 'DADO DE BAJA', ?, NULL, ?, NULL, NULL)`,
         [
           nuevoId,
+          rol,
           rol,
           `BAJA-${uuid().replace(/-/g, '').slice(0, 8).toUpperCase()}`,
           // dni es NOT NULL UNIQUE: un valor distinto por fila.

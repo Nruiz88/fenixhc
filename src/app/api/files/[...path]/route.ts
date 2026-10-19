@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
-import { esDirectiva as esDirectivaRol } from '@/lib/roles';
+import { esDirectiva as esDirectivaRol, rolesDeUsuario } from '@/lib/roles';
 import { registrarAcceso, tipoDeBucket } from '@/lib/bitacora';
 import { leer } from '@/lib/almacen';
 import path from 'path';
@@ -63,7 +63,7 @@ export async function GET(
       if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
       // La segunda carpeta es el id del dueño del archivo.
       const esDueño = segmentos[1] === user.id;
-      const esDirectiva = DIRECTIVA_READ.has(bucket) && esDirectivaRol(user.rol);
+      const esDirectiva = DIRECTIVA_READ.has(bucket) && esDirectivaRol(rolesDeUsuario(user));
       if (!esDueño && !esDirectiva) {
         return NextResponse.json({ error: 'Sin permiso sobre este archivo' }, { status: 403 });
       }

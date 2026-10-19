@@ -174,16 +174,36 @@ export const CAPACIDADES_POR_ROL: Record<Rol, readonly Capacidad[]> = {
   socio_cadete: [],
 };
 
-export function puede(rol: string | undefined | null, capacidad: Capacidad): boolean {
-  if (!rol) return false;
-  const lista = CAPACIDADES_POR_ROL[rol as Rol];
-  return !!lista && lista.includes(capacidad);
+/** Convierte un rol suelto o una lista en la lista de roles a evaluar. */
+function listaDeRoles(rol: string | readonly string[] | undefined | null): readonly string[] {
+  if (!rol) return [];
+  return typeof rol === 'string' ? [rol] : rol;
 }
 
-/** Todas las capacidades de un rol de una vez. Para pintar y esconder cosas. */
-export function capacidadesDe(rol: string | undefined | null): Capacidad[] {
-  if (!rol) return [];
-  return [...(CAPACIDADES_POR_ROL[rol as Rol] ?? [])];
+/**
+ * ¿Alguno de los roles puede hacer esto?
+ *
+ * Con varios roles los permisos se SUMAN: un secretario que además es
+ * tesorero puede ver el parte administrativo y el financiero, porque cada
+ * cargo aporta lo suyo. No hay un rol que "pise" al otro.
+ */
+export function puede(
+  rol: string | readonly string[] | undefined | null,
+  capacidad: Capacidad
+): boolean {
+  return listaDeRoles(rol).some((r) => {
+    const lista = CAPACIDADES_POR_ROL[r as Rol];
+    return !!lista && lista.includes(capacidad);
+  });
+}
+
+/** Todas las capacidades de los roles de una vez. Para pintar y esconder cosas. */
+export function capacidadesDe(rol: string | readonly string[] | undefined | null): Capacidad[] {
+  const todas = new Set<Capacidad>();
+  for (const r of listaDeRoles(rol)) {
+    for (const c of CAPACIDADES_POR_ROL[r as Rol] ?? []) todas.add(c);
+  }
+  return [...todas];
 }
 
 /**
@@ -193,8 +213,8 @@ export function capacidadesDe(rol: string | undefined | null): Capacidad[] {
  * capacidad porque no se agrega ni se quita —es el puesto— y porque casi todo
  * lo demás ya tiene su propia capacidad.
  */
-export function esTesorero(rol: string | undefined | null): boolean {
-  return rol === 'tesorero';
+export function esTesorero(rol: string | readonly string[] | undefined | null): boolean {
+  return listaDeRoles(rol).includes('tesorero');
 }
 
 /**

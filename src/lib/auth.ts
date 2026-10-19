@@ -2,7 +2,10 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import type { NextRequest, NextResponse } from 'next/server';
-import { isRol, esDirectiva, tieneModulo, type Rol, type Modulo } from './roles';
+import {
+  isRol, esDirectiva, tieneModulo, normalizarRoles, rolPrincipal, rolesDeUsuario,
+  type Rol, type Modulo,
+} from './roles';
 import { queryOne } from './db';
 
 // El secreto es obligatorio: con uno fijo o débil cualquiera podría forjar tokens.
@@ -28,7 +31,20 @@ const EXPIRES_IN = '7d';
 
 export interface AuthUser {
   id: string;
+  /**
+   * Rol principal (el de mayor jerarquía de `roles`).
+   *
+   * Se conserva porque medio sistema lo usa para mostrar una etiqueta y para
+   * decidir el portal. Los permisos, en cambio, se evalúan contra `roles`.
+   */
   rol: Rol;
+  /**
+   * Todos los roles de la persona.
+   *
+   * Es opcional para no romper tokens emitidos antes de la migración 14;
+   * `rolesDeUsuario()` los completa con `rol` cuando falta.
+   */
+  roles?: Rol[];
   nombre: string;
   apellido: string;
   email: string;
@@ -63,8 +79,10 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 // existe.
 export function createToken(user: AuthUser, passwordChangedAt?: Date | string | null): string {
   const pc = aSegundos(passwordChangedAt);
+  const roles = normalizarRoles(user.roles, user.rol);
+  const principal = rolPrincipal(roles);
   return jwt.sign(
-    { ...user, pc },
+    { ...user, rol: principal, roles, pc },
     SECRET,
     { expiresIn: EXPIRES_IN }
   );
@@ -112,7 +130,10 @@ export function verifyToken(token: string): AuthUser | null {
     if (typeof payload.pc !== 'number' || !Number.isFinite(payload.pc)) {
       return null;
     }
-    return payload;
+    // Los tokens viejos traen un solo `rol`; se completan con la lista para
+    // que el resto del código no tenga que preguntar si existe.
+    const roles = normalizarRoles(payload.roles, payload.rol);
+    return { ...payload, rol: rolPrincipal(roles), roles };
   } catch {
     return null;
   }
@@ -183,8 +204,17 @@ export async function getCurrentUser(request?: NextRequest): Promise<AuthUser | 
   // surte efecto: se cambia la clave y el ladrón entra treinta segundos más.
   // Una consulta por primary key es sub-milimisegundo. Optimizar esto después
   // vale, pero solo con la basura a la vista.
-  const actual = await queryOne<{ pc: string | Date | null }>(
-    'SELECT password_changed_at AS pc FROM usuarios WHERE id = ? LIMIT 1',
+  // Se traen también los roles vigentes: si la directiva cambia los roles en
+  // la base (o desde el panel), el cambio tiene que valer YA para las APIs,
+  // sin esperar a que la persona vuelva a entrar. El proxy sigue usando el
+  // token (es sincrónico y no consulta la base), pero la puerta de los datos
+  // —requireAuth/requireModulo— es esta y siempre lee la verdad de la base.
+  const actual = await queryOne<{
+    pc: string | Date | null;
+    rol: string | null;
+    roles: unknown;
+  }>(
+    'SELECT password_changed_at AS pc, rol, roles FROM usuarios WHERE id = ? LIMIT 1',
     [user.id]
   );
 
@@ -197,7 +227,10 @@ export async function getCurrentUser(request?: NextRequest): Promise<AuthUser | 
     return null;
   }
 
-  return user;
+  // Los roles de la base mandan sobre los del token. Así una modificación
+  // hecha directamente en la DB también "sube" sin re-login.
+  const roles = normalizarRoles(actual.roles, actual.rol);
+  return { ...user, rol: rolPrincipal(roles), roles };
 }
 
 // Require authentication - returns user or error
@@ -206,7 +239,7 @@ export async function requireAuth(roles?: string[]): Promise<{ user: AuthUser } 
   if (!user) {
     return { error: 'No autenticado', status: 401 };
   }
-  if (roles && !roles.includes(user.rol)) {
+  if (roles && !rolesDeUsuario(user).some((r) => roles.includes(r))) {
     return { error: 'Sin permisos', status: 403 };
   }
   return { user };
@@ -221,7 +254,7 @@ export async function requireDirectiva(): Promise<
 > {
   const user = await getCurrentUser();
   if (!user) return { error: 'No autenticado', status: 401 };
-  if (!esDirectiva(user.rol)) return { error: 'Sin permisos', status: 403 };
+  if (!esDirectiva(rolesDeUsuario(user))) return { error: 'Sin permisos', status: 403 };
   return { user };
 }
 
@@ -234,7 +267,7 @@ export async function requireModulo(modulo: Modulo): Promise<
 > {
   const auth = await requireDirectiva();
   if ('error' in auth) return auth;
-  if (!tieneModulo(auth.user.rol, modulo)) {
+  if (!tieneModulo(rolesDeUsuario(auth.user), modulo)) {
     return { error: 'Sin permisos para este módulo', status: 403 };
   }
   return auth;

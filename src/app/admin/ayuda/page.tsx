@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Paginacion } from '@/components/admin/paginacion';
 import { MANUAL, type TareaManual } from '@/lib/manual';
-import { tieneModulo, ROL_LABEL, type Rol } from '@/lib/roles';
+import { tieneModulo, rolesDeUsuario, etiquetasDeRoles, type Rol } from '@/lib/roles';
 import { puede } from '@/lib/capacidades';
 import { getCurrentUser } from '@/lib/auth-client';
 
@@ -57,7 +57,7 @@ interface ItemIndice {
 
 export default function AdminManual() {
   const router = useRouter();
-  const [rol, setRol] = useState<Rol | undefined>(undefined);
+  const [roles, setRoles] = useState<Rol[] | null>(null);
   const [listo, setListo] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [tema, setTema] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export default function AdminManual() {
   useEffect(() => {
     (async () => {
       const me = await getCurrentUser();
-      if (me?.rol) setRol(me.rol as Rol);
+      if (me) setRoles(rolesDeUsuario(me));
       setListo(true);
     })();
   }, []);
@@ -78,17 +78,17 @@ export default function AdminManual() {
   // eso no se muestra nada: mostrar de menos y pegar un salto cuando carga es
   // peor que mostrar un esqueleto.
   const secciones = useMemo(() => {
-    if (!rol) return [];
+    if (!roles) return [];
 
     return MANUAL.map((s) => ({
       ...s,
       tareas: s.tareas.filter((t) => {
-        if (t.modulo && !tieneModulo(rol, t.modulo)) return false;
-        if (t.capacidad && !puede(rol, t.capacidad)) return false;
+        if (t.modulo && !tieneModulo(roles, t.modulo)) return false;
+        if (t.capacidad && !puede(roles, t.capacidad)) return false;
         return true;
       }),
     })).filter((s) => s.tareas.length > 0);
-  }, [rol]);
+  }, [roles]);
 
   /** Todas las tareas visibles, en aplanada, con el tema al que pertenecen. */
   const items: ItemIndice[] = useMemo(
@@ -282,10 +282,11 @@ export default function AdminManual() {
         Acá vas a encontrar solo las tareas que te corresponden. Si algo que hacés
         vos no está, es que todavía no está escrito:{' '}
         <strong className="text-main">decile a quien administra el sistema</strong>.
-        {rol && (
+        {roles && (
           <>
             {' '}
-            Vos entrás como <strong className="text-main">{ROL_LABEL[rol]}</strong>.
+            Vos entrás como{' '}
+            <strong className="text-main">{etiquetasDeRoles(roles)}</strong>.
           </>
         )}
       </Hint>

@@ -65,6 +65,20 @@ export const PROTECTED_ROUTES = ['/admin', '/socio-benefactor', '/socio-cadete']
 export function isProtectedRoute(pathname: string): boolean {
   return PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
 }
+
+/**
+ * Unión de las tablas permitidas para todos los roles de una persona.
+ *
+ * Se usa en /api/user/query: quien es socio benefactor y además cadete puede
+ * consultar lo de ambos, porque los permisos se suman.
+ */
+export function tablasDe(roles: readonly Rol[]): string[] {
+  const tablas = new Set<string>();
+  for (const rol of roles) {
+    for (const tabla of TABLES_BY_ROLE[rol] ?? []) tablas.add(tabla);
+  }
+  return [...tablas];
+}
 // Se fueron VALIDATION, getRoleFromPath y MESES, que nadie importaba.
 //
 // VALIDATION era una trampa: sus limites viven donde se aplican, no en un

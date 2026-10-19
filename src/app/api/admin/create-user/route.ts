@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { queryOne, insert, uuid } from '@/lib/db';
 import { requireModulo, hashPassword } from '@/lib/auth';
+import { normalizarRoles, rolPrincipal, type Rol } from '@/lib/roles';
 import {
   emailSchema, passwordSchema, dniSchema, nombreSchema, apellidoSchema,
-  rolAdminSchema, firstError,
+  rolesAdminSchema, firstError,
 } from '@/lib/schemas';
 
 // Alta de usuarios desde el panel del club. El admin sí puede crear cuentas
@@ -25,20 +26,26 @@ export async function POST(request: NextRequest) {
     const {
       email: emailRaw, password: passwordRaw, nombre: nombreRaw, apellido: apellidoRaw,
       dni: dniRaw, cuil: cuilRaw, telefono = '', direccion = '',
-      rol: rolRaw = 'socio_benefactor',
     } = body;
+
+    // `roles` es la forma nueva; `rol` se acepta para no romper clientes
+    // viejos que todavía mandan un solo valor.
+    const rolesRaw = body.roles ?? (body.rol !== undefined ? [body.rol] : ['socio_benefactor']);
 
     const email = emailSchema.safeParse(emailRaw);
     const password = passwordSchema.safeParse(passwordRaw);
     const nombre = nombreSchema.safeParse(nombreRaw);
     const apellido = apellidoSchema.safeParse(apellidoRaw);
-    const rol = rolAdminSchema.safeParse(rolRaw);
+    const roles = rolesAdminSchema.safeParse(rolesRaw);
 
     if (!email.success) return NextResponse.json({ error: firstError(email.error) }, { status: 400 });
     if (!password.success) return NextResponse.json({ error: firstError(password.error) }, { status: 400 });
     if (!nombre.success) return NextResponse.json({ error: firstError(nombre.error) }, { status: 400 });
     if (!apellido.success) return NextResponse.json({ error: firstError(apellido.error) }, { status: 400 });
-    if (!rol.success) return NextResponse.json({ error: 'Rol inválido' }, { status: 400 });
+    if (!roles.success) return NextResponse.json({ error: firstError(roles.error) }, { status: 400 });
+
+    const rolesValidos = normalizarRoles(roles.data);
+    const rolPrincipalUsuario: Rol = rolPrincipal(rolesValidos);
 
     const emailVal = email.data;
 
@@ -65,22 +72,25 @@ export async function POST(request: NextRequest) {
     // Alta desde el panel: el admin da la clave y entrega las credenciales en
     // persona, así que la cuenta nace verificada. Quien se registra por
     // /registro sí tiene que pasar por el email.
+    const rolesJson = JSON.stringify(rolesValidos);
+
     await insert(
-      'INSERT INTO usuarios (id, email, password_hash, rol, email_verificado) VALUES (?, ?, ?, ?, 1)',
-      [userId, emailVal, hash, rol.data]
+      'INSERT INTO usuarios (id, email, password_hash, rol, roles, email_verificado) VALUES (?, ?, ?, ?, ?, 1)',
+      [userId, emailVal, hash, rolPrincipalUsuario, rolesJson]
     );
 
     await insert(
-      'INSERT INTO perfiles (id, usuario_id, rol, nombre, apellido, dni, cuil, correo, telefono, direccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO perfiles (id, usuario_id, rol, roles, nombre, apellido, dni, cuil, correo, telefono, direccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        userId, userId, rol.data, nombre.data, apellido.data, dniFinal,
+        userId, userId, rolPrincipalUsuario, rolesJson, nombre.data, apellido.data, dniFinal,
         cuilRaw || null, emailVal, telefono, direccion,
       ]
     );
 
     // Un deportista necesita su fila en `deportistas` para que el portal y las
-    // cuotas funcionen; un padre no.
-    if (rol.data === 'socio_cadete') {
+    // cuotas funcionen; un padre no. Basta con que TENGA el rol, aunque no sea
+    // el principal.
+    if (rolesValidos.includes('socio_cadete')) {
       await insert('INSERT INTO deportistas (id, perfil_id) VALUES (?, ?)', [uuid(), userId]);
     }
 

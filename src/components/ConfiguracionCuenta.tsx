@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { ROL_LABEL, type Rol } from '@/lib/roles';
+import { normalizarRoles, etiquetasDeRoles } from '@/lib/roles';
 import { PageHeader, Panel, DataPoint, Hint } from '@/components/admin/ui';
 import { Save, Lock, Eye, EyeOff } from 'lucide-react';
 
@@ -132,7 +132,10 @@ export function ConfiguracionCuenta() {
                   <DataPoint label="DNI" value={perfil.dni} />
                   <DataPoint label="CUIL" value={perfil.cuil || '—'} />
                   <DataPoint label="Correo" value={perfil.correo} />
-                  <DataPoint label="Rol" value={ROL_LABEL[perfil.rol as Rol] ?? perfil.rol} />
+                  <DataPoint
+                    label="Roles"
+                    value={etiquetasDeRoles(normalizarRoles(perfil.roles, perfil.rol))}
+                  />
                 </dl>
               )}
 

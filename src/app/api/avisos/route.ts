@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { puede } from '@/lib/capacidades';
+import { rolesDeUsuario } from '@/lib/roles';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { listarAvisosPendientes, enviarAviso, historialAvisos } from '@/lib/avisos-db';
 import { agruparParaAvisar, type CuotaParaAvisar, type Responsable, type SeguroParaAvisar } from '@/lib/avisos';
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser(request);
     if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    if (!puede(user.rol, 'comunicar_padres')) return sinPermiso(user.rol, 'comunicar_padres');
+    if (!puede(rolesDeUsuario(user), 'comunicar_padres')) return sinPermiso(user.rol, 'comunicar_padres');
 
     const pendiente = request.nextUrl.searchParams.get('pendiente');
 
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser(request);
     if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    if (!puede(user.rol, 'comunicar_padres')) return sinPermiso(user.rol, 'comunicar_padres');
+    if (!puede(rolesDeUsuario(user), 'comunicar_padres')) return sinPermiso(user.rol, 'comunicar_padres');
 
     const leido = await leerJson<{
       usuarioId?: string;

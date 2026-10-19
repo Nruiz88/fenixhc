@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     }
 
     const perfil = await queryOne(
-      'SELECT id, nombre, apellido, dni, cuil, telefono, direccion, foto_url FROM perfiles WHERE usuario_id = ?',
+      'SELECT id, nombre, apellido, dni, cuil, telefono, direccion, foto_url, rol, roles FROM perfiles WHERE usuario_id = ?',
       [user.id]
     );
 

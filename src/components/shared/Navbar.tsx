@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { getCurrentUser, logout } from '@/lib/auth-client';
-import { PORTAL_POR_ROL, type Rol } from '@/lib/roles';
+import { portalDeRoles, rolesDeUsuario, rolPrincipal, etiquetasDeRoles } from '@/lib/roles';
 import { NotificationsBell } from './NotificationsBell';
 
 const PUBLIC_LINKS = [
@@ -62,8 +62,10 @@ export function Navbar() {
     window.location.href = '/';
   };
 
-  const dashboardInfo = user?.rol
-    ? { href: PORTAL_POR_ROL[user.rol as Rol], label: ROLE_LABEL_UI[user.rol] ?? 'Mi Cuenta' }
+  const roles = user ? rolesDeUsuario(user) : [];
+  const principal = user ? rolPrincipal(roles) : null;
+  const dashboardInfo = user && principal
+    ? { href: portalDeRoles(roles), label: ROLE_LABEL_UI[principal] ?? 'Mi Cuenta' }
     : null;
   const initials = user ? `${user.nombre?.[0] || ''}${user.apellido?.[0] || ''}` : '';
 
@@ -141,7 +143,7 @@ export function Navbar() {
                     <p className="text-sm font-medium text-white leading-tight">
                       {user.nombre} {user.apellido}
                     </p>
-                    <p className="text-[10px] text-gray-500 capitalize">{user.rol}</p>
+                    <p className="text-[10px] text-gray-500">{etiquetasDeRoles(roles)}</p>
                   </div>
                   <ChevronDown className={`h-3.5 w-3.5 text-gray-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -221,7 +223,7 @@ export function Navbar() {
                     </Avatar>
                     <div>
                       <p className="text-sm font-medium text-white">{user.nombre} {user.apellido}</p>
-                      <p className="text-xs text-gray-500 capitalize">{user.rol}</p>
+                      <p className="text-xs text-gray-500">{etiquetasDeRoles(roles)}</p>
                     </div>
                   </div>
                 )}

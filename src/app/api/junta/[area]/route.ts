@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { puede, ETIQUETA_CAPACIDAD, type Capacidad } from '@/lib/capacidades';
+import { rolesDeUsuario } from '@/lib/roles';
 import * as db from '@/lib/junta-db';
 import { FECHA_RE, parsearFecha, parsearMonto } from '@/lib/junta-validacion';
 
@@ -44,11 +45,11 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ area: s
 
     // --- Comunicaciones internas: lectura ----------------------------------
     if (area === 'comunicaciones') {
-      if (!puede(user.rol, 'ver_comunicacion_interna')) return sinPermiso(user.rol, 'ver_comunicacion_interna');
+      if (!puede(rolesDeUsuario(user), 'ver_comunicacion_interna')) return sinPermiso(user.rol, 'ver_comunicacion_interna');
 
       // Los borradores solo los ve quien puede escribir. Si no, un borrador se
       // filtra por la pantalla a cualquiera que esté en la sección.
-      const quienEscribe = puede(user.rol, 'publicar_comunicacion_interna');
+      const quienEscribe = puede(rolesDeUsuario(user), 'publicar_comunicacion_interna');
       const estados = url.searchParams.get('todo') === '1' && quienEscribe
         ? ['borrador', 'publicado', 'archivado']
         : ['publicado'];
@@ -65,20 +66,20 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ area: s
     if (area === 'partes') {
       const tipo = url.searchParams.get('tipo') === 'financiero' ? 'financiero' : 'administrativo';
       const cap: Capacidad = tipo === 'financiero' ? 'ver_parte_financiero' : 'ver_parte_administrativo';
-      if (!puede(user.rol, cap)) return sinPermiso(user.rol, cap);
+      if (!puede(rolesDeUsuario(user), cap)) return sinPermiso(user.rol, cap);
 
       return NextResponse.json({
         data: {
           tipo,
           lista: await db.listarPartes(tipo),
-          puedeCargar: puede(user.rol, 'publicar_parte'),
+          puedeCargar: puede(rolesDeUsuario(user), 'publicar_parte'),
         },
       });
     }
 
     // --- Documentos de legajo ---------------------------------------------
     if (area === 'documentos') {
-      if (!puede(user.rol, 'ver_documentos_legajo')) return sinPermiso(user.rol, 'ver_documentos_legajo');
+      if (!puede(rolesDeUsuario(user), 'ver_documentos_legajo')) return sinPermiso(user.rol, 'ver_documentos_legajo');
 
       const lista = await db.listarDocumentosLegajo({
         perfilId: url.searchParams.get('perfil') ?? undefined,
@@ -87,21 +88,21 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ area: s
 
       // El filtro de visibilidad va ACÁ y no en la consulta: depende de quién
       // pregunta, y si se queda en el SQL hay que acordarse de pasarlo siempre.
-      const sinPrivados = !puede(user.rol, 'descargar_documentos_legajo');
+      const sinPrivados = !puede(rolesDeUsuario(user), 'descargar_documentos_legajo');
       const visible = sinPrivados ? lista.filter((d) => d.visibilidad !== 'privado') : lista;
 
       return NextResponse.json({
         data: {
           lista: visible,
-          puedeCargar: puede(user.rol, 'cargar_documentos_legajo'),
-          puedeDescargar: puede(user.rol, 'descargar_documentos_legajo'),
+          puedeCargar: puede(rolesDeUsuario(user), 'cargar_documentos_legajo'),
+          puedeDescargar: puede(rolesDeUsuario(user), 'descargar_documentos_legajo'),
         },
       });
     }
 
     // --- Recibos -----------------------------------------------------------
     if (area === 'recibos') {
-      if (!puede(user.rol, 'emitir_recibos')) return sinPermiso(user.rol, 'emitir_recibos');
+      if (!puede(rolesDeUsuario(user), 'emitir_recibos')) return sinPermiso(user.rol, 'emitir_recibos');
 
       return NextResponse.json({
         data: {
@@ -116,27 +117,27 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ area: s
 
     // --- Seguros -----------------------------------------------------------
     if (area === 'seguros') {
-      if (!puede(user.rol, 'adherentes_seguro')) return sinPermiso(user.rol, 'adherentes_seguro');
+      if (!puede(rolesDeUsuario(user), 'adherentes_seguro')) return sinPermiso(user.rol, 'adherentes_seguro');
 
       return NextResponse.json({
         data: {
           lista: await db.listarSeguros({ estado: url.searchParams.get('estado') ?? undefined }),
           config: await db.configSeguro(),
-          puedeGestionar: puede(user.rol, 'gestionar_seguro'),
+          puedeGestionar: puede(rolesDeUsuario(user), 'gestionar_seguro'),
         },
       });
     }
 
     // --- Inventario --------------------------------------------------------
     if (area === 'inventario') {
-      if (!puede(user.rol, 'ver_inventario')) return sinPermiso(user.rol, 'ver_inventario');
+      if (!puede(rolesDeUsuario(user), 'ver_inventario')) return sinPermiso(user.rol, 'ver_inventario');
 
       return NextResponse.json({
         data: {
           items: await db.listarInventario(),
           prestamos: await db.listarPrestamos(true),
-          puedeGestionar: puede(user.rol, 'gestionar_inventario'),
-          puedePrestar: puede(user.rol, 'gestionar_prestamos'),
+          puedeGestionar: puede(rolesDeUsuario(user), 'gestionar_inventario'),
+          puedePrestar: puede(rolesDeUsuario(user), 'gestionar_prestamos'),
         },
       });
     }
@@ -164,7 +165,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
 
     // --- Comunicaciones internas -------------------------------------------
     if (area === 'comunicaciones') {
-      if (!puede(user.rol, 'publicar_comunicacion_interna')) {
+      if (!puede(rolesDeUsuario(user), 'publicar_comunicacion_interna')) {
         return sinPermiso(user.rol, 'publicar_comunicacion_interna');
       }
 
@@ -208,7 +209,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
 
     // --- Partes ------------------------------------------------------------
     if (area === 'partes') {
-      if (!puede(user.rol, 'publicar_parte')) return sinPermiso(user.rol, 'publicar_parte');
+      if (!puede(rolesDeUsuario(user), 'publicar_parte')) return sinPermiso(user.rol, 'publicar_parte');
       if (accion !== 'crear') return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });
 
       // El tipo decide qué parte se está escribiendo, y con eso qué parte se
@@ -216,7 +217,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
       // parte financiero que después no va a poder leer.
       const tipo = b.tipo === 'financiero' ? 'financiero' : 'administrativo';
       const capLectura: Capacidad = tipo === 'financiero' ? 'ver_parte_financiero' : 'ver_parte_administrativo';
-      if (!puede(user.rol, capLectura)) return sinPermiso(user.rol, capLectura);
+      if (!puede(rolesDeUsuario(user), capLectura)) return sinPermiso(user.rol, capLectura);
 
       const fecha = parsearFecha(b.fecha_reunion);
       const titulo = texto(b.titulo, 200);
@@ -237,7 +238,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
     // --- Documentos de legajo ---------------------------------------------
     if (area === 'documentos') {
       if (accion === 'crear') {
-        if (!puede(user.rol, 'cargar_documentos_legajo')) return sinPermiso(user.rol, 'cargar_documentos_legajo');
+        if (!puede(rolesDeUsuario(user), 'cargar_documentos_legajo')) return sinPermiso(user.rol, 'cargar_documentos_legajo');
 
         const perfilId = texto(b.perfil_id, 36);
         const url = texto(b.url, 500);
@@ -251,7 +252,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
           tipo: unoDe(b.tipo, ['ficha', 'certificado_estudios', 'copia_dni', 'evaluacion', 'planilla', 'otro'], 'otro'),
           // Solo el que puede verlos todos baja documentos marcados como privados.
           visibilidad:
-            b.visibilidad === 'privado' && !puede(user.rol, 'descargar_documentos_legajo')
+            b.visibilidad === 'privado' && !puede(rolesDeUsuario(user), 'descargar_documentos_legajo')
               ? 'directiva'
               : unoDe(b.visibilidad, ['directiva', 'privado'], 'directiva'),
           notas: texto(b.notas, 2000) || null,
@@ -264,7 +265,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
 
     // --- Recibos -----------------------------------------------------------
     if (area === 'recibos') {
-      if (!puede(user.rol, 'emitir_recibos')) return sinPermiso(user.rol, 'emitir_recibos');
+      if (!puede(rolesDeUsuario(user), 'emitir_recibos')) return sinPermiso(user.rol, 'emitir_recibos');
 
       if (accion === 'emitir') {
         const monto = parsearMonto(b.monto);
@@ -304,7 +305,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
     // --- Seguros -----------------------------------------------------------
     if (area === 'seguros') {
       if (accion === 'config') {
-        if (!puede(user.rol, 'gestionar_seguro')) return sinPermiso(user.rol, 'gestionar_seguro');
+        if (!puede(rolesDeUsuario(user), 'gestionar_seguro')) return sinPermiso(user.rol, 'gestionar_seguro');
         const monto = parsearMonto(b.monto_base);
         const vigencia = Number(b.meses_vigencia);
         const aviso = Number(b.dias_aviso);
@@ -321,7 +322,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
       }
 
       if (accion === 'guardar') {
-        if (!puede(user.rol, 'gestionar_seguro')) return sinPermiso(user.rol, 'gestionar_seguro');
+        if (!puede(rolesDeUsuario(user), 'gestionar_seguro')) return sinPermiso(user.rol, 'gestionar_seguro');
 
         const jugadorId = texto(b.jugador_perfil_id, 36);
         if (!jugadorId) return NextResponse.json({ error: 'Falta el jugador' }, { status: 400 });
@@ -350,7 +351,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
     // --- Inventario --------------------------------------------------------
     if (area === 'inventario') {
       if (accion === 'guardar-item') {
-        if (!puede(user.rol, 'gestionar_inventario')) return sinPermiso(user.rol, 'gestionar_inventario');
+        if (!puede(rolesDeUsuario(user), 'gestionar_inventario')) return sinPermiso(user.rol, 'gestionar_inventario');
 
         const nombre = texto(b.nombre, 150);
         const cantidad = Number(b.cantidad_total);
@@ -374,7 +375,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
       }
 
       if (accion === 'prestar') {
-        if (!puede(user.rol, 'gestionar_prestamos')) return sinPermiso(user.rol, 'gestionar_prestamos');
+        if (!puede(rolesDeUsuario(user), 'gestionar_prestamos')) return sinPermiso(user.rol, 'gestionar_prestamos');
 
         const itemId = texto(b.item_id, 36);
         const persona = texto(b.persona_nombre, 150);
@@ -401,7 +402,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
       }
 
       if (accion === 'cerrar-prestamo') {
-        if (!puede(user.rol, 'gestionar_prestamos')) return sinPermiso(user.rol, 'gestionar_prestamos');
+        if (!puede(rolesDeUsuario(user), 'gestionar_prestamos')) return sinPermiso(user.rol, 'gestionar_prestamos');
 
         const id = texto(b.id, 36);
         const resultado = b.resultado === 'perdido' ? 'perdido' : 'devuelto';

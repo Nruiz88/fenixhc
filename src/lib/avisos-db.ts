@@ -53,6 +53,10 @@ async function responsables(): Promise<Responsable[]> {
        JOIN perfiles p ON p.id = f.padre_perfil_id
        LEFT JOIN perfiles d ON d.id = f.deportista_perfil_id
       WHERE p.rol IN ('socio_benefactor', 'admin', 'presidente', 'secretario', 'tesorero')
+         OR JSON_OVERLAPS(
+              COALESCE(p.roles, JSON_ARRAY()),
+              JSON_ARRAY('socio_benefactor', 'admin', 'presidente', 'secretario', 'tesorero')
+            )
       ORDER BY p.apellido, p.nombre`
   );
 

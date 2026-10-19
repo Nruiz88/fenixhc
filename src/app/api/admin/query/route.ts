@@ -10,14 +10,14 @@ const MAX_LIMIT = 1000;
 
 // Whitelist of columns per table for safety
 const TABLE_COLUMNS: Record<string, string[]> = {
-  perfiles: ['id', 'usuario_id', 'rol', 'nombre', 'apellido', 'dni', 'cuil', 'correo', 'telefono', 'direccion', 'foto_url', 'created_at', 'updated_at'],
+  perfiles: ['id', 'usuario_id', 'rol', 'roles', 'nombre', 'apellido', 'dni', 'cuil', 'correo', 'telefono', 'direccion', 'foto_url', 'created_at', 'updated_at'],
   // Solo lectura de estado de cuentas. `password_hash`, `verification_token`
   // y los expiry NO están en la lista a propósito: si aparecieran, el endpoint
   // genérico permitiría escribir texto plano en la columna de la contraseña
   // o leer los tokens de verificación de cualquier usuario. El alta, la
   // edición y el cambio de contraseña van por /api/admin/create-user y
   // /api/admin/update-user, que hashean y validan.
-  usuarios: ['id', 'email', 'rol', 'email_verificado', 'verification_sent_at', 'created_at', 'updated_at'],
+  usuarios: ['id', 'email', 'rol', 'roles', 'email_verificado', 'verification_sent_at', 'created_at', 'updated_at'],
   deportistas: ['id', 'perfil_id', 'dni_frente_url', 'dni_fondo_url', 'club_activo', 'fecha_inscripcion', 'observaciones', 'created_at'],
   familias: ['id', 'padre_perfil_id', 'deportista_perfil_id', 'tipo_vinculo', 'created_at'],
   // `monto_pagado` y `vencimiento_override` van acá porque /admin/pagos los
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
         if (!data || typeof data !== 'object') {
           return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
         }
-        const filteredData = filterColumns(data, allowedCols);
+        const filteredData = filterColumns(data, allowedCols, true);
         if (Object.keys(filteredData).length === 0) {
           return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
         }
@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
         }
         const { clause, params: filterParams } = buildWhere(table, filters);
         if (!clause) return NextResponse.json({ error: 'Filtros requeridos para update' }, { status: 400 });
-        const filteredData = filterColumns(data, allowedCols);
+        const filteredData = filterColumns(data, allowedCols, true);
         const keys = Object.keys(filteredData);
         if (keys.length === 0) {
           return NextResponse.json({ error: 'No hay columnas válidas para actualizar' }, { status: 400 });
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
         if (!data || typeof data !== 'object') {
           return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
         }
-        const filteredData = filterColumns(data, allowedCols);
+        const filteredData = filterColumns(data, allowedCols, true);
         if (Object.keys(filteredData).length === 0) {
           return NextResponse.json({ error: 'Datos requeridos' }, { status: 400 });
         }
@@ -200,15 +200,25 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Columnas que se pueden LEER pero no escribir por el endpoint genérico.
+//
+// Los roles cambian por /api/admin/create-user y /api/admin/update-user, que
+// validan reglas de negocio (no quedar sin admin, no auto-quitarse el cargo).
+// Si el genérico las aceptara, cualquier cargo de directiva podría
+// autoasignarse admin con un UPDATE, salteándose esas reglas.
+const COLUMNAS_ESCRITURA_RESERVADA = new Set(['rol', 'roles']);
+
 // Filtra las claves contra el whitelist de la tabla. NUNCA debe devolver
 // el `data` original como fallback: las claves se interpolan directo en el
 // SQL (INSERT INTO t (keys)), así que devolverlas sin filtrar abría una vía
 // de inyección de nombres de columna.
-function filterColumns(data: any, allowed: string[]): any {
+function filterColumns(data: any, allowed: string[], escritura = false): any {
   const filtered: any = {};
   if (allowed.length === 0) return filtered;
   for (const [k, v] of Object.entries(data)) {
-    if (allowed.includes(k) && IDENT_RE.test(k)) filtered[k] = v;
+    if (!allowed.includes(k) || !IDENT_RE.test(k)) continue;
+    if (escritura && COLUMNAS_ESCRITURA_RESERVADA.has(k)) continue;
+    filtered[k] = v;
   }
   return filtered;
 }

@@ -14,7 +14,7 @@
 //    PostgREST (row.perfiles, row.familias) para no tocar el JSX.
 
 import type { AuthUser } from './auth';
-import { esDirectiva } from './roles';
+import { esDirectiva, rolesDeUsuario, tieneRol } from './roles';
 
 export interface ViewDef {
   /** SQL estático. Usa `?` para los parámetros. */
@@ -75,7 +75,7 @@ const perfil = (row: any, prefijo: string) => {
 // --- VISTAS ADMIN --------------------------------------------------------
 
 const ADMIN_DEPORTISTAS: ViewDef = {
-  allowed: (u) => esDirectiva(u.rol),
+  allowed: (u) => esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT d.id, d.perfil_id, d.club_activo, d.fecha_inscripcion, d.observaciones,
            d.dni_frente_url, d.dni_fondo_url, d.created_at,
@@ -91,7 +91,7 @@ const ADMIN_DEPORTISTAS: ViewDef = {
 };
 
 const ADMIN_CUOTAS: ViewDef = {
-  allowed: (u) => esDirectiva(u.rol),
+  allowed: (u) => esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT c.id, c.familia_id, c.tipo_socio, c.monto,
            COALESCE(c.monto_pagado, 0) AS monto_pagado, c.mes, c.anio, c.estado,
@@ -116,7 +116,7 @@ const ADMIN_CUOTAS: ViewDef = {
 };
 
 const ADMIN_FAMILIAS: ViewDef = {
-  allowed: (u) => esDirectiva(u.rol),
+  allowed: (u) => esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT f.id, f.padre_perfil_id, f.deportista_perfil_id, f.tipo_vinculo, f.created_at,
            pp.id AS padre_id, pp.nombre AS padre_nombre, pp.apellido AS padre_apellido,
@@ -133,7 +133,7 @@ const ADMIN_FAMILIAS: ViewDef = {
 };
 
 const ADMIN_DEPORTISTAS_LIGEROS: ViewDef = {
-  allowed: (u) => esDirectiva(u.rol),
+  allowed: (u) => esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT d.id, d.perfil_id, d.club_activo, d.fecha_inscripcion,
            p.id AS p_id, p.nombre AS p_nombre, p.apellido AS p_apellido, p.dni AS p_dni
@@ -146,7 +146,7 @@ const ADMIN_DEPORTISTAS_LIGEROS: ViewDef = {
 };
 
 const ADMIN_RESERVAS: ViewDef = {
-  allowed: (u) => esDirectiva(u.rol),
+  allowed: (u) => esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT r.id, r.cancha_id, r.usuario_id, r.fecha, r.hora_inicio, r.hora_fin,
            r.estado, r.notas, r.created_at,
@@ -164,7 +164,7 @@ const ADMIN_RESERVAS: ViewDef = {
 // --- VISTAS USUARIO (scoped) --------------------------------------------
 
 const USUARIO_DEPORTISTAS: ViewDef = {
-  allowed: (u) => u.rol === 'socio_cadete' || esDirectiva(u.rol),
+  allowed: (u) => tieneRol(rolesDeUsuario(u), 'socio_cadete') || esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT d.id, d.perfil_id, d.club_activo, d.fecha_inscripcion, d.observaciones,
            d.dni_frente_url, d.dni_fondo_url, d.created_at,
@@ -179,7 +179,7 @@ const USUARIO_DEPORTISTAS: ViewDef = {
 };
 
 const PADRE_HIJOS: ViewDef = {
-  allowed: (u) => u.rol === 'socio_benefactor' || esDirectiva(u.rol),
+  allowed: (u) => tieneRol(rolesDeUsuario(u), 'socio_benefactor') || esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT f.id, f.tipo_vinculo, f.created_at,
            p.id AS p_id, p.nombre AS p_nombre, p.apellido AS p_apellido,
@@ -194,7 +194,7 @@ const PADRE_HIJOS: ViewDef = {
 };
 
 const PADRE_CUOTAS: ViewDef = {
-  allowed: (u) => u.rol === 'socio_benefactor' || esDirectiva(u.rol),
+  allowed: (u) => tieneRol(rolesDeUsuario(u), 'socio_benefactor') || esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT c.id, c.familia_id, c.tipo_socio, c.monto,
            COALESCE(c.monto_pagado, 0) AS monto_pagado, c.mes, c.anio, c.estado,
@@ -260,10 +260,10 @@ const USUARIO_NOTIFICACIONES: ViewDef = {
     FROM notificaciones n
     LEFT JOIN notificaciones_usuarios nu
            ON nu.notificacion_id = n.id AND nu.usuario_id = ?
-    WHERE n.destinatario_rol = 'todos' OR n.destinatario_rol = ?
+    WHERE n.destinatario_rol = 'todos' OR FIND_IN_SET(n.destinatario_rol, ?)
     ORDER BY n.created_at DESC
     {LIMIT}`,
-  scope: (u) => [u.id, u.rol],
+  scope: (u) => [u.id, rolesDeUsuario(u).join(',')],
   shape: (r) => ({ ...r, leida: Number(r.leida) === 1 }),
 };
 

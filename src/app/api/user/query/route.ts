@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { leerJson, RESP_BAD_JSON } from '@/lib/request';
 import { query, execute, insert, uuid } from '@/lib/db';
 import { requireAuth, type AuthUser } from '@/lib/auth';
-import { TABLES_BY_ROLE } from '@/lib/constants';
+import { tablasDe } from '@/lib/constants';
 import { getView, buildViewSql } from '@/lib/views';
-import { esDirectiva } from '@/lib/roles';
+import { esDirectiva, rolesDeUsuario, tieneRol } from '@/lib/roles';
 import { aplicarFiltrosPublicos } from '@/lib/publico';
 import { opinionVeda } from '@/lib/consentimientos';
 import { opinionVigente, tieneConsentimiento } from '@/lib/consentimientos-db';
@@ -13,7 +13,7 @@ const ALLOWED_OPERATIONS = ['select', 'insert', 'update', 'delete'] as const;
 const MAX_LIMIT = 1000;
 
 const TABLE_COLUMNS: Record<string, string[]> = {
-  perfiles: ['id', 'usuario_id', 'rol', 'nombre', 'apellido', 'dni', 'cuil', 'correo', 'telefono', 'direccion', 'foto_url', 'created_at', 'updated_at'],
+  perfiles: ['id', 'usuario_id', 'rol', 'roles', 'nombre', 'apellido', 'dni', 'cuil', 'correo', 'telefono', 'direccion', 'foto_url', 'created_at', 'updated_at'],
   deportistas: ['id', 'perfil_id', 'dni_frente_url', 'dni_fondo_url', 'club_activo', 'fecha_inscripcion', 'observaciones', 'created_at'],
   familias: ['id', 'padre_perfil_id', 'deportista_perfil_id', 'tipo_vinculo', 'created_at'],
   cuotas: ['id', 'familia_id', 'tipo_socio', 'monto', 'monto_pagado', 'mes', 'anio', 'estado', 'metodo_pago', 'comprobante_url', 'fecha_pago', 'created_at'],
@@ -40,12 +40,13 @@ const IDENT_RE = /^[A-Za-z0-9_]+$/;
 // del socio benefactor, sobre las de sus hijos vinculados).
 // La directiva usa /api/admin/query, asi que no entra por aca.
 function ownerCondition(table: string, user: AuthUser): { cond: string; params: any[] } | null {
-  if (esDirectiva(user.rol)) return null;
+  const roles = rolesDeUsuario(user);
+  if (esDirectiva(roles)) return null;
   switch (table) {
     case 'perfiles':
       return { cond: 'id = ?', params: [user.id] };
     case 'deportistas':
-      return user.rol === 'socio_cadete'
+      return tieneRol(roles, 'socio_cadete')
         ? { cond: 'perfil_id = ?', params: [user.id] }
         : { cond: 'perfil_id IN (SELECT deportista_perfil_id FROM familias WHERE padre_perfil_id = ?)', params: [user.id] };
     case 'familias':
@@ -55,7 +56,12 @@ function ownerCondition(table: string, user: AuthUser): { cond: string; params: 
     case 'reservas':
       return { cond: 'usuario_id = ?', params: [user.id] };
     case 'notificaciones':
-      return { cond: "(destinatario_rol = 'todos' OR destinatario_rol = ?)", params: [user.rol] };
+      // Un usuario con dos roles ve las notificaciones de AMBOS. FIND_IN_SET
+      // recibe la lista separada por comas ya armada en el servidor.
+      return {
+        cond: "(destinatario_rol = 'todos' OR FIND_IN_SET(destinatario_rol, ?))",
+        params: [roles.join(',')],
+      };
     case 'notificaciones_usuarios':
       return { cond: 'usuario_id = ?', params: [user.id] };
     case 'push_subscriptions':
@@ -99,7 +105,7 @@ const UPDATABLE_POR_SOCIO: Record<string, string[]> = {
 
 // Columnas que se rellenan automáticamente en inserts de usuarios no-admin
 function forcedInsertValues(table: string, user: AuthUser): Record<string, any> | null {
-  if (esDirectiva(user.rol)) return {};
+  if (esDirectiva(rolesDeUsuario(user))) return {};
   switch (table) {
     case 'familias': return { padre_perfil_id: user.id };
     case 'reservas': return { usuario_id: user.id };
@@ -181,7 +187,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ data: rows.map(def.shape) });
     }
 
-    if (!table || !TABLES_BY_ROLE[user.rol]?.includes(table)) {
+    // Los permisos de tabla se suman entre todos los roles de la persona.
+    if (!table || !tablasDe(rolesDeUsuario(user)).includes(table)) {
       return NextResponse.json({ error: 'Tabla no válida para tu rol' }, { status: 403 });
     }
 
@@ -189,7 +196,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Operación no válida' }, { status: 400 });
     }
 
-    const esDir = esDirectiva(user.rol);
+    const esDir = esDirectiva(rolesDeUsuario(user));
     const blocked = WRITE_BLOCKED_POR_SOCIO[table] || [];
     if (!esDir && blocked.includes(operation)) {
       return NextResponse.json({ error: 'No tenés permisos para esta operación' }, { status: 403 });

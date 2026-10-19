@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { rateLimit, clientIp } from '@/lib/rateLimit';
 import { escribir } from '@/lib/almacen';
+import { rolesDeUsuario, tieneRol } from '@/lib/roles';
 import path from 'path';
 
 export const runtime = 'nodejs';
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     // La primera carpeta es el id del dueño: solo ahí se puede escribir
     const ownerFolder = cleanPath.split('/')[0];
-    if (user.rol !== 'admin' && ownerFolder !== user.id) {
+    if (!tieneRol(rolesDeUsuario(user), 'admin') && ownerFolder !== user.id) {
       return NextResponse.json({ error: 'Solo podés subir archivos en tu carpeta' }, { status: 403 });
     }
 
