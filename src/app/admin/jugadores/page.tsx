@@ -6,14 +6,19 @@ import { db } from '@/lib/adminQuery';
 import { iniciales, fecha } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import { PageHeader, StatCard, Panel, EmptyState, Toolbar, StatusPill } from '@/components/admin/ui';
+import { Paginacion } from '@/components/admin/paginacion';
 import { Button } from '@/components/ui/button';
 import { UserCheck, Search, X, FileText } from 'lucide-react';
+
+/** Fichas por página (múltiplo de 3 para cerrar las filas de la grilla). */
+const POR_PAGINA = 12;
 
 export default function AdminJugadores() {
   const [jugadores, setJugadores] = useState<any[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [soloActivos, setSoloActivos] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [pagina, setPagina] = useState(1);
 
   useEffect(() => {
     (async () => {
@@ -34,6 +39,14 @@ export default function AdminJugadores() {
         return `${p?.nombre ?? ''} ${p?.apellido ?? ''} ${p?.dni ?? ''}`.toLowerCase().includes(q);
       });
   }, [jugadores, busqueda, soloActivos]);
+
+  const totalPaginas = Math.max(1, Math.ceil(visibles.length / POR_PAGINA));
+  // Si la búsqueda o el filtro reducen la lista, no dejar la página fuera de rango.
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const visiblesPagina = visibles.slice(
+    (paginaActual - 1) * POR_PAGINA,
+    paginaActual * POR_PAGINA
+  );
 
   const activos = jugadores.filter((j) => j.club_activo).length;
   const conDocumento = jugadores.filter(
@@ -70,7 +83,7 @@ export default function AdminJugadores() {
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-dim" />
               <Input
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
+                onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
                 placeholder="Buscar por nombre o DNI"
                 className="pl-8"
                 aria-label="Buscar jugadores"
@@ -79,12 +92,12 @@ export default function AdminJugadores() {
             <Button
               size="sm"
               variant={soloActivos ? 'default' : 'outline'}
-              onClick={() => setSoloActivos((v) => !v)}
+              onClick={() => { setSoloActivos((v) => !v); setPagina(1); }}
             >
               Solo activos
             </Button>
             {(busqueda || soloActivos) && (
-              <Button variant="ghost" size="sm" onClick={() => { setBusqueda(''); setSoloActivos(false); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setBusqueda(''); setSoloActivos(false); setPagina(1); }}>
                 <X className="h-4 w-4" />Limpiar
               </Button>
             )}
@@ -119,7 +132,7 @@ export default function AdminJugadores() {
               jugadores.length === 0 ? (
                 <Button size="sm" render={<Link href="/admin/links-familia" />}>Ir a Vínculos familiares</Button>
               ) : (
-                <Button variant="outline" size="sm" onClick={() => { setBusqueda(''); setSoloActivos(false); }}>
+                <Button variant="outline" size="sm" onClick={() => { setBusqueda(''); setSoloActivos(false); setPagina(1); }}>
                   Ver todos
                 </Button>
               )
@@ -127,45 +140,61 @@ export default function AdminJugadores() {
           />
         </Panel>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibles.map((j) => {
-            const p = j.perfiles;
-            const completo = j.dni_frente_url && j.dni_fondo_url;
-            return (
-              <article key={j.id} className="rounded-xl border border-line bg-surface p-4">
-                <div className="flex items-start gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-info/15 text-xs font-bold text-info">
-                    {iniciales(p?.nombre, p?.apellido)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-sm font-semibold text-main" title={`${p?.nombre} ${p?.apellido}`}>
-                      {p?.nombre} {p?.apellido}
-                    </h2>
-                    <p className="truncate text-xs text-dim">DNI {p?.dni || '—'}</p>
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {visiblesPagina.map((j) => {
+              const p = j.perfiles;
+              const completo = j.dni_frente_url && j.dni_fondo_url;
+              return (
+                <article key={j.id} className="rounded-xl border border-line bg-surface p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-info/15 text-xs font-bold text-info">
+                      {iniciales(p?.nombre, p?.apellido)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h2 className="truncate text-sm font-semibold text-main" title={`${p?.nombre} ${p?.apellido}`}>
+                        {p?.nombre} {p?.apellido}
+                      </h2>
+                      <p className="truncate text-xs text-dim">DNI {p?.dni || '—'}</p>
+                    </div>
+                    <StatusPill tone={j.club_activo ? 'ok' : 'neutral'}>
+                      {j.club_activo ? 'Activo' : 'Inactivo'}
+                    </StatusPill>
                   </div>
-                  <StatusPill tone={j.club_activo ? 'ok' : 'neutral'}>
-                    {j.club_activo ? 'Activo' : 'Inactivo'}
-                  </StatusPill>
-                </div>
 
-                <dl className="mt-4 space-y-2 border-t border-line pt-3 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="text-dim">Inscripción</dt>
-                    <dd className="text-muted">{fecha(j.fecha_inscripcion)}</dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <dt className="text-dim">Documentación</dt>
-                    <dd>
-                      <StatusPill tone={completo ? 'ok' : 'warn'}>
-                        {completo ? 'Completa' : 'Falta'}
-                      </StatusPill>
-                    </dd>
-                  </div>
-                </dl>
-              </article>
-            );
-          })}
-        </div>
+                  <dl className="mt-4 space-y-2 border-t border-line pt-3 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <dt className="text-dim">Inscripción</dt>
+                      <dd className="text-muted">{fecha(j.fecha_inscripcion)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <dt className="text-dim">Documentación</dt>
+                      <dd>
+                        <StatusPill tone={completo ? 'ok' : 'warn'}>
+                          {completo ? 'Completa' : 'Falta'}
+                        </StatusPill>
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              );
+            })}
+          </div>
+
+          {totalPaginas > 1 && (
+            <div className="rounded-xl border border-line bg-surface px-4 py-3">
+              <Paginacion
+                pagina={paginaActual}
+                totalPaginas={totalPaginas}
+                total={visibles.length}
+                porPagina={POR_PAGINA}
+                onCambiar={setPagina}
+                etiqueta="jugador"
+                ariaLabel="Paginación de jugadores"
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

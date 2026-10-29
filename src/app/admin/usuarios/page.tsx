@@ -16,6 +16,7 @@ import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Toolbar } from '@/
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DialogoEditarUsuario, type UsuarioEditable } from '@/components/admin/editarUsuario';
 import { Confirmar } from '@/components/admin/confirmar';
+import { Paginacion } from '@/components/admin/paginacion';
 import { Users, UserCheck, Shield, UserPlus, Search, X, Check, Copy, Pencil, MailWarning, Trash2 } from 'lucide-react';
 
 const FORM_VACIO = {
@@ -30,6 +31,9 @@ const FORM_VACIO = {
   telefono: '',
   direccion: '',
 };
+
+/** Filas por página. La lista completa se sigue cargando para buscar y filtrar. */
+const POR_PAGINA = 20;
 
 /** Tono del badge según el rol, para que un vistazo diga quién ve qué. */
 const TONO_ROL: Record<Rol, 'brand' | 'info' | 'ok' | 'warn' | 'neutral'> = {
@@ -56,6 +60,7 @@ export default function AdminUsuariosPage() {
   const [aEliminar, setAEliminar] = useState<UsuarioEditable | null>(null);
   const [eliminando, setEliminando] = useState(false);
   const [miId, setMiId] = useState<string | null>(null);
+  const [pagina, setPagina] = useState(1);
 
   async function cargar() {
     setCargando(true);
@@ -111,6 +116,14 @@ export default function AdminUsuariosPage() {
           : `${u.nombre} ${u.apellido} ${u.correo} ${u.dni ?? ''}`.toLowerCase().includes(q)
       );
   }, [users, busqueda, filtroRol]);
+
+  const totalPaginas = Math.max(1, Math.ceil(visibles.length / POR_PAGINA));
+  // Si la búsqueda o una baja reducen la lista, no dejar la página fuera de rango.
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const visiblesPagina = visibles.slice(
+    (paginaActual - 1) * POR_PAGINA,
+    paginaActual * POR_PAGINA
+  );
 
   async function crear(e: React.FormEvent) {
     e.preventDefault();
@@ -237,24 +250,24 @@ export default function AdminUsuariosPage() {
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-dim" />
                 <Input
                   value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
+                  onChange={(e) => { setBusqueda(e.target.value); setPagina(1); }}
                   placeholder="Buscar por nombre, email o DNI"
                   className="pl-8"
                   aria-label="Buscar usuarios"
                 />
               </div>
               {(busqueda || filtroRol !== 'todos') && (
-                <Button variant="ghost" size="sm" onClick={() => { setBusqueda(''); setFiltroRol('todos'); }}>
+                <Button variant="ghost" size="sm" onClick={() => { setBusqueda(''); setFiltroRol('todos'); setPagina(1); }}>
                   <X className="h-4 w-4" />Limpiar
                 </Button>
               )}
             </div>
             <div className="flex flex-wrap gap-1.5">
-              <Button size="sm" variant={filtroRol === 'todos' ? 'default' : 'outline'} onClick={() => setFiltroRol('todos')}>
+              <Button size="sm" variant={filtroRol === 'todos' ? 'default' : 'outline'} onClick={() => { setFiltroRol('todos'); setPagina(1); }}>
                 Todos
               </Button>
               {ROLES.map((r) => (
-                <Button key={r} size="sm" variant={filtroRol === r ? 'default' : 'outline'} onClick={() => setFiltroRol(r)}>
+                <Button key={r} size="sm" variant={filtroRol === r ? 'default' : 'outline'} onClick={() => { setFiltroRol(r); setPagina(1); }}>
                   {ROL_LABEL[r]}
                 </Button>
               ))}
@@ -287,77 +300,93 @@ export default function AdminUsuariosPage() {
                   <UserPlus className="h-4 w-4" />Crear el primero
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" onClick={() => { setBusqueda(''); setFiltroRol('todos'); }}>
+                <Button variant="outline" size="sm" onClick={() => { setBusqueda(''); setFiltroRol('todos'); setPagina(1); }}>
                   Ver todos
                 </Button>
               )
             }
           />
         ) : (
-          <ul className="divide-y divide-line">
-            {visibles.map((u) => (
-              <li key={u.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2">
-                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand/15 text-xs font-bold text-brand">
-                  {iniciales(u.nombre, u.apellido)}
-                </span>
+          <>
+            <ul className="divide-y divide-line">
+              {visiblesPagina.map((u) => (
+                <li key={u.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand/15 text-xs font-bold text-brand">
+                    {iniciales(u.nombre, u.apellido)}
+                  </span>
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-medium text-main">
-                      {u.nombre} {u.apellido}
-                    </p>
-                    {(u.roles as Rol[]).map((r) => (
-                      <StatusPill key={r} tone={TONO_ROL[r] ?? 'neutral'} title={ROL_DESCRIPCION[r]}>
-                        {ROL_LABEL[r] ?? r}
-                      </StatusPill>
-                    ))}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-medium text-main">
+                        {u.nombre} {u.apellido}
+                      </p>
+                      {(u.roles as Rol[]).map((r) => (
+                        <StatusPill key={r} tone={TONO_ROL[r] ?? 'neutral'} title={ROL_DESCRIPCION[r]}>
+                          {ROL_LABEL[r] ?? r}
+                        </StatusPill>
+                      ))}
+                    </div>
+                    {/* truncate + title: los emails son cadenas largas sin
+                        puntos de corte y revientan la fila en pantallas angostas. */}
+                    <p className="truncate text-xs text-dim" title={u.correo}>{u.correo}</p>
                   </div>
-                  {/* truncate + title: los emails son cadenas largas sin
-                      puntos de corte y revientan la fila en pantallas angostas. */}
-                  <p className="truncate text-xs text-dim" title={u.correo}>{u.correo}</p>
-                </div>
 
-                {!u.email_verificado && (
-                  <StatusPill tone="warn" title="No confirmó su email: no puede entrar al sistema">
-                    <MailWarning className="h-3 w-3" />Sin verificar
-                  </StatusPill>
-                )}
+                  {!u.email_verificado && (
+                    <StatusPill tone="warn" title="No confirmó su email: no puede entrar al sistema">
+                      <MailWarning className="h-3 w-3" />Sin verificar
+                    </StatusPill>
+                  )}
 
-                <div className="hidden shrink-0 text-right sm:block">
-                  <p className="text-xs text-dim">Alta</p>
-                  <p className="text-xs text-muted">{fecha(u.created_at)}</p>
-                </div>
+                  <div className="hidden shrink-0 text-right sm:block">
+                    <p className="text-xs text-dim">Alta</p>
+                    <p className="text-xs text-muted">{fecha(u.created_at)}</p>
+                  </div>
 
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0 text-dim hover:text-main"
-                  onClick={() => setEditando(u)}
-                  aria-label={`Editar a ${u.nombre} ${u.apellido}`}
-                  title="Editar usuario"
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0 text-dim hover:text-danger disabled:opacity-40"
-                  onClick={() => setAEliminar(u)}
-                  disabled={!u.usuario_id || (u.usuario_id ?? u.id) === miId}
-                  aria-label={`Eliminar a ${u.nombre} ${u.apellido}`}
-                  title={
-                    !u.usuario_id
-                      ? 'Esta ficha no tiene cuenta de acceso'
-                      : (u.usuario_id ?? u.id) === miId
-                        ? 'No podés eliminar tu propia cuenta'
-                        : 'Eliminar usuario'
-                  }
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </li>
-            ))}
-          </ul>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0 text-dim hover:text-main"
+                    onClick={() => setEditando(u)}
+                    aria-label={`Editar a ${u.nombre} ${u.apellido}`}
+                    title="Editar usuario"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="shrink-0 text-dim hover:text-danger disabled:opacity-40"
+                    onClick={() => setAEliminar(u)}
+                    disabled={!u.usuario_id || (u.usuario_id ?? u.id) === miId}
+                    aria-label={`Eliminar a ${u.nombre} ${u.apellido}`}
+                    title={
+                      !u.usuario_id
+                        ? 'Esta ficha no tiene cuenta de acceso'
+                        : (u.usuario_id ?? u.id) === miId
+                          ? 'No podés eliminar tu propia cuenta'
+                          : 'Eliminar usuario'
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+
+            {totalPaginas > 1 && (
+              <div className="border-t border-line px-4 py-3">
+                <Paginacion
+                  pagina={paginaActual}
+                  totalPaginas={totalPaginas}
+                  total={visibles.length}
+                  porPagina={POR_PAGINA}
+                  onCambiar={setPagina}
+                  etiqueta="usuario"
+                  ariaLabel="Paginación de usuarios"
+                />
+              </div>
+            )}
+          </>
         )}
       </Panel>
 

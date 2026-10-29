@@ -448,6 +448,7 @@ export default function AdminManual() {
                 total={filtrados.length}
                 porPagina={POR_PAGINA}
                 onCambiar={setPagina}
+                ariaLabel="Paginación del manual"
               />
             </>
           )}

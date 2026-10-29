@@ -25,14 +25,17 @@ export function Paginacion({
   total,
   porPagina,
   onCambiar,
-  etiqueta = 'tareas',
+  etiqueta = 'tarea',
+  ariaLabel = 'Paginación',
 }: {
   pagina: number;
   totalPaginas: number;
   total: number;
   porPagina: number;
   onCambiar: (p: number) => void;
+  /** Singular: el plural se arma solo ("usuario" → "usuarios"). */
   etiqueta?: string;
+  ariaLabel?: string;
 }) {
   if (totalPaginas <= 1) {
     return (
@@ -59,7 +62,7 @@ export function Paginacion({
   return (
     <nav
       className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-      aria-label="Paginación del manual"
+      aria-label={ariaLabel}
     >
       <p className="text-xs text-dim">
         Mostrando <span className="tabular text-muted">{desde}</span>–
