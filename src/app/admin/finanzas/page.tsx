@@ -185,7 +185,11 @@ export default function AdminFinanzas() {
         title="Finanzas"
         description="Cargá cada pago y cada gasto del club. Es la fuente de los números de Contabilidad."
         actions={
-          <Select value={String(anio)} onValueChange={(v) => v && setAnio(Number(v))}>
+          <Select
+            value={String(anio)}
+            onValueChange={(v) => v && setAnio(Number(v))}
+            items={aniosDisponibles.map((a) => ({ value: String(a), label: a }))}
+          >
             <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
             <SelectContent>
               {aniosDisponibles.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
@@ -269,6 +273,7 @@ export default function AdminFinanzas() {
             <Select
               value={form.categoria || SIN_CATEGORIA}
               onValueChange={(v) => setForm({ ...form, categoria: v === SIN_CATEGORIA ? '' : (v ?? '') })}
+              items={[{ value: SIN_CATEGORIA, label: 'Sin categoría' }, ...categorias]}
             >
               <SelectTrigger id="categoria"><SelectValue placeholder="Sin categoría" /></SelectTrigger>
               <SelectContent>
@@ -292,7 +297,7 @@ export default function AdminFinanzas() {
 
           <div className="space-y-1.5">
             <Label htmlFor="metodo">Cómo se pagó</Label>
-            <Select value={form.metodo_pago} onValueChange={(v) => v && setForm({ ...form, metodo_pago: v })}>
+            <Select value={form.metodo_pago} onValueChange={(v) => v && setForm({ ...form, metodo_pago: v })} items={METODOS}>
               <SelectTrigger id="metodo"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {METODOS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}

@@ -299,7 +299,14 @@ export default function AdminPartidos() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="sede">Local o visitante</Label>
-                <Select value={form.es_local} onValueChange={(v) => v && setForm({ ...form, es_local: v })}>
+                <Select
+                  value={form.es_local}
+                  onValueChange={(v) => v && setForm({ ...form, es_local: v })}
+                  items={[
+                    { value: 'true', label: 'Local (de casa)' },
+                    { value: 'false', label: 'Visitante (fuera)' },
+                  ]}
+                >
                   <SelectTrigger id="sede"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="true">Local (de casa)</SelectItem>
@@ -313,7 +320,7 @@ export default function AdminPartidos() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="estado">Estado</Label>
-                <Select value={form.estado} onValueChange={(v) => v && setForm({ ...form, estado: v })}>
+                <Select value={form.estado} onValueChange={(v) => v && setForm({ ...form, estado: v })} items={ESTADOS}>
                   <SelectTrigger id="estado"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ESTADOS.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}

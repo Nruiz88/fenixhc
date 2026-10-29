@@ -30,6 +30,19 @@ const FORM_VACIO = {
   metodo: 'transferencia',
 };
 
+const MESES = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i + 1),
+  label: mesNombre(i + 1),
+}));
+
+const METODOS = [
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'debito', label: 'Débito automático' },
+  { value: 'credito', label: 'Tarjeta de crédito' },
+  { value: 'cheque', label: 'Cheque' },
+];
+
 export default function AdminPagos() {
   const { calcular, listo: configLista, config } = useConfigCuotas();
   const [cuotas, setCuotas] = useState<any[]>([]);
@@ -84,6 +97,29 @@ export default function AdminPagos() {
   const anios = useMemo(
     () => [...new Set(cuotas.map((c) => c.anio))].filter(Number.isFinite).sort((a, b) => b - a),
     [cuotas]
+  );
+
+  // Las opciones llevan la etiqueta visible: si no, el trigger muestra el UUID
+  // de la familia en vez de los nombres.
+  const opcionesFamilia = useMemo(
+    () =>
+      familias.length === 0
+        ? [{ value: SIN_SEL, label: 'No hay familias vinculadas' }]
+        : familias.map((f) => ({
+            value: f.id,
+            label: `${f.padre?.nombre ?? ''} ${f.padre?.apellido ?? ''}${
+              f.hijo ? ` — ${f.hijo.nombre} ${f.hijo.apellido}` : ''
+            }`.trim(),
+          })),
+    [familias]
+  );
+
+  const opcionesAnio = useMemo(
+    () => [
+      { value: 'todos', label: 'Todos' },
+      ...anios.map((a) => ({ value: String(a), label: String(a) })),
+    ],
+    [anios]
   );
 
   const resumen = useMemo(() => {
@@ -299,20 +335,25 @@ export default function AdminPagos() {
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Select value={mesFiltro} onValueChange={(v) => v && setMesFiltro(v)}>
+              <Select
+                value={mesFiltro}
+                onValueChange={(v) => v && setMesFiltro(v)}
+                items={[{ value: 'todos', label: 'Todos los meses' }, ...MESES]}
+              >
                 <SelectTrigger className="w-36"><SelectValue placeholder="Mes" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos los meses</SelectItem>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                    <SelectItem key={m} value={String(m)}>{mesNombre(m)}</SelectItem>
+                  {MESES.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={anioFiltro} onValueChange={(v) => v && setAnioFiltro(v)}>
+              <Select value={anioFiltro} onValueChange={(v) => v && setAnioFiltro(v)} items={opcionesAnio}>
                 <SelectTrigger className="w-28"><SelectValue placeholder="Año" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {anios.map((a) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+                  {opcionesAnio.map((a) => (
+                    <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -537,19 +578,15 @@ export default function AdminPagos() {
               <Select
                 value={form.familia_id || SIN_SEL}
                 onValueChange={(v) => setForm({ ...form, familia_id: v === SIN_SEL ? '' : (v ?? '') })}
+                items={opcionesFamilia}
               >
                 <SelectTrigger id="familia"><SelectValue placeholder="Elegí la familia" /></SelectTrigger>
                 <SelectContent>
-                  {familias.length === 0 ? (
-                    <SelectItem value={SIN_SEL} disabled>No hay familias vinculadas</SelectItem>
-                  ) : (
-                    familias.map((f) => (
-                      <SelectItem key={f.id} value={f.id}>
-                        {f.padre?.nombre} {f.padre?.apellido}
-                        {f.hijo ? ` — ${f.hijo.nombre} ${f.hijo.apellido}` : ''}
-                      </SelectItem>
-                    ))
-                  )}
+                  {opcionesFamilia.map((f) => (
+                    <SelectItem key={f.value} value={f.value} disabled={familias.length === 0}>
+                      {f.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               {familias.length === 0 && (
@@ -562,11 +599,11 @@ export default function AdminPagos() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="mes">Mes *</Label>
-                <Select value={form.mes} onValueChange={(v) => v && setForm({ ...form, mes: v })}>
+                <Select value={form.mes} onValueChange={(v) => v && setForm({ ...form, mes: v })} items={MESES}>
                   <SelectTrigger id="mes"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                      <SelectItem key={m} value={String(m)}>{mesNombre(m)}</SelectItem>
+                    {MESES.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -583,14 +620,12 @@ export default function AdminPagos() {
 
             <div className="space-y-1.5">
               <Label htmlFor="metodo">Cómo se pagó</Label>
-              <Select value={form.metodo} onValueChange={(v) => v && setForm({ ...form, metodo: v })}>
+              <Select value={form.metodo} onValueChange={(v) => v && setForm({ ...form, metodo: v })} items={METODOS}>
                 <SelectTrigger id="metodo"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="transferencia">Transferencia</SelectItem>
-                  <SelectItem value="efectivo">Efectivo</SelectItem>
-                  <SelectItem value="debito">Débito automático</SelectItem>
-                  <SelectItem value="credito">Tarjeta de crédito</SelectItem>
-                  <SelectItem value="cheque">Cheque</SelectItem>
+                  {METODOS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

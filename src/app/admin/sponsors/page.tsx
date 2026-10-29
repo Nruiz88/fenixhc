@@ -259,7 +259,7 @@ export default function AdminSponsorsPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="tier">Categoría</Label>
-              <Select value={form.tier} onValueChange={(v) => v && setForm({ ...form, tier: v })}>
+              <Select value={form.tier} onValueChange={(v) => v && setForm({ ...form, tier: v })} items={TIERS}>
                 <SelectTrigger id="tier"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TIERS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}

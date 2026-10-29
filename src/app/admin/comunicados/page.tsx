@@ -337,7 +337,7 @@ export default function AdminComunicadosPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="tipo">Tipo</Label>
-                <Select value={form.tipo} onValueChange={(v) => v && setForm({ ...form, tipo: v })}>
+                <Select value={form.tipo} onValueChange={(v) => v && setForm({ ...form, tipo: v })} items={TIPOS}>
                   <SelectTrigger id="tipo"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TIPOS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
@@ -346,7 +346,7 @@ export default function AdminComunicadosPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="estado">Estado</Label>
-                <Select value={form.estado} onValueChange={(v) => v && setForm({ ...form, estado: v })}>
+                <Select value={form.estado} onValueChange={(v) => v && setForm({ ...form, estado: v })} items={ESTADOS}>
                   <SelectTrigger id="estado"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ESTADOS.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}

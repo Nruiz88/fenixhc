@@ -151,6 +151,10 @@ export default function AdminLinksFamilia() {
               <Select
                 value={form.padre_id || SIN_SEL}
                 onValueChange={(v) => setForm({ ...form, padre_id: v === SIN_SEL ? '' : (v ?? '') })}
+                items={benefactoresLibres.map((p) => ({
+                  value: p.id,
+                  label: `${p.nombre} ${p.apellido}`,
+                }))}
               >
                 <SelectTrigger id="socio"><SelectValue placeholder="Elegí un socio" /></SelectTrigger>
                 <SelectContent>
@@ -168,6 +172,10 @@ export default function AdminLinksFamilia() {
               <Select
                 value={form.deportista_id || SIN_SEL}
                 onValueChange={(v) => setForm({ ...form, deportista_id: v === SIN_SEL ? '' : (v ?? '') })}
+                items={cadetesLibres.map((d) => ({
+                  value: d.perfil_id,
+                  label: `${d.perfiles?.nombre ?? ''} ${d.perfiles?.apellido ?? ''}`.trim(),
+                }))}
               >
                 <SelectTrigger id="cadete"><SelectValue placeholder="Elegí un jugador" /></SelectTrigger>
                 <SelectContent>
@@ -185,6 +193,7 @@ export default function AdminLinksFamilia() {
               <Select
                 value={form.tipo_vinculo}
                 onValueChange={(v) => v && setForm({ ...form, tipo_vinculo: v })}
+                items={VINCULOS}
               >
                 <SelectTrigger id="vinculo"><SelectValue /></SelectTrigger>
                 <SelectContent>

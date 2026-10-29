@@ -29,6 +29,14 @@ const TONO: Record<string, { tone: 'danger' | 'warn' | 'info' | 'neutral'; icon:
 
 const FORM_VACIO = { titulo: '', mensaje: '', tipo: 'general', destinatario_rol: 'todos' };
 
+const DESTINATARIOS = [
+  { value: 'todos', label: 'Todos los socios' },
+  ...(['socio_benefactor', 'socio_cadete'] as Rol[]).map((r) => ({
+    value: r,
+    label: ROL_LABEL[r],
+  })),
+];
+
 export default function AdminNotificaciones() {
   const [notifs, setNotifs] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -128,12 +136,12 @@ export default function AdminNotificaciones() {
               <Select
                 value={form.destinatario_rol}
                 onValueChange={(v) => v && setForm({ ...form, destinatario_rol: v })}
+                items={DESTINATARIOS}
               >
                 <SelectTrigger id="destinatario"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos los socios</SelectItem>
-                  {(['socio_benefactor', 'socio_cadete'] as Rol[]).map((r) => (
-                    <SelectItem key={r} value={r}>{ROL_LABEL[r]}</SelectItem>
+                  {DESTINATARIOS.map((d) => (
+                    <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
