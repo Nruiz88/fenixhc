@@ -64,7 +64,14 @@ export async function resendVerification(email: string, password: string): Promi
 }
 
 // Register
-export async function register(data: any): Promise<{ userId?: string; error?: string; devVerificationUrl?: string }> {
+export async function register(data: any): Promise<{
+  userId?: string;
+  error?: string;
+  devVerificationUrl?: string;
+  childEmail?: string | null;
+  childVerificationSent?: boolean | null;
+  childDevVerificationUrl?: string;
+}> {
   try {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
@@ -73,7 +80,13 @@ export async function register(data: any): Promise<{ userId?: string; error?: st
     });
     const json = await res.json();
     if (!res.ok) return { error: json.error };
-    return { userId: json.userId, devVerificationUrl: json.devVerificationUrl };
+    return {
+      userId: json.userId,
+      devVerificationUrl: json.devVerificationUrl,
+      childEmail: json.childEmail,
+      childVerificationSent: json.childVerificationSent,
+      childDevVerificationUrl: json.childDevVerificationUrl,
+    };
   } catch {
     return { error: 'Error de conexión' };
   }

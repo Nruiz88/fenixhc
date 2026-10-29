@@ -112,9 +112,12 @@ export async function sendEmail(opts: {
 export function verificacionEmail(opts: {
   nombre: string;
   link: string;
+  /** Días de validez del enlace. Se muestra para que nadie lo deje para después sin saber. */
+  dias?: number;
 }): { subject: string; html: string; text: string } {
   const subject = 'Verificá tu email - Fenix Roller Hockey';
-  const text = `Hola ${opts.nombre}, verificá tu email ingresando a: ${opts.link}`;
+  const vigencia = opts.dias ? ` El enlace vence en ${opts.dias} días.` : '';
+  const text = `Hola ${opts.nombre}, verificá tu email ingresando a: ${opts.link}.${vigencia}`;
   const html = `
     <!DOCTYPE html>
     <html>
@@ -129,6 +132,9 @@ export function verificacionEmail(opts: {
           <p style="color:#999;font-size:14px;margin:0 0 24px;line-height:1.6;">
             Hola ${opts.nombre}, falta confirmar tu email para poder entrar al portal.
           </p>
+          ${opts.dias ? `<p style="color:#888;font-size:13px;margin:0 0 24px;line-height:1.6;">
+            El enlace vence en ${opts.dias} días. Si lo dejás para después, podés pedir uno nuevo desde el ingreso o desde el portal de tu familia.
+          </p>` : ''}
           <a href="${opts.link}"
              style="display:inline-block;background:#DC2626;color:#fff;text-decoration:none;
                     padding:14px 28px;border-radius:10px;font-weight:600;font-size:15px;">

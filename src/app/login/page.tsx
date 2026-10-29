@@ -98,7 +98,10 @@ function LoginForm() {
 
             {noVerificado && (
               <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-3 text-sm text-amber-300 space-y-2">
-                <p>Revisá tu casilla de correo y seguí el enlace de confirmación.</p>
+                <p>
+                  Revisá tu casilla de correo y seguí el enlace de confirmación.
+                  Si el enlace venció, pedí uno nuevo acá abajo.
+                </p>
                 <button
                   type="button"
                   onClick={handleResend}

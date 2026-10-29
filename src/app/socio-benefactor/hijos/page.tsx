@@ -8,17 +8,20 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Mail, Phone } from 'lucide-react';
 import { SubirDocumentacion } from '@/components/SubirDocumentacion';
+import { VerificacionHijo } from '@/components/VerificacionHijo';
 
 /** Una fila de `familias` con el perfil del jugador y su ficha. */
 interface FilaHijo {
   id: string;
   tipo_vinculo: string;
   perfil_id: string | null;
+  usuario_id: string | null;
   nombre: string | null;
   apellido: string | null;
   dni: string | null;
   telefono: string | null;
   correo: string | null;
+  email_verificado: number | null;
   deportista_id: string | null;
   club_activo: number | null;
   dni_frente_url: string | null;
@@ -31,11 +34,13 @@ export default async function SocioBenefactorHijos() {
 
   const rows = await query<FilaHijo>(
     `SELECT f.id, f.tipo_vinculo,
-            p.id AS perfil_id, p.nombre, p.apellido, p.dni, p.telefono, p.correo,
+            p.id AS perfil_id, p.usuario_id, p.nombre, p.apellido, p.dni, p.telefono, p.correo,
+            u.email_verificado,
             d.id AS deportista_id, d.club_activo,
             d.dni_frente_url, d.dni_fondo_url
      FROM familias f
      LEFT JOIN perfiles p ON p.id = f.deportista_perfil_id
+     LEFT JOIN usuarios u ON u.id = p.usuario_id
      LEFT JOIN deportistas d ON d.perfil_id = f.deportista_perfil_id
      WHERE f.padre_perfil_id = ?
      ORDER BY p.nombre`,
@@ -87,6 +92,8 @@ export default async function SocioBenefactorHijos() {
           correo: r.correo,
         },
         deportistas: r.deportista_id ? { club_activo: r.club_activo } : null,
+        emailVerificado: Boolean(r.email_verificado),
+        tieneCuenta: Boolean(r.usuario_id),
         documentacion: {
           perfilId,
           nombre: nombreCompleto,
@@ -133,7 +140,14 @@ export default async function SocioBenefactorHijos() {
                   borde y su propio título, y anidarlo dentro de una `Card`
                   dejaba dos cajas compitiendo por el mismo espacio. */}
               {h.documentacion.perfilId && (
-                <div className="px-6 pb-6">
+                <div className="space-y-3 px-6 pb-6">
+                  {h.tieneCuenta && (
+                    <VerificacionHijo
+                      perfilId={h.documentacion.perfilId}
+                      email={h.perfiles?.correo ?? ''}
+                      verificado={h.emailVerificado}
+                    />
+                  )}
                   <SubirDocumentacion
                     perfilId={h.documentacion.perfilId}
                     nombre={h.documentacion.nombre}

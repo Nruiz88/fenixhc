@@ -5,6 +5,7 @@
   Variables que espera Resend:
     {{nombre}}  nombre de la persona (se escapa solo)
     {{link}}    URL completa de verificación, YA con el token
+    {{dias}}    días de validez del enlace (7)
 
   Para usar: en resend.com -> Templates -> Create -> pegá este HTML.
   Después poné el ID en la variable de entorno RESEND_TEMPLATE_VERIFICACION.
@@ -85,7 +86,7 @@
           <tr>
             <td style="padding:28px 28px 32px 28px;">
               <p style="margin:0; padding-top:16px; border-top:1px solid #e4e4e7; font-size:11px; line-height:1.6; color:#a1a1aa;">
-                Este enlace vence en 24 horas y funciona una sola vez.
+                Este enlace vence en {{dias}} días y funciona una sola vez.
                 Si no te registraste, ignorá este mensaje.
               </p>
             </td>

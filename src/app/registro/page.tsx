@@ -70,6 +70,11 @@ export default function RegistroPage() {
   const [pendingVerify, setPendingVerify] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
   const [devUrl, setDevUrl] = useState('');
+  // Estado del correo del jugador: si salió y a qué casilla fue. Se muestra en
+  // la pantalla final para que el padre no tenga que adivinar.
+  const [childEmail, setChildEmail] = useState('');
+  const [childSent, setChildSent] = useState<boolean | null>(null);
+  const [childDevUrl, setChildDevUrl] = useState('');
 
   const update = (field: string, value: string) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -203,6 +208,9 @@ export default function RegistroPage() {
     // No hay sesión: hay que verificar el email antes de poder entrar.
     setPendingVerify(true);
     setRegisteredEmail(form.email);
+    setChildEmail(result.childEmail || '');
+    setChildSent(result.childVerificationSent ?? null);
+    setChildDevUrl(result.childDevVerificationUrl || '');
     // Solo en dev (sin RESEND_API_KEY), para poder completar el flujo.
     setDevUrl(result.devVerificationUrl || '');
     setLoading(false);
@@ -220,8 +228,49 @@ export default function RegistroPage() {
           <h2 className="text-2xl font-bold text-white mt-4">Revisá tu email</h2>
           <p className="text-gray-400 mt-2 text-sm leading-relaxed">
             Te enviamos un enlace de verificación a <span className="text-white font-medium">{registeredEmail}</span>.
-            Hacé clic en él para activar tu cuenta. Después vas a poder iniciar sesión.
+            Hacé clic en él para activar tu cuenta. El enlace vence en 7 días; si lo
+            dejás para después, podés pedir uno nuevo desde el ingreso.
           </p>
+
+          {childEmail && (
+            <div
+              className={`mt-4 rounded-lg border p-3 text-left text-xs leading-relaxed ${
+                childSent === false
+                  ? 'border-amber-800 bg-amber-900/20 text-amber-200'
+                  : 'border-blue-800 bg-blue-900/20 text-blue-200'
+              }`}
+            >
+              {childSent === false ? (
+                <>
+                  <p className="font-semibold">No pudimos enviar el enlace a {childEmail}</p>
+                  <p className="mt-1 text-amber-300/80">
+                    La cuenta de tu hijo quedó creada. Cuando entres a tu portal,
+                    andá a <strong>Mis Hijos</strong> y reenviá la verificación
+                    (también podés corregir el email si estaba mal escrito).
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold">También enviamos un enlace a {childEmail}</p>
+                  <p className="mt-1 text-blue-300/80">
+                    Es el correo de tu hijo. Tiene 7 días para verificarlo; si no
+                    entra ahora, puede hacerlo más adelante o pedir un enlace
+                    nuevo desde el ingreso.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          {childDevUrl && (
+            <div className="mt-4 p-3 bg-amber-900/20 border border-amber-800 rounded-lg text-left">
+              <p className="text-xs text-amber-300 mb-1">
+                <strong>Modo dev (hijo):</strong> el email no salió. Usá este enlace:
+              </p>
+              <a href={childDevUrl} className="text-xs underline text-amber-200 break-all">{childDevUrl}</a>
+            </div>
+          )}
+
           {devUrl && (
             <div className="mt-4 p-3 bg-amber-900/20 border border-amber-800 rounded-lg text-left">
               <p className="text-xs text-amber-300 mb-1">

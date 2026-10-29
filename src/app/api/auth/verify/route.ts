@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verificarToken } from '@/lib/verification';
 
 // GET /api/auth/verify?token=...  ->  confirma el email y marca la cuenta.
-// El token es de un solo uso y expira a las 24h.
+// El token es de un solo uso y expira a los 7 días (ver lib/verification.ts).
 export async function GET(request: NextRequest) {
   try {
     const token = request.nextUrl.searchParams.get('token') || '';

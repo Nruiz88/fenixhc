@@ -9,7 +9,11 @@ import { randomBytes, createHash } from 'crypto';
 import { execute, query, type Ejecutable } from './db';
 import { sendEmail, verificacionEmail, idPlantilla } from './email';
 
-const TTL_HORAS = 24;
+// Confirmar la casilla no es urgente y muchas familias crean la cuenta del
+// jugador y recién la abren días después. Una semana cubre ese caso sin dejar
+// el enlace abierto para siempre.
+export const TTL_DIAS = 7;
+const TTL_HORAS = TTL_DIAS * 24;
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -57,9 +61,9 @@ export async function enviarVerificacion(opts: {
   nombre: string;
   token: string;
   baseUrl: string;
-}): Promise<{ ok: boolean }> {
+}): Promise<{ ok: boolean; motivo?: 'enviado' | 'sin-key' | 'error' }> {
   const link = `${opts.baseUrl}/verificar?token=${opts.token}`;
-  const { subject, html, text } = verificacionEmail({ nombre: opts.nombre, link });
+  const { subject, html, text } = verificacionEmail({ nombre: opts.nombre, link, dias: TTL_DIAS });
   const res = await sendEmail({
     to: opts.email,
     subject,
@@ -69,10 +73,10 @@ export async function enviarVerificacion(opts: {
     // el html de arriba. Ese camino es el que no puede romperse.
     plantilla: {
       id: idPlantilla('RESEND_TEMPLATE_VERIFICACION'),
-      variables: { nombre: opts.nombre, link },
+      variables: { nombre: opts.nombre, link, dias: String(TTL_DIAS) },
     },
   });
-  return { ok: res.sent };
+  return { ok: res.sent, motivo: res.motivo };
 }
 
 /**
@@ -87,13 +91,14 @@ export async function generarYEnviarVerificacion(
   email: string,
   nombre: string,
   baseUrl: string
-): Promise<{ ok: boolean; devToken?: string }> {
+): Promise<{ ok: boolean; motivo?: 'enviado' | 'sin-key' | 'error'; devToken?: string }> {
   const token = await generarTokenVerificacion(usuarioId);
-  const { ok } = await enviarVerificacion({ email, nombre, token, baseUrl });
+  const { ok, motivo } = await enviarVerificacion({ email, nombre, token, baseUrl });
 
-  // Si no hay API key (dev / deploy sin configurar) devolvemos el token para
-  // poder mostrar el link en pantalla en vez de dejar al usuario sin salida.
-  return { ok, devToken: ok ? undefined : token };
+  // Solo sin API key (dev / deploy sin configurar) devolvemos el token para
+  // mostrar el link en pantalla. Un error real de Resend NO expone el token:
+  // sería entregarle el enlace a alguien que no controla esa casilla.
+  return { ok, motivo, devToken: motivo === 'sin-key' ? token : undefined };
 }
 
 /** Verifica el token recibido y marca el email como verificado. */
@@ -131,6 +136,6 @@ export async function reenviarVerificacion(
   email: string,
   nombre: string,
   baseUrl: string
-): Promise<{ ok: boolean; devToken?: string }> {
+): Promise<{ ok: boolean; motivo?: 'enviado' | 'sin-key' | 'error'; devToken?: string }> {
   return generarYEnviarVerificacion(usuarioId, email, nombre, baseUrl);
 }

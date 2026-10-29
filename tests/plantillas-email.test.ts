@@ -14,7 +14,7 @@ import { join } from 'node:path';
 const EMPRESA = 'Fenix Roller Hockey';
 
 const PLANTILLAS = [
-  { archivo: 'verificacion.html', variables: ['{{nombre}}', '{{link}}'] },
+  { archivo: 'verificacion.html', variables: ['{{nombre}}', '{{link}}', '{{dias}}'] },
   { archivo: 'recuperacion.html', variables: ['{{nombre}}', '{{link}}', '{{minutos}}'] },
   { archivo: 'aviso-cuota.html', variables: ['{{nombre}}', '{{mensaje}}'] },
 ] as const;

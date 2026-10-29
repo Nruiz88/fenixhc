@@ -397,13 +397,22 @@ export async function POST(request: NextRequest) {
     // Commit hecho. Ahora sí se manda el correo.
     // -------------------------------------------------------------------------
     // El hijo también tiene que verificar su email para poder entrar.
+    // El resultado se registra: antes se ignoraba y una falla de Resend dejaba
+    // al jugador sin enlace y a la familia sin saberlo. Tampoco se le puede
+    // decir al padre "revisá el correo de tu hijo" si el envío falló.
+    let hijoEnvio: { ok: boolean; motivo?: string } | null = null;
     if (tokenHijo) {
-      await enviarVerificacion({
+      hijoEnvio = await enviarVerificacion({
         email: hijoEmailVal,
         nombre: hijoNombreVal,
         token: tokenHijo,
         baseUrl: base,
       });
+      if (!hijoEnvio.ok && hijoEnvio.motivo !== 'sin-key') {
+        console.error(
+          `No se pudo enviar la verificación al hijo ${hijoEmailVal} (usuario ${hijoUserId})`
+        );
+      }
     }
 
     const padre = await enviarVerificacion({
@@ -425,9 +434,19 @@ export async function POST(request: NextRequest) {
       userId,
       childId: registraHijo ? hijoPerfilId : null,
       requiresVerification: true,
+      // El padre necesita saber a qué casilla fue el enlace del jugador y si
+      // salió. Con eso la pantalla de "revisá tu email" puede mostrar el dato
+      // correcto y, si falló, mandarlo a reenviarlo desde Mis Hijos.
+      childEmail: registraHijo ? hijoEmailVal : null,
+      childVerificationSent: hijoEnvio?.ok ?? null,
       // Solo si RESEND_API_KEY no está configurado (dev): se muestra el link
       // en pantalla para poder completar la verificación sin email.
-      devVerificationUrl: padre.ok ? undefined : `${base}/verificar?token=${tokenPadre}`,
+      devVerificationUrl:
+        padre.motivo === 'sin-key' ? `${base}/verificar?token=${tokenPadre}` : undefined,
+      childDevVerificationUrl:
+        tokenHijo && hijoEnvio?.motivo === 'sin-key'
+          ? `${base}/verificar?token=${tokenHijo}`
+          : undefined,
     });
     return response;
   } catch (err: any) {
