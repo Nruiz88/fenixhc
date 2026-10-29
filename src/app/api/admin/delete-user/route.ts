@@ -132,11 +132,11 @@ export async function POST(request: NextRequest) {
     // deportista, reservas y notificaciones. Todo dentro de una transacción
     // para que un error a mitad de camino no deje la cuenta a medio borrar.
     await transaccion(async (conn) => {
-      const [resultado] = await conn.execute<any>(
+      const [resultado] = await conn.execute(
         'DELETE FROM usuarios WHERE id = ?',
         [id]
       );
-      if (!resultado?.affectedRows) {
+      if (!(resultado as { affectedRows?: number })?.affectedRows) {
         throw new Error('El usuario no existe o ya fue eliminado');
       }
     });
@@ -145,11 +145,14 @@ export async function POST(request: NextRequest) {
       success: true,
       mensaje: `${perfil ? `${perfil.nombre} ${perfil.apellido}` : usuario.email} fue eliminado. Su cuenta ya no existe.`,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errno = (err as { errno?: number })?.errno;
+    const code = (err as { code?: string })?.code;
+
     // 1451 = ER_ROW_IS_REFERENCED_2. Pasa cuando la persona envió avisos a
     // familias (esa FK es RESTRICT, a propósito: no se puede perder el registro
     // de quién mandó el aviso).
-    if (err?.errno === 1451 || err?.code === 'ER_ROW_IS_REFERENCED_2') {
+    if (errno === 1451 || code === 'ER_ROW_IS_REFERENCED_2') {
       return NextResponse.json(
         {
           error:
@@ -161,7 +164,11 @@ export async function POST(request: NextRequest) {
 
     console.error('Delete user error:', err);
     return NextResponse.json(
-      { error: err?.message || 'No se pudo eliminar el usuario' },
+      {
+        error: err instanceof Error && err.message
+          ? err.message
+          : 'No se pudo eliminar el usuario',
+      },
       { status: 500 }
     );
   }

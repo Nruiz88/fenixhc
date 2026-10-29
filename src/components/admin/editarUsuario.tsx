@@ -14,6 +14,8 @@ import { Save, KeyRound, AlertTriangle, Loader2, Check } from 'lucide-react';
 
 export interface UsuarioEditable {
   id: string;
+  /** Id de la cuenta de acceso. Puede diferir del id de la ficha. */
+  usuario_id?: string | null;
   nombre: string;
   apellido: string;
   correo: string;

@@ -56,10 +56,10 @@ describe('eliminar usuario no rompe la contabilidad ni la administración', () =
 describe('el panel ofrece la eliminación', () => {
   it('llama al endpoint propio con el id y la confirmación', () => {
     expect(PANEL).toContain("fetch('/api/admin/delete-user'");
-    expect(PANEL).toMatch(/id: aEliminar\.id,\s*confirmar: true/);
+    expect(PANEL).toMatch(/id: aEliminar\.usuario_id \?\? aEliminar\.id,\s*confirmar: true/);
   });
 
-  it('deshabilita el botón en la propia cuenta', () => {
-    expect(PANEL).toMatch(/disabled=\{u\.id === miId\}/);
+  it('deshabilita el botón en la propia cuenta y en fichas sin acceso', () => {
+    expect(PANEL).toMatch(/disabled=\{!u\.usuario_id \|\| \(u\.usuario_id \?\? u\.id\) === miId\}/);
   });
 });

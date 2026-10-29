@@ -53,7 +53,7 @@ export default function AdminUsuariosPage() {
   const [form, setForm] = useState(FORM_VACIO);
   const [creado, setCreado] = useState<{ nombre: string; email: string; password: string } | null>(null);
   const [editando, setEditando] = useState<UsuarioEditable | null>(null);
-  const [aEliminar, setAEliminar] = useState<any | null>(null);
+  const [aEliminar, setAEliminar] = useState<UsuarioEditable | null>(null);
   const [eliminando, setEliminando] = useState(false);
   const [miId, setMiId] = useState<string | null>(null);
 
@@ -183,7 +183,7 @@ export default function AdminUsuariosPage() {
       const res = await fetch('/api/admin/delete-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: aEliminar.id, confirmar: true }),
+        body: JSON.stringify({ id: aEliminar.usuario_id ?? aEliminar.id, confirmar: true }),
       });
       const json = await res.json();
 
@@ -196,8 +196,10 @@ export default function AdminUsuariosPage() {
         description: json.mensaje ?? 'La cuenta ya no existe.',
       });
       await cargar();
-    } catch (err: any) {
-      toast.error('No se pudo eliminar el usuario', { description: err?.message });
+    } catch (err: unknown) {
+      toast.error('No se pudo eliminar el usuario', {
+        description: err instanceof Error ? err.message : undefined,
+      });
     } finally {
       setEliminando(false);
     }
@@ -341,9 +343,15 @@ export default function AdminUsuariosPage() {
                   size="icon-sm"
                   className="shrink-0 text-dim hover:text-danger disabled:opacity-40"
                   onClick={() => setAEliminar(u)}
-                  disabled={u.id === miId}
+                  disabled={!u.usuario_id || (u.usuario_id ?? u.id) === miId}
                   aria-label={`Eliminar a ${u.nombre} ${u.apellido}`}
-                  title={u.id === miId ? 'No podés eliminar tu propia cuenta' : 'Eliminar usuario'}
+                  title={
+                    !u.usuario_id
+                      ? 'Esta ficha no tiene cuenta de acceso'
+                      : (u.usuario_id ?? u.id) === miId
+                        ? 'No podés eliminar tu propia cuenta'
+                        : 'Eliminar usuario'
+                  }
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -359,7 +367,7 @@ export default function AdminUsuariosPage() {
         abierto={!!editando}
         onCerrar={() => setEditando(null)}
         onGuardado={cargar}
-        soyYo={!!editando && editando.id === miId}
+        soyYo={!!editando && (editando.usuario_id ?? editando.id) === miId}
         soyElUnicoAdmin={directiva.filter((d) => tieneRol(d.roles, 'admin')).length <= 1}
       />
 
