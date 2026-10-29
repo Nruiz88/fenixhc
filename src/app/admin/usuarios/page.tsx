@@ -15,7 +15,8 @@ import { toast } from 'sonner';
 import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Toolbar } from '@/components/admin/ui';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DialogoEditarUsuario, type UsuarioEditable } from '@/components/admin/editarUsuario';
-import { Users, UserCheck, Shield, UserPlus, Search, X, Check, Copy, Pencil, MailWarning } from 'lucide-react';
+import { Confirmar } from '@/components/admin/confirmar';
+import { Users, UserCheck, Shield, UserPlus, Search, X, Check, Copy, Pencil, MailWarning, Trash2 } from 'lucide-react';
 
 const FORM_VACIO = {
   // Toda cuenta arranca con un rol; se pueden marcar más antes de crearla.
@@ -52,6 +53,8 @@ export default function AdminUsuariosPage() {
   const [form, setForm] = useState(FORM_VACIO);
   const [creado, setCreado] = useState<{ nombre: string; email: string; password: string } | null>(null);
   const [editando, setEditando] = useState<UsuarioEditable | null>(null);
+  const [aEliminar, setAEliminar] = useState<any | null>(null);
+  const [eliminando, setEliminando] = useState(false);
   const [miId, setMiId] = useState<string | null>(null);
 
   async function cargar() {
@@ -165,6 +168,38 @@ export default function AdminUsuariosPage() {
       toast.success(`${que} copiado`);
     } catch {
       toast.error('No se pudo copiar. Anotalo a mano.');
+    }
+  }
+
+  /**
+   * Borra la cuenta de verdad. El endpoint se niega si hay cuotas, recibos o
+   * avisos enviados: en esos casos el camino correcto es "Dar de baja" en
+   * Datos personales, que anonimiza y conserva la contabilidad.
+   */
+  async function eliminar() {
+    if (!aEliminar) return;
+    setEliminando(true);
+    try {
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: aEliminar.id, confirmar: true }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        toast.error(json.error || 'No se pudo eliminar el usuario', { duration: 9000 });
+        return;
+      }
+
+      toast.success('Usuario eliminado', {
+        description: json.mensaje ?? 'La cuenta ya no existe.',
+      });
+      await cargar();
+    } catch (err: any) {
+      toast.error('No se pudo eliminar el usuario', { description: err?.message });
+    } finally {
+      setEliminando(false);
     }
   }
 
@@ -301,6 +336,17 @@ export default function AdminUsuariosPage() {
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-dim hover:text-danger disabled:opacity-40"
+                  onClick={() => setAEliminar(u)}
+                  disabled={u.id === miId}
+                  aria-label={`Eliminar a ${u.nombre} ${u.apellido}`}
+                  title={u.id === miId ? 'No podés eliminar tu propia cuenta' : 'Eliminar usuario'}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </li>
             ))}
           </ul>
@@ -315,6 +361,21 @@ export default function AdminUsuariosPage() {
         onGuardado={cargar}
         soyYo={!!editando && editando.id === miId}
         soyElUnicoAdmin={directiva.filter((d) => tieneRol(d.roles, 'admin')).length <= 1}
+      />
+
+      {/* Eliminación definitiva */}
+      <Confirmar
+        abierto={!!aEliminar}
+        onCerrar={() => setAEliminar(null)}
+        onConfirmar={eliminar}
+        titulo={aEliminar ? `Eliminar a ${aEliminar.nombre} ${aEliminar.apellido}` : 'Eliminar usuario'}
+        descripcion={
+          aEliminar
+            ? `Se borran la cuenta ${aEliminar.correo}, su ficha y sus datos personales. No se puede deshacer. Si la persona tiene pagos o historial, el sistema no va a permitir borrarla: en ese caso usá "Dar de baja" en Datos personales.`
+            : ''
+        }
+        textoConfirmar="Eliminar cuenta"
+        pendiente={eliminando}
       />
 
       {/* Diálogo de alta */}

@@ -184,6 +184,23 @@ export const MANUAL: SeccionManual[] = [
         ],
       },
       {
+        id: 'eliminar-usuario',
+        titulo: 'Eliminar una cuenta',
+        resumen: 'Para altas equivocadas o cuentas que nunca se usaron.',
+        ruta: '/admin/usuarios',
+        modulo: 'usuarios',
+        pasos: [
+          { texto: 'En «Usuarios», presioná el tacho de basura en la fila de esa persona.' },
+          { texto: 'Revisá el nombre y el correo antes de confirmar.' },
+          { texto: 'Presioná «Eliminar cuenta».' },
+        ],
+        avisos: [
+          'Esto borra la cuenta y la ficha. No se puede deshacer.',
+          'Si la persona tiene cuotas, recibos o avisos enviados, el sistema no la deja eliminar: usá «Dar de baja» en Datos personales. La baja conserva la contabilidad.',
+          'No podés eliminar tu propia cuenta ni dejar al club sin administradores.',
+        ],
+      },
+      {
         id: 'vincular-familia',
         titulo: 'Vincular un socio con su jugador',
         resumen: 'Sin este vínculo, las cuotas no se le pueden imputar a nadie.',
