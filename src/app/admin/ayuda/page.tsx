@@ -84,6 +84,7 @@ export default function AdminManual() {
       ...s,
       tareas: s.tareas.filter((t) => {
         if (t.modulo && !tieneModulo(roles, t.modulo)) return false;
+        if (t.soloAdmin && !roles.includes('admin')) return false;
         if (t.capacidad && !puede(roles, t.capacidad)) return false;
         return true;
       }),

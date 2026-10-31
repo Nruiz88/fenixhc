@@ -60,6 +60,10 @@ mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/02_seed.sql
 - `mariadb/10_menores_consentimientos.sql` → `deportistas.fecha_nacimiento`, la tabla
   `consentimientos` (solo de alta), `revocaciones_consentimiento` y `opiciones_menor`.
   **Sin ella el registro con consentimiento da error y no se puede subir el DNI.**
+- `mariadb/15_mercadopago.sql` → tabla `pagos_mercadopago`, columna
+  `cuotas.pago_mp_id`, el método de pago `mercadopago` y las claves de
+  configuración de MercadoPago. **Sin ella el portal no ofrece pago online y
+  el webhook devuelve error; el resto de la app sigue funcionando.**
 
 Todas son idempotentes: se pueden volver a correr sin duplicar nada.
 
@@ -344,6 +348,56 @@ fijan la matriz de roles y permisos (`tests/roles.test.ts`), que todas las
 pantallas del panel caigan bajo un módulo (`tests/proteccion-rutas.test.ts`) y
 el mínimo de datos que tiene que traer un pedido de baja
 (`tests/baja-solicitud.test.ts`).
+
+## Cobros online con MercadoPago
+
+Migración `mariadb/15_mercadopago.sql`. La configuración se carga en
+`/admin/configuracion` → **Cobros online**, y **solo la ve y la edita el rol
+`admin`**. El presidente no: estas credenciales permiten cobrar en nombre del
+club y ver toda su cuenta de MercadoPago.
+
+Flujo:
+
+1. El socio entra a **Mis cuotas → Pagar online** (una cuota o todas las
+   pendientes). El portal solo muestra el botón si el admin habilitó los cobros.
+2. El servidor calcula el importe con el recargo vigente y crea una preferencia
+   de Checkout Pro. El navegador va a MercadoPago.
+3. Al volver, `/socio-benefactor/pagos/mercadopago` consulta el pago real a la
+   API y acredita las cuotas. El webhook
+   `/api/pagos/mercadopago/webhook` hace la misma operación por si la persona
+   cierra la ventana antes de volver.
+4. La cuota queda `pagada`, con `metodo_pago = 'mercadopago'`,
+   `monto_pagado` con el total cobrado y `pago_mp_id` apuntando al cobro.
+
+Qué configurar en MercadoPago Developers → tu aplicación:
+
+- **Access Token** (credenciales de producción o `TEST-` para prueba).
+- **Webhooks → URL de notificaciones**: la que muestra la pantalla, con el
+  formato `https://<dominio>/api/pagos/mercadopago/webhook`.
+- **Secreto de firma** del webhook (recomendado). Sin secreto el webhook igual
+  se valida consultando el pago a la API, pero con secreto se descarta antes
+  cualquier POST falso.
+
+Decisiones que no conviene revertir:
+
+- **El webhook no acredita por el POST.** Consulta el pago a MercadoPago y
+  comprueba importe, moneda y `external_reference` contra un cobro creado por
+  la app. Un POST falso no puede inventar un pago aprobado.
+- **El importe se calcula en el servidor.** El cliente manda qué cuotas paga,
+  nunca cuánto.
+- **Una cuota con comprobante de transferencia en revisión no se puede pagar
+  online.** Si se permitiera, la tesorería podría aprobar el comprobante y
+  además entrar el cobro de MercadoPago: la familia pagaría dos veces.
+- **Los cobros duplicados o con importe distinto quedan en `revision`.** No se
+  pisan cuotas ya pagas ni se devuelve deuda automáticamente por un reembolso:
+  lo resuelve tesorería desde la lista de últimos cobros.
+- **Las credenciales se guardan cifradas** (AES-256-GCM con clave derivada del
+  `JWT_SECRET`). Si se rota el `JWT_SECRET`, hay que volver a cargarlas; la
+  pantalla lo detecta.
+- **`APP_URL` tiene que ser la URL pública https.** Sin eso, MercadoPago no
+  puede llamar al webhook y la vuelta puede armarse con el host interno.
+
+Tests de la firma y de los importes: `tests/mercadopago.test.ts`.
 
 ## Solicitudes de baja de datos
 El derecho de supresión lo tiene la persona, no el club, así que hay tres

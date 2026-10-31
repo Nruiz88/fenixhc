@@ -25,7 +25,13 @@ const POR_DEFECTO: ConfigCuotas = {
 /** Lee la configuración de cuotas desde la base. */
 export async function leerConfigCuotas(): Promise<ConfigCuotas> {
   const [filas, vencs] = await Promise.all([
-    query<{ clave: string; valor: string }>('SELECT clave, valor FROM configuracion_club'),
+    // Solo las claves de cuotas. `configuracion_club` también guarda las
+    // credenciales de MercadoPago (cifradas); no hace falta traerlas a este
+    // camino para calcular un recargo.
+    query<{ clave: string; valor: string }>(
+      `SELECT clave, valor FROM configuracion_club
+        WHERE clave IN ('cuota_monto_base', 'cuota_mes_vencimiento_dia')`
+    ),
     query<Vencimiento>(
       'SELECT id, dia, porcentaje, etiqueta, activo, orden FROM vencimientos_cuota ORDER BY dia ASC'
     ),

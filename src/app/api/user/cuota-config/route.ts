@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth';
 import { leerConfigCuotasSegura } from '@/lib/cuotas-db';
+import { mercadopagoHabilitado } from '@/lib/pagos-config';
 
 // Configuración de cuotas para el portal de socios.
 //
@@ -17,11 +18,17 @@ export async function GET() {
       return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const config = await leerConfigCuotasSegura();
+    const [config, pagoOnlineHabilitado] = await Promise.all([
+      leerConfigCuotasSegura(),
+      mercadopagoHabilitado(),
+    ]);
 
     return NextResponse.json({
       data: {
         montoBase: config.montoBase,
+        // El portal esconde el botón de pago online si no hay credenciales
+        // cargadas: es mejor no ofrecer algo que va a fallar al hacer clic.
+        pagoOnlineHabilitado,
         vencimientos: config.vencimientos
           .filter((v) => v.activo)
           .map((v) => ({ dia: v.dia, porcentaje: Number(v.porcentaje), etiqueta: v.etiqueta })),

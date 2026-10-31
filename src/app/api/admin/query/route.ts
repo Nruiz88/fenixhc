@@ -25,7 +25,7 @@ const TABLE_COLUMNS: Record<string, string[]> = {
   // recargo). Sin estas dos columnas en la whitelist, el endpoint genérico
   // las descarta en silencio y la cuota queda pagada con monto_pagado NULL:
   // el flujo parece funcionar y la contabilidad subestima el ingreso.
-  cuotas: ['id', 'familia_id', 'tipo_socio', 'monto', 'monto_pagado', 'vencimiento_override', 'mes', 'anio', 'estado', 'metodo_pago', 'comprobante_url', 'fecha_pago', 'created_at'],
+  cuotas: ['id', 'familia_id', 'tipo_socio', 'monto', 'monto_pagado', 'vencimiento_override', 'mes', 'anio', 'estado', 'metodo_pago', 'comprobante_url', 'pago_mp_id', 'fecha_pago', 'created_at'],
   finanzas: ['id', 'tipo', 'concepto', 'monto', 'fecha', 'categoria', 'metodo_pago', 'descripcion', 'comprobante_url', 'created_by', 'created_at'],
   notificaciones: ['id', 'titulo', 'mensaje', 'tipo', 'destinatario_rol', 'enviada_email', 'created_by', 'created_at'],
   notificaciones_usuarios: ['id', 'notificacion_id', 'usuario_id', 'leida', 'created_at'],

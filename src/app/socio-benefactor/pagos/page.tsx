@@ -3,18 +3,23 @@
 import { useState, useEffect, useMemo } from 'react';
 import { udb } from '@/lib/userQuery';
 import { uploadComprobante } from '@/lib/upload';
+import { alLogin } from '@/lib/sesion';
 import { money, mesNombre, fecha, periodo as fmtPeriodo } from '@/lib/format';
 import { useConfigCuotas } from '@/lib/useConfigCuotas';
 import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Hint } from '@/components/admin/ui';
 import { DesgloseCuota, PillRecargo } from '@/components/admin/cuota';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Upload, ExternalLink, CheckCircle2, Clock, DollarSign, CalendarClock } from 'lucide-react';
+import {
+  Upload, ExternalLink, CheckCircle2, Clock, DollarSign, CalendarClock,
+  CreditCard, Loader2,
+} from 'lucide-react';
 
 export default function SocioBenefactorPagos() {
   const [cuotas, setCuotas] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
   const [subiendo, setSubiendo] = useState<string | null>(null);
+  const [pagando, setPagando] = useState<string | null>(null);
   const { calcular, config } = useConfigCuotas();
 
   async function cargar() {
@@ -37,6 +42,40 @@ export default function SocioBenefactorPagos() {
     setSubiendo(null);
   }
 
+  /**
+   * Inicia el cobro online.
+   *
+   * El cliente solo manda QUÉ cuotas quiere pagar. El importe lo calcula el
+   * servidor con la configuración vigente, así nadie puede pagar $1 y saldar
+   * la cuota.
+   */
+  async function pagarOnline(ids: string[]) {
+    const clave = ids.length === 1 ? ids[0] : 'todas';
+    setPagando(clave);
+    try {
+      const res = await fetch('/api/user/mercadopago/preferencia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cuotaIds: ids }),
+      });
+
+      if (res.status === 401) { alLogin(); return; }
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'No se pudo iniciar el pago');
+
+      // Checkout Pro: se sale de la app y se vuelve a
+      // /socio-benefactor/pagos/mercadopago. No se usa un iframe para no
+      // debilitar la CSP ni pedirle la tarjeta a un formulario propio.
+      window.location.href = json.data.initPoint;
+    } catch (err) {
+      toast.error('No se pudo iniciar el pago online', {
+        description: err instanceof Error ? err.message : 'Error de conexión',
+      });
+      setPagando(null);
+    }
+  }
+
   const { pagadas, pendientes } = useMemo(() => {
     const ordenadas = [...cuotas].sort((a, b) => b.anio - a.anio || b.mes - a.mes);
     return {
@@ -44,6 +83,11 @@ export default function SocioBenefactorPagos() {
       pendientes: ordenadas.filter((c) => c.estado === 'pendiente'),
     };
   }, [cuotas]);
+
+  // Una cuota con comprobante de transferencia en revisión no se puede pagar
+  // online: si la tesorería aprueba el comprobante y además entró el pago de
+  // MercadoPago, la familia pagó dos veces.
+  const pagables = pendientes.filter((c) => !c.comprobante_url);
 
   // Lo que hay que pagar hoy, con el recargo de cada cuota. Se recalcula
   // cuando llega la configuración: sin los porcentajes cargados no hay
@@ -65,6 +109,25 @@ export default function SocioBenefactorPagos() {
       <PageHeader
         title="Mis cuotas"
         description="Tu historial de pagos y lo que tenés que pagar este mes."
+        actions={
+          config?.pagoOnlineHabilitado && pagables.length > 0 ? (
+            <Button
+              onClick={() => pagarOnline(pagables.map((c) => c.id))}
+              disabled={!!pagando}
+            >
+              {pagando === 'todas' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CreditCard className="h-4 w-4" />
+              )}
+              {pagando === 'todas'
+                ? 'Iniciando…'
+                : pagables.length === 1
+                  ? 'Pagar online'
+                  : `Pagar ${pagables.length} cuotas online`}
+            </Button>
+          ) : undefined
+        }
       />
 
       {/* Reglas de recargo a la vista, no escondidas. */}
@@ -101,6 +164,14 @@ export default function SocioBenefactorPagos() {
           icon={<CalendarClock className="h-4 w-4" />}
         />
       </div>
+
+      {config?.pagoOnlineHabilitado && pagables.length > 0 && (
+        <Hint>
+          También podés pagar con MercadoPago desde acá. Al confirmarse el pago,
+          la cuota se marca como pagada automáticamente y no hace falta subir
+          comprobante.
+        </Hint>
+      )}
 
       {pendientes.length > 0 && (
         <Hint>
@@ -159,15 +230,31 @@ export default function SocioBenefactorPagos() {
                         <ExternalLink className="h-4 w-4" />Ver mi comprobante
                       </Button>
                     ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={subiendo === c.id}
-                        onClick={() => document.getElementById(`file-${c.id}`)?.click()}
-                      >
-                        <Upload className="h-4 w-4" />
-                        {subiendo === c.id ? 'Subiendo…' : 'Subir comprobante'}
-                      </Button>
+                      <>
+                        {config?.pagoOnlineHabilitado && (
+                          <Button
+                            size="sm"
+                            disabled={!!pagando || subiendo === c.id}
+                            onClick={() => pagarOnline([c.id])}
+                          >
+                            {pagando === c.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <CreditCard className="h-4 w-4" />
+                            )}
+                            {pagando === c.id ? 'Iniciando…' : 'Pagar online'}
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={subiendo === c.id || !!pagando}
+                          onClick={() => document.getElementById(`file-${c.id}`)?.click()}
+                        >
+                          <Upload className="h-4 w-4" />
+                          {subiendo === c.id ? 'Subiendo…' : 'Subir comprobante'}
+                        </Button>
+                      </>
                     )}
                     <input
                       id={`file-${c.id}`}
@@ -217,7 +304,9 @@ export default function SocioBenefactorPagos() {
                       </p>
                       <p className="text-xs text-dim">
                         Pagada el {fecha(c.fecha_pago)}
-                        {c.metodo_pago ? ` · ${c.metodo_pago}` : ''}
+                        {c.metodo_pago
+                          ? ` · ${c.metodo_pago === 'mercadopago' ? 'MercadoPago' : c.metodo_pago}`
+                          : ''}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">

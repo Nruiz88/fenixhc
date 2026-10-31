@@ -41,6 +41,7 @@ const METODOS = [
   { value: 'debito', label: 'Débito automático' },
   { value: 'credito', label: 'Tarjeta de crédito' },
   { value: 'cheque', label: 'Cheque' },
+  { value: 'mercadopago', label: 'MercadoPago (cobro online)' },
 ];
 
 export default function AdminPagos() {
@@ -427,6 +428,9 @@ export default function AdminPagos() {
                         {padre?.nombre} {padre?.apellido}
                       </p>
                       <StatusPill tone={tono.tone}>{tono.label}</StatusPill>
+                      {c.metodo_pago === 'mercadopago' && (
+                        <StatusPill tone="info">MercadoPago</StatusPill>
+                      )}
                       {comprobante && <StatusPill tone="info"><Paperclip className="h-3 w-3" />Para revisar</StatusPill>}
                       {c.estado === 'pendiente' && rec.porcentaje > 0 && (
                         <PillRecargo porcentaje={rec.porcentaje} />

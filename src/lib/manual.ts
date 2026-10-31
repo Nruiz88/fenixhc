@@ -51,6 +51,15 @@ export interface TareaManual {
   ruta: string;
   /** Módulo del panel. Si está, solo quien tenga ese módulo ve la tarea. */
   modulo?: Modulo;
+  /**
+   * La tarea es solo para el rol `admin`.
+   *
+   * El módulo `configuracion` lo comparten admin y presidente, pero hay
+   * pantallas dentro de ese módulo que solo el admin puede abrir (por ejemplo,
+   * las credenciales de MercadoPago). Sin este filtro, el manual le mostraría
+   * al presidente una tarea que la API le va a rechazar.
+   */
+  soloAdmin?: boolean;
   /** Capacidad de junta. Si está, se filtra además por la matriz de capacidades. */
   capacidad?: Capacidad;
   pasos: PasoManual[];
@@ -373,6 +382,42 @@ export const MANUAL: SeccionManual[] = [
           'Cambiar el recargo NO cambia lo ya cobrado: solo afecta a las cuotas pendientes.',
           'Cambiar el monto base tampoco modifica las cuotas ya emitidas. Solo cambia el valor que se precarga la próxima vez.',
           'Solo el presidente y el administrador pueden cambiar estos números.',
+        ],
+      },
+      {
+        id: 'cobros-mercadopago',
+        titulo: 'Configurar los cobros online con MercadoPago',
+        resumen: 'Para que el socio pague la cuota desde el portal y quede acreditada sola.',
+        ruta: '/admin/configuracion/mercadopago',
+        modulo: 'configuracion',
+        soloAdmin: true,
+        pasos: [
+          { texto: 'Entrá a «Configuración» y elegí la pestaña «Cobros online».' },
+          {
+            texto: 'Pegá el Access Token de tu aplicación de MercadoPago.',
+            nota: 'Está en MercadoPago Developers → tu aplicación → Credenciales.',
+          },
+          {
+            texto: 'Copiá la «URL de notificaciones» que muestra la pantalla y pegala en MercadoPago Developers → tu aplicación → Webhooks, evento «Pagos».',
+          },
+          {
+            texto: 'Copiá también el secreto de firma que muestra MercadoPago y pegalo en «Secreto del webhook».',
+            nota: 'Es recomendable: sin secreto el webhook igual se valida consultando el pago, pero con secreto se descarta antes cualquier aviso falso.',
+          },
+          {
+            texto: 'Activá «Cobros online habilitados» y presioná «Guardar cambios».',
+            nota: 'El botón de pago aparece en «Mis cuotas» del portal del socio.',
+          },
+          {
+            texto: 'Revisá «Últimos cobros online». Lo aprobado marca la cuota como pagada; lo que quedó «en revisión» necesita que lo mires.',
+          },
+        ],
+        avisos: [
+          'Esta pestaña solo la ve el administrador. El presidente no puede entrar aunque tenga el módulo Configuración.',
+          'El Access Token y el secreto se guardan cifrados. El token completo no se vuelve a mostrar: si se pierde, se genera uno nuevo en MercadoPago.',
+          'Con credenciales de prueba (empiezan con TEST-) los pagos no mueven dinero real. Para cobrar de verdad hay que cargar las de producción.',
+          'El webhook necesita que APP_URL sea la dirección pública https: MercadoPago no puede llamar a localhost.',
+          'Una cuota con comprobante de transferencia en revisión no se puede pagar online, para que la familia no pague dos veces.',
         ],
       },
     ],

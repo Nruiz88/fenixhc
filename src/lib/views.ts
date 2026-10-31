@@ -95,7 +95,7 @@ const ADMIN_CUOTAS: ViewDef = {
   sql: `
     SELECT c.id, c.familia_id, c.tipo_socio, c.monto,
            COALESCE(c.monto_pagado, 0) AS monto_pagado, c.mes, c.anio, c.estado,
-           c.metodo_pago, c.comprobante_url, c.fecha_pago, c.created_at,
+           c.metodo_pago, c.comprobante_url, c.pago_mp_id, c.fecha_pago, c.created_at,
            c.vencimiento_override,
            f.id AS f_id,
            pp.id AS padre_id, pp.nombre AS padre_nombre, pp.apellido AS padre_apellido,
@@ -198,7 +198,7 @@ const PADRE_CUOTAS: ViewDef = {
   sql: `
     SELECT c.id, c.familia_id, c.tipo_socio, c.monto,
            COALESCE(c.monto_pagado, 0) AS monto_pagado, c.mes, c.anio, c.estado,
-           c.metodo_pago, c.comprobante_url, c.fecha_pago, c.created_at,
+           c.metodo_pago, c.comprobante_url, c.pago_mp_id, c.fecha_pago, c.created_at,
            c.vencimiento_override,
            f.id AS f_id,
            dp.id AS hijo_id, dp.nombre AS hijo_nombre, dp.apellido AS hijo_apellido,

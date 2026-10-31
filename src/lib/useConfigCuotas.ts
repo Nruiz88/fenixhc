@@ -14,6 +14,8 @@ import { calcularRecargo, type Vencimiento, type ResultadoRecargo } from '@/lib/
 export interface ConfigCuotasCliente {
   montoBase: number;
   vencimientos: Vencimiento[];
+  /** true solo si el admin cargó credenciales de MercadoPago y habilitó el cobro. */
+  pagoOnlineHabilitado?: boolean;
 }
 
 let cache: ConfigCuotasCliente | null = null;
