@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/adminQuery';
 import { toast } from 'sonner';
-import { fecha } from '@/lib/format';
+import { fecha, isoDia } from '@/lib/format';
 import { todayISO } from '@/lib/dates';
 import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Toolbar, type StatusTone } from '@/components/admin/ui';
 import { Confirmar } from '@/components/admin/confirmar';
@@ -77,8 +77,8 @@ export default function AdminPartidos() {
   const visibles = useMemo(() => {
     const hoy = todayISO();
     return partidos
-      .filter((p) => (soloFuturos ? String(p.fecha) >= hoy : true))
-      .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+      .filter((p) => (soloFuturos ? isoDia(p.fecha) >= hoy : true))
+      .sort((a, b) => isoDia(b.fecha).localeCompare(isoDia(a.fecha)));
   }, [partidos, soloFuturos]);
 
   const jugados = partidos.filter((p) => p.estado === 'finalizado');
@@ -94,7 +94,7 @@ export default function AdminPartidos() {
   function abrirEdicion(p: any) {
     setEditando(p);
     setForm({
-      fecha: String(p.fecha).slice(0, 10),
+      fecha: isoDia(p.fecha),
       hora: p.hora ? String(p.hora).slice(0, 5) : '',
       rival: p.rival ?? '',
       cancha: p.cancha ?? 'Cancha Principal',

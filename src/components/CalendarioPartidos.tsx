@@ -1,10 +1,11 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, Trophy } from 'lucide-react';
+import { parseFechaDia } from '@/lib/format';
 
 interface Partido {
   id: string;
-  fecha: string;
+  fecha: string | Date;
   hora: string | null;
   rival: string;
   cancha: string;
@@ -44,8 +45,9 @@ export function CalendarioPartidos() {
     }
   };
 
-  const formatDate = (fecha: string) => {
-    const d = new Date(fecha + 'T12:00:00');
+  const formatDate = (fecha: string | Date) => {
+    const d = parseFechaDia(fecha);
+    if (!d) return { day: '—', month: '', weekday: '' };
     return {
       day: d.toLocaleDateString('es-AR', { day: 'numeric' }),
       month: d.toLocaleDateString('es-AR', { month: 'short' }).toUpperCase(),
