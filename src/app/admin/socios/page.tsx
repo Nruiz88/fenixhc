@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { db } from '@/lib/adminQuery';
 import { iniciales } from '@/lib/format';
+import { normalizarRoles } from '@/lib/roles';
 import { Input } from '@/components/ui/input';
 import { PageHeader, Panel, EmptyState, Toolbar, DataPoint } from '@/components/admin/ui';
 import { Button } from '@/components/ui/button';
@@ -17,8 +18,18 @@ export default function AdminSocios() {
   useEffect(() => {
     (async () => {
       setCargando(true);
-      const { data } = await db.select<any>('perfiles', '*', { rol: 'socio_benefactor' }, { limit: 1000 });
-      setSocios(data ?? []);
+
+      // No se filtra por `perfiles.rol`: esa columna guarda el rol PRINCIPAL.
+      // Una persona puede ser secretaria y socia benefactora a la vez, y en
+      // ese caso su rol principal sigue siendo `secretario`. Se traen los
+      // perfiles y se miran todos los roles con la misma normalización que usa
+      // el resto del sistema.
+      const { data } = await db.select<any>('perfiles', '*', undefined, { limit: 1000 });
+      const socios = (data ?? []).filter((p: any) =>
+        normalizarRoles(p.roles, p.rol).includes('socio_benefactor')
+      );
+
+      setSocios(socios);
       setCargando(false);
     })();
   }, []);

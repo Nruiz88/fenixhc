@@ -171,6 +171,25 @@ function Sidebar({
       </nav>
 
       <div className="shrink-0 space-y-1 border-t border-line p-3">
+        {/* Una persona puede ser de la directiva y además socio. En ese caso
+            entra al panel por su cargo, pero tiene que poder llegar a su
+            propio portal para ver/pagar las cuotas de sus hijos. */}
+        {tieneRol(roles ?? [], 'socio_benefactor') && (
+          <Link
+            href="/socio-benefactor/pagos"
+            className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-main"
+          >
+            <DollarSign className="h-4 w-4" /> Mis cuotas
+          </Link>
+        )}
+        {tieneRol(roles ?? [], 'socio_cadete') && (
+          <Link
+            href="/socio-cadete/dashboard"
+            className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-main"
+          >
+            <UserCheck className="h-4 w-4" /> Mi ficha
+          </Link>
+        )}
         <Link
           href="/"
           className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-main"
