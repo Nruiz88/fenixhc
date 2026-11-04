@@ -22,7 +22,11 @@ export function RegistrarPwa() {
     const registrar = () => {
       if (cancelado) return;
       navigator.serviceWorker
-        .register('/sw.js', { scope: '/' })
+        // `updateViaCache: 'none'` evita que el navegador reutilice durante
+        // horas el `sw.js` viejo por el cache HTTP de los archivos públicos.
+        // Sin esto, un deploy puede tardar en llegar a los celulares que ya
+        // tienen la PWA instalada.
+        .register('/sw.js', { scope: '/', updateViaCache: 'none' })
         .catch((err) => {
           // No romper la app si el navegador rechaza el registro (por ejemplo,
           // modo privado o una política del dispositivo).
