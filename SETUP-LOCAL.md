@@ -64,6 +64,8 @@ mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/02_seed.sql
   `cuotas.pago_mp_id`, el método de pago `mercadopago` y las claves de
   configuración de MercadoPago. **Sin ella el portal no ofrece pago online y
   el webhook devuelve error; el resto de la app sigue funcionando.**
+- `mariadb/16_cuotas_unicas.sql` → índice único `(familia_id, mes, anio)` en
+  `cuotas`. Evita dos cuotas para la misma familia y período.
 
 Todas son idempotentes: se pueden volver a correr sin duplicar nada.
 
@@ -341,6 +343,20 @@ Cálculo en `src/lib/cuotas.ts` (lógica pura, la importan el servidor y el
 cliente); lectura y escritura de la configuración en `src/lib/cuotas-db.ts`.
 La separación importa: si el acceso a la base estuviera en el archivo puro, el
 driver de MySQL se iría al bundle del navegador.
+
+### Emitir cuotas
+
+En `/admin/pagos`, arriba a la derecha, está **Emitir cuotas**. Permite:
+
+- Emitir para **una familia** o para **todas las familias**.
+- Elegir mes, año y monto por cuota (se precarga el monto base configurado).
+- Crear las cuotas en estado `pendiente`, para que aparezcan en el portal del
+  socio y puedan pagarse por transferencia o MercadoPago.
+
+Las cuotas que ya existen para esa familia y período **se omiten**, no se
+sobrescriben. La migración `16_cuotas_unicas.sql` agrega el índice único
+`(familia_id, mes, anio)` que lo garantiza también ante dos emisiones
+simultáneas.
 
 Tests: `npm test` (vitest). Cubren los casos de fecha que fallan en silencio:
 cambio de año, meses cortos, límite del día del hito y redondeo. También

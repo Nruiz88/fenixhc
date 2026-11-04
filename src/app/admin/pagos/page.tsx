@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   CheckCircle2, Clock, DollarSign, FileText, Search, X, Eye,
-  Plus, AlertTriangle, XCircle, Paperclip,
+  Plus, AlertTriangle, XCircle, Paperclip, CalendarPlus,
 } from 'lucide-react';
 
 type Filtro = 'todas' | 'pendiente' | 'pagada' | 'rechazada';
@@ -28,6 +28,13 @@ const FORM_VACIO = {
   anio: String(new Date().getFullYear()),
   monto: '',
   metodo: 'transferencia',
+};
+
+const EMITIR_VACIO = {
+  familia_id: '',
+  mes: String(new Date().getMonth() + 1),
+  anio: String(new Date().getFullYear()),
+  monto: '',
 };
 
 const MESES = Array.from({ length: 12 }, (_, i) => ({
@@ -61,6 +68,11 @@ export default function AdminPagos() {
 
   const [asignarAbierto, setAsignarAbierto] = useState(false);
   const [form, setForm] = useState({ ...FORM_VACIO });
+
+  const [emitirAbierto, setEmitirAbierto] = useState(false);
+  const [emitirModo, setEmitirModo] = useState<'una' | 'todas'>('una');
+  const [emitirForm, setEmitirForm] = useState({ ...EMITIR_VACIO });
+  const [emitiendo, setEmitiendo] = useState(false);
 
   async function cargar() {
     setCargando(true);
@@ -200,6 +212,79 @@ export default function AdminPagos() {
     setAsignarAbierto(true);
   }
 
+  /** Abre la emisión de cuotas pendientes con el monto base configurado. */
+  function abrirEmision() {
+    setEmitirModo('una');
+    setEmitirForm({
+      ...EMITIR_VACIO,
+      familia_id: familias[0]?.id ?? '',
+      monto: config ? String(config.montoBase) : '',
+    });
+    setEmitirAbierto(true);
+  }
+
+  async function emitir(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (familias.length === 0) {
+      toast.error('No hay familias vinculadas. Creá el vínculo primero en Vínculos familiares.');
+      return;
+    }
+    if (emitirModo === 'una' && !emitirForm.familia_id) {
+      toast.error('Elegí la familia');
+      return;
+    }
+
+    const monto = Number(emitirForm.monto);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      toast.error('El monto de cada cuota tiene que ser mayor a cero');
+      return;
+    }
+
+    setEmitiendo(true);
+    try {
+      const res = await fetch('/api/admin/emitir-cuota', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modo: emitirModo,
+          familiaId: emitirModo === 'una' ? emitirForm.familia_id : undefined,
+          mes: Number(emitirForm.mes),
+          anio: Number(emitirForm.anio),
+          monto,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'No se pudieron emitir las cuotas');
+
+      const data = json.data;
+      if (data.creadas === 0) {
+        toast.info('No se creó ninguna cuota nueva', {
+          description: `Las cuotas de ${data.periodo} ya existían (${data.omitidas} omitidas).`,
+        });
+      } else {
+        toast.success(
+          `${data.creadas} ${data.creadas === 1 ? 'cuota emitida' : 'cuotas emitidas'}`,
+          {
+            description:
+              data.omitidas > 0
+                ? `${data.omitidas} ya existían y se omitieron. Período ${data.periodo}.`
+                : `Período ${data.periodo} · ${money(data.monto)} por cuota.`,
+          }
+        );
+      }
+
+      setEmitirAbierto(false);
+      await cargar();
+    } catch (err) {
+      toast.error('No se pudieron emitir las cuotas', {
+        description: err instanceof Error ? err.message : 'Error de conexión',
+      });
+    } finally {
+      setEmitiendo(false);
+    }
+  }
+
   async function asignar(e: React.FormEvent) {
     e.preventDefault();
     if (!form.familia_id || !form.mes || !form.anio || !form.monto) {
@@ -254,11 +339,16 @@ export default function AdminPagos() {
     <div className="space-y-6">
       <PageHeader
         title="Pagos de cuotas"
-        description="Aprobar comprobantes y registrar pagos que llegan por otros canales."
+        description="Emitir las cuotas del mes, aprobar comprobantes y registrar pagos."
         actions={
-          <Button onClick={abrirAlta}>
-            <Plus className="h-4 w-4" />Registrar pago
-          </Button>
+          <>
+            <Button variant="outline" onClick={abrirAlta}>
+              <Plus className="h-4 w-4" />Registrar pago
+            </Button>
+            <Button onClick={abrirEmision}>
+              <CalendarPlus className="h-4 w-4" />Emitir cuotas
+            </Button>
+          </>
         }
       />
 
@@ -388,16 +478,36 @@ export default function AdminPagos() {
         ) : filtradas.length === 0 ? (
           <EmptyState
             icon={<DollarSign className="h-6 w-6" />}
-            title={cuotas.length === 0 ? 'Todavía no hay cuotas cargadas' : 'Ninguna cuota coincide con el filtro'}
+            title={cuotas.length === 0 ? 'Todavía no hay cuotas emitidas' : 'Ninguna cuota coincide con el filtro'}
             description={
               cuotas.length === 0
-                ? 'Registrá el primer pago con el botón de arriba. Las cuotas se pueden cargar una por una o munculendo al cobrar.'
+                ? 'Emití las cuotas del mes para que las familias las vean y paguen, o registrá un pago que llegó por otro canal.'
                 : 'Probá con otro nombre, otro mes o quitá los filtros.'
             }
             action={
-              <Button onClick={abrirAlta}>
-                <Plus className="h-4 w-4" />Registrar el primero
-              </Button>
+              cuotas.length === 0 ? (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button onClick={abrirEmision}>
+                    <CalendarPlus className="h-4 w-4" />Emitir cuotas
+                  </Button>
+                  <Button variant="outline" onClick={abrirAlta}>
+                    <Plus className="h-4 w-4" />Registrar pago
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFiltro('todas');
+                    setBusqueda('');
+                    setAnioFiltro('todos');
+                    setMesFiltro('todos');
+                  }}
+                >
+                  Ver todas
+                </Button>
+              )
             }
           />
         ) : (
@@ -638,6 +748,133 @@ export default function AdminPagos() {
               <Button type="button" variant="outline" onClick={() => setAsignarAbierto(false)}>Cancelar</Button>
               <Button type="submit" disabled={guardando || familias.length === 0}>
                 {guardando ? 'Guardando…' : 'Registrar pago'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Emisión de cuotas pendientes */}
+      <Dialog open={emitirAbierto} onOpenChange={(o) => !o && setEmitirAbierto(false)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Emitir cuotas</DialogTitle>
+            <DialogDescription>
+              Crea cuotas pendientes para que las familias las vean en su portal
+              y puedan pagar. Las cuotas que ya existen para ese período se
+              omiten.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={emitir} className="space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={emitirModo === 'una' ? 'default' : 'outline'}
+                onClick={() => setEmitirModo('una')}
+              >
+                Una familia
+              </Button>
+              <Button
+                type="button"
+                variant={emitirModo === 'todas' ? 'default' : 'outline'}
+                onClick={() => setEmitirModo('todas')}
+                disabled={familias.length === 0}
+              >
+                Todas ({familias.length})
+              </Button>
+            </div>
+
+            {emitirModo === 'una' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="emitir-familia">Familia *</Label>
+                <Select
+                  value={emitirForm.familia_id || SIN_SEL}
+                  onValueChange={(v) => setEmitirForm({
+                    ...emitirForm,
+                    familia_id: v === SIN_SEL ? '' : (v ?? ''),
+                  })}
+                  items={opcionesFamilia}
+                >
+                  <SelectTrigger id="emitir-familia"><SelectValue placeholder="Elegí la familia" /></SelectTrigger>
+                  <SelectContent>
+                    {opcionesFamilia.map((f) => (
+                      <SelectItem key={f.value} value={f.value} disabled={familias.length === 0}>
+                        {f.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="emitir-mes">Mes *</Label>
+                <Select
+                  value={emitirForm.mes}
+                  onValueChange={(v) => v && setEmitirForm({ ...emitirForm, mes: v })}
+                  items={MESES}
+                >
+                  <SelectTrigger id="emitir-mes"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MESES.map((m) => (
+                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="emitir-anio">Año *</Label>
+                <Input
+                  id="emitir-anio"
+                  type="number"
+                  value={emitirForm.anio}
+                  onChange={(e) => setEmitirForm({ ...emitirForm, anio: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="emitir-monto">Monto por cuota *</Label>
+                <Input
+                  id="emitir-monto"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={emitirForm.monto}
+                  onChange={(e) => setEmitirForm({ ...emitirForm, monto: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+
+            {familias.length === 0 && (
+              <p className="rounded-lg border border-warn/25 bg-warn/10 px-3 py-2 text-xs text-warn">
+                No hay familias vinculadas. Creá el vínculo primero en Vínculos familiares.
+              </p>
+            )}
+
+            <div className="rounded-lg border border-info/25 bg-info/10 px-3 py-2 text-xs text-info">
+              {emitirModo === 'una'
+                ? `Se emite 1 cuota de ${money(Number(emitirForm.monto) || 0)} para ${mesNombre(Number(emitirForm.mes))} ${emitirForm.anio}.`
+                : `Se emiten hasta ${familias.length} cuotas de ${money(Number(emitirForm.monto) || 0)} c/u para ${mesNombre(Number(emitirForm.mes))} ${emitirForm.anio}.`}
+              {' '}Las que ya existan se omiten.
+            </div>
+
+            <DialogFooter className="!mx-0 !mb-0 !rounded-none !border-0 !bg-transparent !p-0">
+              <Button type="button" variant="outline" onClick={() => setEmitirAbierto(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  emitiendo ||
+                  familias.length === 0 ||
+                  !emitirForm.monto ||
+                  (emitirModo === 'una' && !emitirForm.familia_id)
+                }
+              >
+                {emitiendo ? 'Emitiendo…' : 'Emitir cuota(s)'}
               </Button>
             </DialogFooter>
           </form>

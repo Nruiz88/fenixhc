@@ -38,7 +38,7 @@ La base se crea con los archivos de `mariadb/`, en orden:
 mariadb -h localhost -u fenix -p'...' < mariadb/01_schema.sql
 mariadb -h localhost -u fenix -p'...' < mariadb/02_seed.sql
 mariadb -h localhost -u fenix -p'...' < mariadb/03_drop_chat.sql
-# ... hasta 15. Cada uno es idempotente: se pueden volver a correr.
+# ... hasta 16. Cada uno es idempotente: se pueden volver a correr.
 ```
 
 **El detalle completo de cada migración está en [SETUP-LOCAL.md](SETUP-LOCAL.md)**,
@@ -64,6 +64,7 @@ npm run lint    # eslint
 | `src/app/api/admin/query` | Queries del panel. Autorización por módulo y rol |
 | `src/app/api/files/[...path]` | Sirve los archivos. Chequea permisos y deja bitácora ANTES de leer |
 | `src/app/api/pagos/mercadopago/webhook` | Webhook de MercadoPago: consulta el pago real antes de acreditar |
+| `src/app/api/admin/emitir-cuota` | Emite cuotas pendientes para una familia o para todas |
 | `src/app/admin/configuracion/mercadopago` | Credenciales de MercadoPago. Solo el rol `admin` |
 | `src/proxy.ts` | Protección de rutas por sesión y módulo |
 | `src/lib/roles.ts` | Los 8 roles y la matriz de módulos |
