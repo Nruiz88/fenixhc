@@ -21,6 +21,8 @@ const csp = [
   "media-src 'self' blob:",
   "font-src 'self' data:",
   "connect-src 'self'",
+  // El service worker de la PWA se sirve desde el mismo origen.
+  "worker-src 'self'",
   "form-action 'self'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -45,6 +47,16 @@ const nextConfig: NextConfig = {
       {
         source: '/:path*',
         headers: securityHeaders,
+      },
+      {
+        // El navegador tiene que poder ver el service worker nuevo en cada
+        // deploy. Si se cachea fuerte, una versión vieja sigue controlando la
+        // app aunque el servidor ya tenga otra.
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' },
+        ],
       },
     ];
   },

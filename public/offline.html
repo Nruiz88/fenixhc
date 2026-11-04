@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0b" />
+    <title>Sin conexión | Fenix Roller Hockey</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --base: #0a0a0b;
+        --surface: #131316;
+        --line: #2a2a31;
+        --main: #f5f5f5;
+        --muted: #a1a1aa;
+        --brand: #dc2626;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: var(--base);
+        color: var(--main);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .tarjeta {
+        width: 100%;
+        max-width: 380px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        padding: 32px 24px;
+        text-align: center;
+      }
+      img { width: 104px; height: 104px; object-fit: contain; }
+      h1 { margin: 18px 0 8px; font-size: 20px; }
+      p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 14px; }
+      a {
+        display: inline-block;
+        margin-top: 22px;
+        padding: 11px 18px;
+        border-radius: 10px;
+        background: var(--brand);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="tarjeta">
+      <img src="/logo.png" alt="Fenix Roller Hockey" />
+      <h1>Sin conexión</h1>
+      <p>
+        No pudimos conectarnos. Revisá los datos móviles o el Wi-Fi y volvé a
+        intentar. Las cuotas y los datos del club necesitan conexión.
+      </p>
+      <a href="/">Volver a intentar</a>
+    </main>
+  </body>
+</html>
