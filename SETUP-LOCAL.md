@@ -371,7 +371,9 @@ Flujo:
 
 Qué configurar en MercadoPago Developers → tu aplicación:
 
-- **Access Token** (credenciales de producción o `TEST-` para prueba).
+- **Access Token** (credenciales de Producción o de Test). Las de prueba
+  pueden empezar con `APP_USR-` o `TEST-`: lo que define el entorno es la
+  cuenta de MercadoPago, no el prefijo.
 - **Webhooks → URL de notificaciones**: la que muestra la pantalla, con el
   formato `https://<dominio>/api/pagos/mercadopago/webhook`.
 - **Secreto de firma** del webhook (recomendado). Sin secreto el webhook igual

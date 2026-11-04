@@ -267,9 +267,12 @@ export default function AdminMercadoPago() {
               placeholder={config.accessTokenCargado ? 'Dejalo vacío para conservar el actual' : 'APP_USR-... o TEST-...'}
             />
             <p className="text-[11px] text-dim">
-              MercadoPago Developers → tu aplicación → Credenciales. Con un token
-              que empieza con <span className="font-mono">TEST-</span> se usa el
-              checkout de prueba.
+              MercadoPago Developers → tu aplicación → Credenciales. Las
+              credenciales de prueba pueden empezar con{' '}
+              <span className="font-mono">APP_USR-</span> o{' '}
+              <span className="font-mono">TEST-</span>: lo que define el entorno
+              es la cuenta de MercadoPago. La app consulta la cuenta y muestra
+              arriba si es de prueba o de producción.
             </p>
           </div>
 

@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const initPoint = puntoDeInicio(preferencia, config.accessToken);
+      const initPoint = puntoDeInicio(preferencia);
       await guardarPreferencia(pagoId, String(preferencia.id), initPoint);
 
       return NextResponse.json({

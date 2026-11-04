@@ -126,19 +126,58 @@ export async function obtenerPago(
 }
 
 /**
- * Punto de entrada para el checkout según el tipo de credencial.
+ * Punto de entrada para el checkout.
  *
- * Con credenciales de prueba MercadoPago devuelve `sandbox_init_point`; con
- * producción, `init_point`. Usar el de producción con un token TEST manda a
- * la persona a un checkout que no acepta ese token.
+ * SIEMPRE `init_point`. MercadoPago eliminó el entorno sandbox: las pruebas
+ * corren contra la misma API y el mismo checkout, con credenciales de una
+ * cuenta de prueba. `sandbox_init_point` está deprecado y puede terminar en
+ * una página de error, incluso usando credenciales que empiezan con `TEST-`.
  */
-export function puntoDeInicio(
-  preferencia: PreferenciaMercadoPago,
-  accessToken: string
-): string {
-  const esPrueba = accessToken.trim().toUpperCase().startsWith('TEST-');
-  if (esPrueba) return preferencia.sandbox_init_point || preferencia.init_point;
+export function puntoDeInicio(preferencia: PreferenciaMercadoPago): string {
   return preferencia.init_point;
+}
+
+export interface CuentaMercadoPago {
+  id?: number | string;
+  nickname?: string;
+  email?: string;
+  tags: string[];
+  /** true si la cuenta es un usuario de prueba de MercadoPago. */
+  esPrueba: boolean;
+}
+
+/**
+ * Consulta a qué cuenta pertenece un Access Token.
+ *
+ * El prefijo no sirve para saber si es prueba: MercadoPago entrega tokens
+ * `APP_USR-` también para cuentas de prueba de Checkout Pro. La marca confiable
+ * es el tag `test_user` de `/users/me` (o el nickname/email de testuser).
+ */
+export async function consultarCuenta(accessToken: string): Promise<CuentaMercadoPago> {
+  const data = await pedir<{
+    id?: number | string;
+    nickname?: string;
+    email?: string;
+    tags?: unknown;
+  }>('/users/me', accessToken);
+
+  const tags = Array.isArray(data.tags) ? data.tags.map(String) : [];
+  const nickname = String(data.nickname ?? '');
+  const email = String(data.email ?? '').toLowerCase();
+
+  const esPrueba =
+    tags.includes('test_user') ||
+    nickname.toUpperCase().startsWith('TESTUSER') ||
+    email.endsWith('@testuser.com') ||
+    accessToken.trim().toUpperCase().startsWith('TEST-');
+
+  return {
+    id: data.id,
+    nickname: data.nickname,
+    email: data.email,
+    tags,
+    esPrueba,
+  };
 }
 
 interface FirmaWebhook {

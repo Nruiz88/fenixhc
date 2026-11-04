@@ -86,19 +86,17 @@ describe('firma del webhook de MercadoPago', () => {
   });
 });
 
-describe('checkout según el tipo de credencial', () => {
+describe('URL del checkout', () => {
   const preferencia = {
     id: 'pref',
-    init_point: 'https://produccion',
-    sandbox_init_point: 'https://sandbox',
+    init_point: 'https://checkout-mercadopago',
+    sandbox_init_point: 'https://sandbox-deprecado',
   };
 
-  it('usa el sandbox con un token TEST-', () => {
-    expect(puntoDeInicio(preferencia, 'TEST-123')).toBe('https://sandbox');
-  });
-
-  it('usa producción con un token de producción', () => {
-    expect(puntoDeInicio(preferencia, 'APP_USR-123')).toBe('https://produccion');
+  it('usa siempre init_point, también con credenciales TEST-', () => {
+    // MercadoPago eliminó el sandbox: las pruebas usan la misma URL con una
+    // cuenta de prueba. `sandbox_init_point` está deprecado.
+    expect(puntoDeInicio(preferencia)).toBe('https://checkout-mercadopago');
   });
 });
 

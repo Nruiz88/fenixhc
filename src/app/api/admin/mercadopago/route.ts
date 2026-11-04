@@ -8,7 +8,7 @@ import {
   type ConfigMercadoPago,
 } from '@/lib/pagos-config';
 import { listarPagosMercadoPago } from '@/lib/pagos-db';
-import { urlWebhook } from '@/lib/mercadopago';
+import { consultarCuenta, urlWebhook } from '@/lib/mercadopago';
 
 // Credenciales de MercadoPago.
 //
@@ -33,7 +33,30 @@ function mensajeError(err: unknown): string {
   return err instanceof Error ? err.message : 'Error interno';
 }
 
-function versionPublica(config: ConfigMercadoPago, request: NextRequest) {
+/**
+ * Entorno real de la credencial.
+ *
+ * No se usa el prefijo: MercadoPago entrega `APP_USR-` tanto a cuentas reales
+ * como a cuentas de prueba de Checkout Pro. Se consulta `/users/me` y se mira
+ * el tag `test_user`. Si la consulta falla, cae al prefijo como aproximación
+ * para no romper la pantalla de configuración.
+ */
+async function entornoDe(config: ConfigMercadoPago): Promise<'test' | 'produccion' | null> {
+  if (!config.accessToken) return null;
+  try {
+    const cuenta = await consultarCuenta(config.accessToken);
+    return cuenta.esPrueba ? 'test' : 'produccion';
+  } catch (err) {
+    console.warn('No se pudo consultar la cuenta de MercadoPago:', err);
+    return config.accessToken.toUpperCase().startsWith('TEST-') ? 'test' : 'produccion';
+  }
+}
+
+function versionPublica(
+  config: ConfigMercadoPago,
+  request: NextRequest,
+  entorno: 'test' | 'produccion' | null
+) {
   return {
     habilitado: config.habilitado,
     accessTokenCargado: config.accessToken.length > 0,
@@ -43,11 +66,7 @@ function versionPublica(config: ConfigMercadoPago, request: NextRequest) {
     publicKey: config.publicKey,
     webhookSecretCargado: config.webhookSecret.length > 0,
     webhookUrl: urlWebhook(request),
-    entorno: config.accessToken
-      ? config.accessToken.toUpperCase().startsWith('TEST-')
-        ? 'test'
-        : 'produccion'
-      : null,
+    entorno,
     errorCredenciales: config.errorCredenciales,
   };
 }
@@ -60,10 +79,13 @@ export async function GET(request: NextRequest) {
     }
 
     const config = await leerConfigMercadoPago();
-    const pagos = await listarPagosMercadoPago(20);
+    const [entorno, pagos] = await Promise.all([
+      entornoDe(config),
+      listarPagosMercadoPago(20),
+    ]);
 
     return NextResponse.json({
-      data: { ...versionPublica(config, request), pagos },
+      data: { ...versionPublica(config, request, entorno), pagos },
     });
   } catch (err) {
     console.error('MercadoPago config GET:', err);
@@ -117,9 +139,13 @@ export async function PUT(request: NextRequest) {
 
     await guardarConfigMercadoPago(datos);
     const config = await leerConfigMercadoPago();
+    const [entorno, pagos] = await Promise.all([
+      entornoDe(config),
+      listarPagosMercadoPago(20),
+    ]);
 
     return NextResponse.json({
-      data: { ...versionPublica(config, request), pagos: await listarPagosMercadoPago(20) },
+      data: { ...versionPublica(config, request, entorno), pagos },
     });
   } catch (err) {
     console.error('MercadoPago config PUT:', err);

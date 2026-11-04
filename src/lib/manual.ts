@@ -415,7 +415,7 @@ export const MANUAL: SeccionManual[] = [
         avisos: [
           'Esta pestaña solo la ve el administrador. El presidente no puede entrar aunque tenga el módulo Configuración.',
           'El Access Token y el secreto se guardan cifrados. El token completo no se vuelve a mostrar: si se pierde, se genera uno nuevo en MercadoPago.',
-          'Con credenciales de prueba (empiezan con TEST-) los pagos no mueven dinero real. Para cobrar de verdad hay que cargar las de producción.',
+          'Con credenciales de una cuenta de prueba los pagos no mueven dinero real. Ojo: las credenciales de prueba pueden empezar con APP_USR- o TEST-; lo que importa es la cuenta, no el prefijo.',
           'El webhook necesita que APP_URL sea la dirección pública https: MercadoPago no puede llamar a localhost.',
           'Una cuota con comprobante de transferencia en revisión no se puede pagar online, para que la familia no pague dos veces.',
         ],
