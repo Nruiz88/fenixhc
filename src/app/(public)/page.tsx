@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { MapPin, ArrowRight, Clock, ChevronRight, Star, Phone, Mail } from 'lucide-react';
 import { CalendarioPartidos } from '@/components/CalendarioPartidos';
+import { BotonInstalarPwa } from '@/components/shared/BotonInstalarPwa';
 import { CLUB_INFO } from '@/lib/constants';
 
 function HeroSection() {
@@ -32,6 +33,7 @@ function HeroSection() {
           <div className="flex flex-col sm:flex-row gap-4 mb-14">
             <Link href="/registro"><Button size="lg" className="bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold px-8 h-14 text-base gap-2 shadow-lg shadow-[#DC2626]/25">Unite al Club <ArrowRight className="h-5 w-5" /></Button></Link>
             <Link href="/club"><Button size="lg" variant="outline" className="border-white/20 text-white hover:bg-white/5 font-semibold px-8 h-14 text-base">Conocé Más</Button></Link>
+            <BotonInstalarPwa />
           </div>
           <div className="grid grid-cols-3 gap-6 max-w-md">
             {[
