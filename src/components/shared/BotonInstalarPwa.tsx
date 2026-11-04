@@ -59,13 +59,7 @@ export function BotonInstalarPwa() {
   const [ayuda, setAyuda] = useState<'ios' | 'android' | null>(null);
 
   useEffect(() => {
-    if (estaInstalada()) {
-      setInstalada(true);
-      return;
-    }
-
-    setIos(esIOS());
-    setAndroid(esAndroid());
+    let vigente = true;
 
     const alPoderInstalar = (event: Event) => {
       event.preventDefault();
@@ -81,7 +75,21 @@ export function BotonInstalarPwa() {
     window.addEventListener('beforeinstallprompt', alPoderInstalar);
     window.addEventListener('appinstalled', alInstalar);
 
+    // La detección inicial va en un microtask: así el primer render del
+    // servidor y el del cliente coinciden y no se setea estado en el cuerpo
+    // del efecto (evita un render en cascada).
+    Promise.resolve().then(() => {
+      if (!vigente) return;
+      if (estaInstalada()) {
+        setInstalada(true);
+        return;
+      }
+      setIos(esIOS());
+      setAndroid(esAndroid());
+    });
+
     return () => {
+      vigente = false;
       window.removeEventListener('beforeinstallprompt', alPoderInstalar);
       window.removeEventListener('appinstalled', alInstalar);
     };
