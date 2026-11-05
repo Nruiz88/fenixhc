@@ -169,18 +169,29 @@ export default function AdminPagos() {
     // reportaba $75.000.
     const r = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override);
 
-    const { error } = await db.update(
+    // El filtro por `estado: 'pendiente'` es la protección contra una
+    // aprobación vieja: si MercadoPago acreditó la cuota mientras la pantalla
+    // estaba abierta, la fila ya no es pendiente y este UPDATE no la toca.
+    const { data, error } = await db.update(
       'cuotas',
       {
         estado: 'pagada',
         fecha_pago: new Date().toISOString(),
         monto_pagado: r.total,
       },
-      { id: c.id }
+      { id: c.id, estado: 'pendiente' }
     );
     setProcesando(null);
 
     if (error) { toast.error(error); return; }
+
+    const affected = Number((data as { affected?: number } | null)?.affected ?? 0);
+    if (affected === 0) {
+      toast.info('La cuota ya estaba paga o cambió de estado. Actualizá la lista.');
+      setAVer(null);
+      await cargar();
+      return;
+    }
 
     toast.success(`Cuota de ${fmtPeriodo(c.mes, c.anio)} marcada como pagada`, {
       description:
@@ -194,12 +205,24 @@ export default function AdminPagos() {
 
   async function rechazar() {
     if (!aRechazar) return;
-    const { error } = await db.update(
+    const { data, error } = await db.update(
       'cuotas',
       { estado: 'pendiente', comprobante_url: null, fecha_pago: null, monto_pagado: null },
-      { id: aRechazar.id }
+      // Solo se rechaza una cuota todavía pendiente. Si MercadoPago la pagó
+      // mientras el modal estaba abierto, no se le borra el pago.
+      { id: aRechazar.id, estado: 'pendiente' }
     );
     if (error) { toast.error(error); return; }
+
+    const affected = Number((data as { affected?: number } | null)?.affected ?? 0);
+    if (affected === 0) {
+      toast.info('La cuota ya cambió de estado. Actualizá la lista.');
+      setARechazar(null);
+      setAVer(null);
+      await cargar();
+      return;
+    }
+
     toast.success('Comprobante rechazado. La cuota vuelve a pendiente para que la persona lo vuelva a subir.');
     setARechazar(null);
     setAVer(null);
