@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/adminQuery';
 import { toast } from 'sonner';
 import { money, mesNombre, fecha, periodo as fmtPeriodo } from '@/lib/format';
+import { mysqlDateTime } from '@/lib/dates';
 import { useConfigCuotas } from '@/lib/useConfigCuotas';
 import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Toolbar, Hint, tonoEstadoCuota } from '@/components/admin/ui';
 import { Confirmar } from '@/components/admin/confirmar';
@@ -176,7 +177,7 @@ export default function AdminPagos() {
       'cuotas',
       {
         estado: 'pagada',
-        fecha_pago: new Date().toISOString(),
+        fecha_pago: mysqlDateTime(),
         monto_pagado: r.total,
       },
       { id: c.id, estado: 'pendiente' }
@@ -337,7 +338,7 @@ export default function AdminPagos() {
       anio: Number(form.anio),
       monto,
       estado: 'pagada',
-      fecha_pago: new Date().toISOString(),
+      fecha_pago: mysqlDateTime(),
       tipo_socio: 'benefactor',
       metodo_pago: form.metodo,
     });
@@ -632,7 +633,7 @@ export default function AdminPagos() {
 
       {/* Comprobante */}
       <Dialog open={!!aVer} onOpenChange={(o) => !o && setAVer(null)}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto overscroll-contain sm:max-w-2xl">
           {aVer && (
             <>
               <DialogHeader>
@@ -645,13 +646,17 @@ export default function AdminPagos() {
 
               <div className="overflow-hidden rounded-lg border border-line bg-surface-2">
                 {aVer.comprobante_url?.toLowerCase().endsWith('.pdf') ? (
-                  <iframe src={aVer.comprobante_url} className="h-96 w-full" title="Comprobante de pago" />
+                  <iframe
+                    src={aVer.comprobante_url}
+                    className="h-[55dvh] min-h-64 w-full"
+                    title="Comprobante de pago"
+                  />
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={aVer.comprobante_url}
                     alt={`Comprobante de ${aVer.familias?.padre?.nombre}`}
-                    className="max-h-96 w-full object-contain"
+                    className="max-h-[55dvh] w-full object-contain"
                   />
                 )}
               </div>

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { db } from '@/lib/adminQuery';
 import { toast } from 'sonner';
 import { fecha, fechaHora } from '@/lib/format';
+import { mysqlDateTime } from '@/lib/dates';
 import { PageHeader, Panel, EmptyState, StatusPill, Toolbar, Hint, type StatusTone } from '@/components/admin/ui';
 import { Confirmar } from '@/components/admin/confirmar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -129,7 +130,7 @@ export default function AdminComunicadosPage() {
       // publicado. Si no, un comunicado republicado por error aparecía como
       // nuevo en la web y los socios lo leían dos veces.
       fecha_publicacion:
-        form.estado === 'publicado' ? new Date().toISOString() : (editando?.fecha_publicacion ?? null),
+        form.estado === 'publicado' ? mysqlDateTime() : (editando?.fecha_publicacion ?? null),
     };
 
     const res = editando

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { fecha, fechaDia, isoDia, parseFechaDia } from '@/lib/format';
+import { mysqlDateTime } from '@/lib/dates';
 
 // Las columnas DATE de MySQL llegan al navegador como ISO a medianoche UTC.
 // Si se hace new Date(...) en Argentina, el día se corre al anterior. Estos
@@ -31,5 +32,13 @@ describe('fechas de MySQL DATE', () => {
     expect(fecha('')).toBe('—');
     expect(fecha('no-es-fecha')).toBe('—');
     expect(parseFechaDia('no-es-fecha')).toBeNull();
+  });
+});
+
+describe('fecha y hora para MySQL', () => {
+  it('usa el formato que acepta MariaDB, sin T ni Z', () => {
+    expect(mysqlDateTime(new Date('2026-11-05T19:04:58.442Z'))).toBe(
+      '2026-11-05 19:04:58'
+    );
   });
 });

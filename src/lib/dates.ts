@@ -9,6 +9,17 @@ function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
 
+/**
+ * Fecha y hora para columnas TIMESTAMP/DATETIME de MySQL.
+ *
+ * MariaDB rechaza el ISO de JavaScript (`2026-11-05T19:04:58.442Z`) en modo
+ * estricto: espera `YYYY-MM-DD HH:mm:ss`. El pool usa `timezone: '+00:00'`,
+ * así que se manda en UTC y la lectura vuelve como Date.
+ */
+export function mysqlDateTime(date: Date = new Date()): string {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function aISO(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
