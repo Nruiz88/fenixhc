@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Panel, EmptyState, StatusPill, Hint, Toolbar } from '@/components/admin/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fecha } from '@/lib/format';
 import { useJunta, accionJunta } from '../use-junta';
 import { Receipt, Plus, Loader2, Ban, Download } from 'lucide-react';
@@ -35,6 +36,24 @@ interface Recibo {
   anio: number | null;
 }
 
+interface Familia {
+  id: string;
+  padre_nombre: string | null;
+  padre_apellido: string | null;
+  padre_dni: string | null;
+  hijo_nombre: string | null;
+  hijo_apellido: string | null;
+}
+
+interface Cuota {
+  id: string;
+  familia_id: string;
+  mes: number;
+  anio: number;
+  monto: number;
+  estado: string;
+}
+
 const FORMAS = [
   ['efectivo', 'Efectivo'],
   ['transferencia', 'Transferencia'],
@@ -45,27 +64,127 @@ const FORMAS = [
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
+// Base UI no dispara onValueChange con un string vacío: la opción quedaría sin
+// poder elegirse. El centinela representa "sin socio" / "sin cuota".
+const SIN_SEL = '__sin_seleccion__';
+
 function plata(n: number) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(Number(n));
 }
 
+/** "Pérez, Juan — Pedro Pérez": se busca por apellido, no por UUID. */
+function nombreFamilia(f: Familia) {
+  const padre = [f.padre_apellido, f.padre_nombre].filter(Boolean).join(', ');
+  const hijo = [f.hijo_nombre, f.hijo_apellido].filter(Boolean).join(' ');
+  return hijo ? `${padre || 'Familia'} — ${hijo}` : padre || 'Familia sin datos';
+}
+
+const FORM_VACIO = {
+  monto: '',
+  forma_pago: 'efectivo',
+  concepto: '',
+  familia_id: '',
+  cuota_id: '',
+};
+
 export function TabRecibos() {
   const [filtro, setFiltro] = useState<'emitido' | 'anulado' | ''>('emitido');
-  const { datos, cargando, fallo, recargar } = useJunta<{ lista: Recibo[] }>('recibos', {
+  const { datos, cargando, fallo, recargar } = useJunta<{
+    lista: Recibo[];
+    familias: Familia[];
+  }>('recibos', {
     estado: filtro,
   });
   const [nuevo, setNuevo] = useState(false);
   const [anulando, setAnulando] = useState<Recibo | null>(null);
   const [motivo, setMotivo] = useState('');
   const [guardando, setGuardando] = useState(false);
-  const [form, setForm] = useState({
-    monto: '',
-    forma_pago: 'efectivo',
-    concepto: '',
-    cuota_id: '',
-  });
+  const [form, setForm] = useState({ ...FORM_VACIO });
+  const [cuotas, setCuotas] = useState<Cuota[]>([]);
+  const [cargandoCuotas, setCargandoCuotas] = useState(false);
 
-  const lista = datos?.lista ?? [];
+  // Evita que una respuesta vieja de cuotas pise a la de la familia elegida
+  // después. Sin esto, elegir dos socios seguidos deja las cuotas del primero.
+  const pedidoCuotas = useRef(0);
+
+  const lista = useMemo(() => datos?.lista ?? [], [datos]);
+  const familias = useMemo(() => datos?.familias ?? [], [datos]);
+
+  const opcionesFamilia = useMemo(
+    () =>
+      familias.map((f) => ({
+        value: f.id,
+        label: nombreFamilia(f),
+      })),
+    [familias]
+  );
+
+  const opcionesCuota = useMemo(
+    () =>
+      cuotas.map((c) => ({
+        value: c.id,
+        label: `Cuota ${MESES[c.mes - 1] ?? c.mes} ${c.anio} · ${plata(c.monto)} · ${
+          c.estado === 'pagada' ? 'pagada' : c.estado
+        }`,
+      })),
+    [cuotas]
+  );
+
+  async function cargarCuotas(familiaId: string) {
+    const pedido = ++pedidoCuotas.current;
+
+    if (!familiaId) {
+      setCuotas([]);
+      setCargandoCuotas(false);
+      return;
+    }
+
+    setCargandoCuotas(true);
+    try {
+      const res = await fetch(`/api/junta/recibos?familia=${encodeURIComponent(familiaId)}`);
+      const json = await res.json();
+      if (pedido !== pedidoCuotas.current) return;
+      setCuotas(res.ok ? json.data?.cuotas ?? [] : []);
+    } catch {
+      if (pedido === pedidoCuotas.current) setCuotas([]);
+    } finally {
+      if (pedido === pedidoCuotas.current) setCargandoCuotas(false);
+    }
+  }
+
+  function abrirNuevo() {
+    pedidoCuotas.current++; // descarta cualquier pedido de cuotas que siga en vuelo
+    setForm({ ...FORM_VACIO });
+    setCuotas([]);
+    setNuevo(true);
+  }
+
+  function elegirFamilia(familiaId: string) {
+    // Al cambiar de socio la cuota anterior ya no sirve.
+    setForm((f) => ({ ...f, familia_id: familiaId, cuota_id: '' }));
+    cargarCuotas(familiaId);
+  }
+
+  function elegirCuota(cuotaId: string) {
+    const cuota = cuotas.find((c) => c.id === cuotaId);
+
+    if (!cuota) {
+      setForm((f) => ({ ...f, cuota_id: '' }));
+      return;
+    }
+
+    setForm((f) => ({
+      ...f,
+      cuota_id: cuota.id,
+      familia_id: cuota.familia_id,
+      // El monto y el concepto se completan con la cuota, pero el concepto
+      // respeta lo que la persona ya haya escrito.
+      monto: String(Number(cuota.monto)),
+      concepto: f.concepto.trim()
+        ? f.concepto
+        : `Cuota ${MESES[cuota.mes - 1] ?? cuota.mes} ${cuota.anio}`,
+    }));
+  }
 
   async function emitir() {
     if (!form.monto.trim()) return;
@@ -74,7 +193,8 @@ export function TabRecibos() {
     setGuardando(false);
     if (ok) {
       setNuevo(false);
-      setForm({ monto: '', forma_pago: 'efectivo', concepto: '', cuota_id: '' });
+      setForm({ ...FORM_VACIO });
+      setCuotas([]);
       await recargar();
     }
   }
@@ -110,7 +230,7 @@ export function TabRecibos() {
         description={`${totales.cantidad} emitidos · ${plata(totales.monto)}`}
         bodyClassName="p-0"
         actions={
-          <Button size="sm" onClick={() => setNuevo(true)}>
+          <Button size="sm" onClick={abrirNuevo}>
             <Plus className="h-4 w-4" />
             Emitir recibo
           </Button>
@@ -216,16 +336,74 @@ export function TabRecibos() {
 
       {/* Emitir */}
       <Dialog open={nuevo} onOpenChange={(o) => { if (!o) setNuevo(false); }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto overscroll-contain">
           <DialogHeader>
             <DialogTitle>Emitir recibo</DialogTitle>
             <DialogDescription>
-              El número es correlativo y automático. Para atarlo a una cuota, elegí
-              el socio desde Pagos.
+              El número es correlativo y automático. Si el recibo corresponde a una
+              cuota, elegí el socio y la cuota acá mismo. Si no, dejalo sin socio
+              para un recibo general.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="r-familia">Socio (opcional)</Label>
+              <Select
+                value={form.familia_id || SIN_SEL}
+                onValueChange={(v) => elegirFamilia(v === SIN_SEL ? '' : (v ?? ''))}
+                items={[
+                  { value: SIN_SEL, label: 'Sin socio · recibo general' },
+                  ...opcionesFamilia,
+                ]}
+              >
+                <SelectTrigger id="r-familia" className="w-full">
+                  <SelectValue placeholder="Elegí el socio" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SIN_SEL}>Sin socio · recibo general</SelectItem>
+                  {opcionesFamilia.map((f) => (
+                    <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-dim">
+                El recibo queda a nombre del socio. Es el dato que ven el banco y el
+                contador.
+              </p>
+            </div>
+
+            {form.familia_id && (
+              <div className="space-y-1.5">
+                <Label htmlFor="r-cuota">Cuota (opcional)</Label>
+                <Select
+                  value={form.cuota_id || SIN_SEL}
+                  onValueChange={(v) => elegirCuota(v === SIN_SEL ? '' : (v ?? ''))}
+                  items={[
+                    { value: SIN_SEL, label: 'Sin cuota · solo el socio' },
+                    ...opcionesCuota,
+                  ]}
+                >
+                  <SelectTrigger id="r-cuota" className="w-full">
+                    <SelectValue placeholder="Elegí la cuota" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SIN_SEL}>Sin cuota · solo el socio</SelectItem>
+                    {opcionesCuota.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-dim">
+                  {cargandoCuotas
+                    ? 'Cargando las cuotas del socio…'
+                    : cuotas.length === 0
+                      ? 'Ese socio no tiene cuotas pendientes ni del año en curso.'
+                      : 'Al elegir una cuota se completan el monto y el concepto. Emitir el recibo no la marca como pagada.'}
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="r-monto">Monto *</Label>

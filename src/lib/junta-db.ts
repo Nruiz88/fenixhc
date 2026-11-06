@@ -256,6 +256,62 @@ export async function obtenerDocumentoLegajo(id: string): Promise<DocumentoLegaj
 // Recibos
 // ---------------------------------------------------------------------------
 
+export interface FamiliaRecibo {
+  id: string;
+  padre_nombre: string | null;
+  padre_apellido: string | null;
+  padre_dni: string | null;
+  hijo_nombre: string | null;
+  hijo_apellido: string | null;
+}
+
+/**
+ * Familias para elegir el socio al emitir un recibo.
+ *
+ * Se listan con el nombre del padre y del jugador porque quien emite el recibo
+ * busca a la persona por apellido, no por el UUID de la familia.
+ */
+export async function listarFamiliasRecibo(): Promise<FamiliaRecibo[]> {
+  return query<FamiliaRecibo>(
+    `SELECT f.id,
+            pp.nombre AS padre_nombre, pp.apellido AS padre_apellido,
+            pp.dni AS padre_dni,
+            dp.nombre AS hijo_nombre, dp.apellido AS hijo_apellido
+       FROM familias f
+       LEFT JOIN perfiles pp ON pp.id = f.padre_perfil_id
+       LEFT JOIN perfiles dp ON dp.id = f.deportista_perfil_id
+      ORDER BY pp.apellido, pp.nombre, dp.apellido, dp.nombre`
+  );
+}
+
+export interface CuotaRecibo {
+  id: string;
+  familia_id: string;
+  mes: number;
+  anio: number;
+  monto: number;
+  estado: string;
+}
+
+/**
+ * Cuotas de una familia para atar el recibo.
+ *
+ * Trae las pendientes de cualquier año y todas las del año en curso: son las
+ * que se pueden estar cobrando hoy. Una cuota vieja ya pagada se puede seguir
+ * cobrando, pero el recibo se emite sin atarla; para eso está el concepto.
+ */
+export async function listarCuotasRecibo(familiaId: string): Promise<CuotaRecibo[]> {
+  return query<CuotaRecibo>(
+    `SELECT c.id, c.familia_id, c.mes, c.anio, c.monto, c.estado
+       FROM cuotas c
+      WHERE c.familia_id = ?
+        AND (c.estado = 'pendiente' OR c.anio >= YEAR(CURDATE()))
+      ORDER BY c.anio DESC, c.mes DESC
+      LIMIT 500`,
+    [familiaId]
+  );
+}
+
 export interface Recibo {
   id: string;
   numero: string;
@@ -341,6 +397,25 @@ export async function emitirRecibo(datos: {
   reemplazaId?: string | null;
 }): Promise<{ id: string; numero: string }> {
   return transaccion(async (conn) => {
+    // Si el recibo va atado a una cuota, la familia sale de la cuota y no del
+    // cliente. Así es imposible guardar un recibo que apunte a la cuota de otra
+    // familia por un error de la pantalla o una llamada armada a mano.
+    let familiaId = datos.familiaId ?? null;
+
+    if (datos.cuotaId) {
+      const [cuotas] = await conn.execute<any[]>(
+        'SELECT familia_id FROM cuotas WHERE id = ? LIMIT 1',
+        [datos.cuotaId]
+      );
+      const familiaDeCuota = cuotas?.[0]?.familia_id as string | undefined;
+
+      if (!familiaDeCuota) throw new Error('La cuota elegida no existe');
+      if (familiaId && familiaId !== familiaDeCuota) {
+        throw new Error('La cuota elegida no pertenece a esa familia');
+      }
+      familiaId = familiaDeCuota;
+    }
+
     const [filas] = await conn.execute<any[]>(
       'SELECT numero FROM recibos ORDER BY created_at DESC, numero DESC LIMIT 1 FOR UPDATE'
     );
@@ -367,7 +442,7 @@ export async function emitirRecibo(datos: {
           emitido_por, estado, reemplaza_id, fecha_emision, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'emitido', ?, CURDATE(), NOW())`,
       [
-        id, numero, datos.cuotaId ?? null, datos.familiaId ?? null, datos.monto,
+        id, numero, datos.cuotaId ?? null, familiaId, datos.monto,
         datos.formaPago, datos.concepto ?? null, datos.emitidoPor,
         datos.reemplazaId ?? null,
       ]

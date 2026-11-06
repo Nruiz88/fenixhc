@@ -104,12 +104,18 @@ export async function GET(request: NextRequest, ctx: { params: Promise<{ area: s
     if (area === 'recibos') {
       if (!puede(rolesDeUsuario(user), 'emitir_recibos')) return sinPermiso(user.rol, 'emitir_recibos');
 
+      // Las cuotas se piden por familia y no se mandan todas: el club puede
+      // tener miles y la pantalla solo las necesita para el socio elegido.
+      const familiaId = url.searchParams.get('familia') ?? '';
+
       return NextResponse.json({
         data: {
           lista: await db.listarRecibos({
             estado: url.searchParams.get('estado') ?? undefined,
             limite: Number(url.searchParams.get('limite')) || undefined,
           }),
+          familias: await db.listarFamiliasRecibo(),
+          cuotas: familiaId ? await db.listarCuotasRecibo(familiaId) : [],
           puedeEmitir: true,
         },
       });
@@ -273,17 +279,29 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ area: 
           return NextResponse.json({ error: 'El monto tiene que ser un número mayor que cero' }, { status: 400 });
         }
 
-        const r = await db.emitirRecibo({
-          cuotaId: texto(b.cuota_id, 36) || null,
-          familiaId: texto(b.familia_id, 36) || null,
-          monto,
-          formaPago: unoDe(b.forma_pago, ['efectivo', 'transferencia', 'debito', 'credito', 'cheque'], 'efectivo'),
-          concepto: texto(b.concepto, 255) || null,
-          emitidoPor: user.id,
-          reemplazaId: texto(b.reemplaza_id, 36) || null,
-        });
+        try {
+          const r = await db.emitirRecibo({
+            cuotaId: texto(b.cuota_id, 36) || null,
+            familiaId: texto(b.familia_id, 36) || null,
+            monto,
+            formaPago: unoDe(b.forma_pago, ['efectivo', 'transferencia', 'debito', 'credito', 'cheque'], 'efectivo'),
+            concepto: texto(b.concepto, 255) || null,
+            emitidoPor: user.id,
+            reemplazaId: texto(b.reemplaza_id, 36) || null,
+          });
 
-        return NextResponse.json({ success: true, ...r }, { status: 201 });
+          return NextResponse.json({ success: true, ...r }, { status: 201 });
+        } catch (err) {
+          return NextResponse.json(
+            {
+              error:
+                err instanceof Error && err.message
+                  ? err.message
+                  : 'No se pudo emitir el recibo',
+            },
+            { status: 400 }
+          );
+        }
       }
 
       if (accion === 'anular') {
