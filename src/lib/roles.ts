@@ -296,6 +296,10 @@ export function moduloDeRuta(pathname: string): Modulo | null {
 // los vocales.
 const RUTAS_ADICIONALES: Record<string, Modulo> = {
   '/admin/privacidad': 'configuracion',
+  // Becados cuelga de Socios: no es un módulo nuevo, es una sección más de
+  // personas. Sin esta línea la ruta caería en `null` y el proxy la dejaría
+  // abierta a toda la directiva, incluso a quien no tiene Socios.
+  '/admin/becados': 'socios',
 };
 
 /**

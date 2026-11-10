@@ -8,7 +8,7 @@ import { normalizarRoles } from '@/lib/roles';
 import { Input } from '@/components/ui/input';
 import { PageHeader, Panel, EmptyState, Toolbar, DataPoint } from '@/components/admin/ui';
 import { Button } from '@/components/ui/button';
-import { Users, Search, X, Phone, Mail, MapPin } from 'lucide-react';
+import { Users, Search, X, Phone, Mail, MapPin, BadgePercent } from 'lucide-react';
 
 export default function AdminSocios() {
   const [socios, setSocios] = useState<any[]>([]);
@@ -73,6 +73,10 @@ export default function AdminSocios() {
           </div>
           <Button size="sm" variant="ghost" render={<Link href="/admin/legajos" />}>
             Ver legajos
+          </Button>
+          <Button size="sm" variant="ghost" render={<Link href="/admin/becados" />}>
+            <BadgePercent className="h-4 w-4" />
+            Becados
           </Button>
         </Toolbar>
       </Panel>

@@ -330,6 +330,8 @@ export interface Recibo {
   socio_dni: string | null;
   mes: number | null;
   anio: number | null;
+  beca_porcentaje: number | null;
+  monto_lista: number | null;
 }
 
 export async function listarRecibos(filtros?: { estado?: string; limite?: number }): Promise<Recibo[]> {
@@ -347,7 +349,8 @@ export async function listarRecibos(filtros?: { estado?: string; limite?: number
             r.forma_pago, r.concepto, r.emitido_por, r.estado, r.anulado_motivo,
             r.descargado_en,
             TRIM(CONCAT(p.nombre, ' ', p.apellido)) AS socio_nombre,
-            p.dni AS socio_dni, c.mes, c.anio
+            p.dni AS socio_dni, c.mes, c.anio,
+            c.beca_porcentaje, c.monto_lista
        FROM recibos r
        LEFT JOIN familias f ON f.id = r.familia_id
        LEFT JOIN perfiles p ON p.id = f.padre_perfil_id
@@ -365,7 +368,8 @@ export async function obtenerRecibo(id: string): Promise<Recibo | null> {
             r.forma_pago, r.concepto, r.emitido_por, r.estado, r.anulado_motivo,
             r.descargado_en,
             TRIM(CONCAT(p.nombre, ' ', p.apellido)) AS socio_nombre,
-            p.dni AS socio_dni, c.mes, c.anio
+            p.dni AS socio_dni, c.mes, c.anio,
+            c.beca_porcentaje, c.monto_lista
        FROM recibos r
        LEFT JOIN familias f ON f.id = r.familia_id
        LEFT JOIN perfiles p ON p.id = f.padre_perfil_id

@@ -111,6 +111,12 @@ function dibujarRecibo(doc: PDFKit.PDFDocument, r: any): void {
   ];
   if (r.socio_dni) filas.push(['DNI', r.socio_dni]);
   if (r.mes != null && r.anio != null) filas.push(['Corresponde a', `Cuota de ${MESES[r.mes - 1]} de ${r.anio}`]);
+  if (Number(r.beca_porcentaje) > 0) {
+    filas.push(['Beca', `${Number(r.beca_porcentaje)}% — sin recargo`]);
+    if (r.monto_lista != null && Number(r.monto_lista) !== Number(r.monto)) {
+      filas.push(['Valor de la cuota', plata(Number(r.monto_lista))]);
+    }
+  }
   filas.push(['Concepto', r.concepto || 'Cuota mensual']);
   filas.push(['Forma de pago', FORMAS[r.forma_pago] || r.forma_pago]);
 

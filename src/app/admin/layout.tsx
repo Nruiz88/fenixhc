@@ -11,7 +11,7 @@ import {
   Menu, LogOut, LayoutDashboard, Users, UserCheck, FileText, Link2,
   DollarSign, PieChart, Bell, Calendar, Home, ChevronRight, Settings,
   Megaphone, Star, Clock, TrendingUp, BarChart3, Shield, ShieldCheck, Landmark,
-  BookOpen,
+  BookOpen, BadgePercent,
 } from 'lucide-react';
 import {
   tieneModulo, tieneRol, rolesDeUsuario, etiquetasDeRoles,
@@ -33,6 +33,7 @@ const SECCIONES: { titulo: string; items: NavItem[] }[] = [
     items: [
       { label: 'Usuarios', href: '/admin/usuarios', icon: Users, modulo: 'usuarios' },
       { label: 'Socios Benefactores', href: '/admin/socios', icon: Users, modulo: 'socios' },
+      { label: 'Becados', href: '/admin/becados', icon: BadgePercent, modulo: 'socios' },
       { label: 'Jugadores', href: '/admin/jugadores', icon: UserCheck, modulo: 'jugadores' },
       { label: 'Legajos', href: '/admin/legajos', icon: FileText, modulo: 'legajos' },
       { label: 'Vínculos familiares', href: '/admin/links-familia', icon: Link2, modulo: 'familias' },

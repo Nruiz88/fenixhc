@@ -97,9 +97,12 @@ export function componerAviso(f: FamiliarParaAvisar): string {
   } else {
     if (f.cuotas.length === 1) {
       const c = f.cuotas[0];
+      const conRecargo = c.recargo.porcentaje > 0;
       lineas.push('');
       lineas.push(
-        `La cuota de ${nombreMes(c.mes)} de ${c.anio} está pendiente. Con el recargo por atraso vigente, el total es $${pesos(c.recargo.total)}.`
+        conRecargo
+          ? `La cuota de ${nombreMes(c.mes)} de ${c.anio} está pendiente. Con el recargo por atraso vigente, el total es $${pesos(c.recargo.total)}.`
+          : `La cuota de ${nombreMes(c.mes)} de ${c.anio} está pendiente. El total a pagar es $${pesos(c.recargo.total)}.`
       );
     } else if (f.cuotas.length > 1) {
       lineas.push('');
@@ -107,8 +110,11 @@ export function componerAviso(f: FamiliarParaAvisar): string {
       for (const c of f.cuotas) {
         lineas.push(`· ${nombreMes(c.mes)} de ${c.anio}: $${pesos(c.recargo.total)}`);
       }
+      const hayRecargo = f.cuotas.some((c) => c.recargo.porcentaje > 0);
       lineas.push(
-        `Total a pagar: $${pesos(f.montoTotal)}, con los recargos que corresponden a la fecha de hoy.`
+        hayRecargo
+          ? `Total a pagar: $${pesos(f.montoTotal)}, con los recargos que corresponden a la fecha de hoy.`
+          : `Total a pagar: $${pesos(f.montoTotal)}.`
       );
     }
 
@@ -165,9 +171,10 @@ export function agruparParaAvisar(
   for (const c of cuotas) {
     const f = porUsuario.get(c.usuarioId);
     if (!f) continue;
-    // Solo entra lo que tiene recargo. Lo demás todavía no venció y no es
-    // motivo para escribirle a nadie.
-    if (c.recargo.porcentaje <= 0) continue;
+    // Un becado no tiene recargo nunca, pero igual debe la cuota. Por eso la
+    // condición mira también los días de atraso: sin eso, el aviso no le
+    // llegaría nunca y la deuda quedaría invisible.
+    if (c.recargo.porcentaje <= 0 && c.recargo.diasVencida <= 0) continue;
     f.cuotas.push(c);
   }
 

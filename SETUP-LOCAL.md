@@ -66,6 +66,10 @@ mariadb -h localhost -u fenix -p'TU_CLAVE_LOCAL' < mariadb/02_seed.sql
   el webhook devuelve error; el resto de la app sigue funcionando.**
 - `mariadb/16_cuotas_unicas.sql` → índice único `(familia_id, mes, anio)` en
   `cuotas`. Evita dos cuotas para la misma familia y período.
+- `mariadb/17_becas.sql` → `deportistas.beca_porcentaje` y, en cada cuota,
+  `beca_porcentaje` (el porcentaje aplicado) y `monto_lista` (el precio antes
+  del descuento). **Sin ella la pantalla Becados y las cuotas con descuento
+  fallan.**
 
 Todas son idempotentes: se pueden volver a correr sin duplicar nada.
 

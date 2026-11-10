@@ -38,7 +38,7 @@ La base se crea con los archivos de `mariadb/`, en orden:
 mariadb -h localhost -u fenix -p'...' < mariadb/01_schema.sql
 mariadb -h localhost -u fenix -p'...' < mariadb/02_seed.sql
 mariadb -h localhost -u fenix -p'...' < mariadb/03_drop_chat.sql
-# ... hasta 16. Cada uno es idempotente: se pueden volver a correr.
+# ... hasta 17. Cada uno es idempotente: se pueden volver a correr.
 ```
 
 **El detalle completo de cada migración está en [SETUP-LOCAL.md](SETUP-LOCAL.md)**,

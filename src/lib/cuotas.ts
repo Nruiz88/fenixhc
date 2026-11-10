@@ -53,6 +53,49 @@ export interface ResultadoRecargo {
   proximo: { vencimiento: Vencimiento; fecha: Date } | null;
   /** Días hasta el próximo hito. */
   diasParaProximo: number | null;
+  /**
+   * Porcentaje de beca de la cuota. Con beca no se cobra recargo nunca.
+   *
+   * El monto que entra acá (`montoBase`) ya viene descontado: la beca se
+   * aplica al emitir y se guarda en la cuota. Este campo es solo la marca
+   * para saltar el recargo y para mostrarla en pantalla.
+   */
+  becaPorcentaje: number;
+}
+
+/** Redondea a 2 decimales, igual que los importes que se guardan en la base. */
+function aCentavos(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** Normaliza una beca a los valores que entiende el club. */
+function becaValida(porcentaje: number | null | undefined): number {
+  const n = Number(porcentaje);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(Math.max(n, 0), 100);
+}
+
+/**
+ * Aplica la beca al precio de lista de una cuota.
+ *
+ * Es lógica pura y la usan el servidor (emisión y recálculo de pendientes) y
+ * la pantalla (alta manual de un pago). Sin esto, cada lugar calcularía el
+ * descuento con su propio redondeo y los importes no cerrarían entre sí.
+ */
+export function aplicarBeca(
+  montoLista: number,
+  becaPorcentaje: number | null | undefined
+): { montoLista: number; monto: number; descuento: number; becaPorcentaje: number } {
+  const lista = Math.max(0, Number(montoLista) || 0);
+  const beca = becaValida(becaPorcentaje);
+  const monto = aCentavos(lista * (1 - beca / 100));
+
+  return {
+    montoLista: aCentavos(lista),
+    monto,
+    descuento: aCentavos(lista - monto),
+    becaPorcentaje: beca,
+  };
 }
 
 /**
@@ -104,9 +147,11 @@ export function calcularRecargo(
   anio: number,
   vencimientos: Vencimiento[],
   hoy: Date = new Date(),
-  override?: string | Date | null
+  override?: string | Date | null,
+  becaPorcentaje: number | null = 0
 ): ResultadoRecargo {
   const base = Number(montoBase) || 0;
+  const beca = becaValida(becaPorcentaje);
 
   // Sin vencimientos cargados no hay recargo posible. Es el caso de una
   // instalación recién hecha: es preferible no cobrar recargo a cobrar uno
@@ -115,7 +160,7 @@ export function calcularRecargo(
     return {
       montoBase: base, porcentaje: 0, recargo: 0, total: base,
       hito: null, fechaHito: null, diasVencida: 0,
-      proximo: null, diasParaProximo: null,
+      proximo: null, diasParaProximo: null, becaPorcentaje: beca,
     };
   }
 
@@ -167,7 +212,10 @@ export function calcularRecargo(
     }
   }
 
-  const pct = vigente ? Number(vigente.porcentaje) : 0;
+  // Un becado no paga interés nunca, ni siquiera después del último hito.
+  // La fecha de vencimiento se sigue calculando: sirve para saber cuándo
+  // corresponde pagar, aunque no haya recargo.
+  const pct = beca > 0 ? 0 : vigente ? Number(vigente.porcentaje) : 0;
   const recargo = (base * pct) / 100;
 
   return {
@@ -183,5 +231,6 @@ export function calcularRecargo(
     diasVencida: fechaVigente ? Math.round((hoyMs - aFecha(fechaVigente)) / 86400000) : 0,
     proximo,
     diasParaProximo: proximo ? Math.round((aFecha(proximo.fecha) - hoyMs) / 86400000) : null,
+    becaPorcentaje: beca,
   };
 }

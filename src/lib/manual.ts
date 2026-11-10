@@ -264,6 +264,28 @@ export const MANUAL: SeccionManual[] = [
         ],
       },
       {
+        id: 'asignar-beca',
+        titulo: 'Asignar una beca a un jugador',
+        resumen: 'Descuenta la cuota del jugador y quita el recargo por pago tardío.',
+        ruta: '/admin/becados',
+        modulo: 'socios',
+        pasos: [
+          { texto: 'Entrá a «Becados».' },
+          { texto: 'Buscá al jugador por nombre, DNI o socio.' },
+          { texto: 'Elegí el porcentaje en la fila del jugador: 25%, 50% o 100%.' },
+          {
+            texto: 'El cambio se guarda al instante.',
+            nota: 'Las cuotas pendientes de ese jugador se recalculan con el nuevo importe.',
+          },
+        ],
+        ejemplo:
+          'Un jugador con beca del 50% y una cuota de $75.000 paga $37.500, y si se atrasa no se le suma recargo.',
+        avisos: [
+          'Las cuotas ya pagadas no se modifican: la beca rige para las pendientes y las que se emitan después.',
+          'Con una beca del 100% la cuota del mes queda en $0 y se marca como pagada, para que no aparezca como deuda.',
+        ],
+      },
+      {
         id: 'ver-jugadores',
         titulo: 'Ver el estado de inscripción de los jugadores',
         resumen: 'Quién está activo y a quién le falta documentación.',

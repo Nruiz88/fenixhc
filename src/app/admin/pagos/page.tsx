@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { money, mesNombre, fecha, periodo as fmtPeriodo } from '@/lib/format';
 import { mysqlDateTime } from '@/lib/dates';
 import { useConfigCuotas } from '@/lib/useConfigCuotas';
+import { aplicarBeca } from '@/lib/cuotas';
 import { PageHeader, StatCard, Panel, EmptyState, StatusPill, Toolbar, Hint, tonoEstadoCuota } from '@/components/admin/ui';
 import { Confirmar } from '@/components/admin/confirmar';
 import { DesgloseCuota, PillRecargo } from '@/components/admin/cuota';
@@ -123,7 +124,7 @@ export default function AdminPagos() {
             value: f.id,
             label: `${f.padre?.nombre ?? ''} ${f.padre?.apellido ?? ''}${
               f.hijo ? ` — ${f.hijo.nombre} ${f.hijo.apellido}` : ''
-            }`.trim(),
+            }${Number(f.beca_porcentaje) > 0 ? ` · beca ${f.beca_porcentaje}%` : ''}`.trim(),
           })),
     [familias]
   );
@@ -146,7 +147,7 @@ export default function AdminPagos() {
     // el club tiene derecho a cobrar hoy, no lo que figura en el catálogo.
     const cobradoDe = (c: any) => Number(c.monto_pagado) > 0 ? Number(c.monto_pagado) : Number(c.monto);
     const aCobrarDe = (c: any) =>
-      calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override).total;
+      calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override, Number(c.beca_porcentaje)).total;
 
     return {
       cobradas: pagadas.length,
@@ -168,7 +169,7 @@ export default function AdminPagos() {
     // `monto_pagado`. Sin esto, el recargo que efectivamente pagó el socio
     // desaparecía: la cuota decía $75.000, entró $78.750, y la contabilidad
     // reportaba $75.000.
-    const r = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override);
+    const r = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override, Number(c.beca_porcentaje));
 
     // El filtro por `estado: 'pendiente'` es la protección contra una
     // aprobación vieja: si MercadoPago acreditó la cuota mientras la pantalla
@@ -236,6 +237,29 @@ export default function AdminPagos() {
     setAsignarAbierto(true);
   }
 
+  const familiaSeleccionada = familias.find((f) => f.id === form.familia_id);
+  const becaSeleccionada = Number(familiaSeleccionada?.beca_porcentaje ?? 0);
+
+  /**
+   * Al elegir la familia se completa el monto con la beca ya aplicada.
+   *
+   * El alta manual registra una cuota pagada. Si el jugador tiene beca, cobrar
+   * el precio de lista sería un error difícil de ver después, porque la cuota
+   * queda saldada y nadie vuelve a mirarla.
+   */
+  function elegirFamiliaPago(valor: string) {
+    const familiaId = valor === SIN_SEL ? '' : (valor ?? '');
+    const familia = familias.find((f) => f.id === familiaId);
+    const beca = Number(familia?.beca_porcentaje ?? 0);
+    const base = Number(config?.montoBase ?? 0);
+
+    setForm((f) => ({
+      ...f,
+      familia_id: familiaId,
+      monto: base > 0 ? String(aplicarBeca(base, beca).monto) : f.monto,
+    }));
+  }
+
   /** Abre la emisión de cuotas pendientes con el monto base configurado. */
   function abrirEmision() {
     setEmitirModo('una');
@@ -282,6 +306,11 @@ export default function AdminPagos() {
       if (!res.ok) throw new Error(json.error || 'No se pudieron emitir las cuotas');
 
       const data = json.data;
+      const becadas =
+        data.becadas > 0
+          ? ` ${data.becadas} ${data.becadas === 1 ? 'cuota quedó' : 'cuotas quedaron'} en $0 por beca del 100%.`
+          : '';
+
       if (data.creadas === 0) {
         toast.info('No se creó ninguna cuota nueva', {
           description: `Las cuotas de ${data.periodo} ya existían (${data.omitidas} omitidas).`,
@@ -292,8 +321,8 @@ export default function AdminPagos() {
           {
             description:
               data.omitidas > 0
-                ? `${data.omitidas} ya existían y se omitieron. Período ${data.periodo}.`
-                : `Período ${data.periodo} · ${money(data.monto)} por cuota.`,
+                ? `${data.omitidas} ya existían y se omitieron. Período ${data.periodo}.${becadas}`
+                : `Período ${data.periodo} · ${money(data.monto)} por cuota.${becadas}`,
           }
         );
       }
@@ -337,6 +366,10 @@ export default function AdminPagos() {
       mes: Number(form.mes),
       anio: Number(form.anio),
       monto,
+      // El precio de lista queda guardado aunque la cuota ya esté pagada: es
+      // lo que permite mostrar cuánto se descontó por la beca.
+      monto_lista: becaSeleccionada > 0 ? Number(config?.montoBase ?? monto) : monto,
+      beca_porcentaje: becaSeleccionada,
       estado: 'pagada',
       fecha_pago: mysqlDateTime(),
       tipo_socio: 'benefactor',
@@ -356,8 +389,8 @@ export default function AdminPagos() {
   // Recargo de la cuota abierta en el modal, para comparar el importe del
   // comprobante contra el total que corresponde.
   const recModal = aVer
-    ? calcular(Number(aVer.monto), Number(aVer.mes), Number(aVer.anio), aVer.vencimiento_override)
-    : { montoBase: 0, porcentaje: 0, recargo: 0, total: 0, diasVencida: 0, fechaHito: null, diasParaProximo: null };
+    ? calcular(Number(aVer.monto), Number(aVer.mes), Number(aVer.anio), aVer.vencimiento_override, Number(aVer.beca_porcentaje))
+    : { montoBase: 0, porcentaje: 0, recargo: 0, total: 0, diasVencida: 0, fechaHito: null, diasParaProximo: null, becaPorcentaje: 0 };
 
   return (
     <div className="space-y-6">
@@ -541,7 +574,7 @@ export default function AdminPagos() {
               const hijo = c.familias?.hijo;
               const tono = tonoEstadoCuota(c.estado);
               const comprobante = c.estado === 'pendiente' && c.comprobante_url;
-              const rec = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override);
+              const rec = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override, Number(c.beca_porcentaje));
               return (
                 <li key={c.id} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2">
                   <span
@@ -566,6 +599,9 @@ export default function AdminPagos() {
                         <StatusPill tone="info">MercadoPago</StatusPill>
                       )}
                       {comprobante && <StatusPill tone="info"><Paperclip className="h-3 w-3" />Para revisar</StatusPill>}
+                      {Number(c.beca_porcentaje) > 0 && (
+                        <StatusPill tone="info">Beca {Number(c.beca_porcentaje)}%</StatusPill>
+                      )}
                       {c.estado === 'pendiente' && rec.porcentaje > 0 && (
                         <PillRecargo porcentaje={rec.porcentaje} />
                       )}
@@ -595,6 +631,8 @@ export default function AdminPagos() {
                     <DesgloseCuota
                       compacto
                       montoBase={rec.montoBase}
+                      montoLista={Number(c.monto_lista ?? c.monto)}
+                      becaPorcentaje={rec.becaPorcentaje}
                       porcentaje={rec.porcentaje}
                       recargo={rec.recargo}
                       total={rec.total}
@@ -669,6 +707,8 @@ export default function AdminPagos() {
 
               <DesgloseCuota
                 montoBase={recModal.montoBase}
+                montoLista={Number(aVer.monto_lista ?? aVer.monto)}
+                becaPorcentaje={recModal.becaPorcentaje}
                 porcentaje={recModal.porcentaje}
                 recargo={recModal.recargo}
                 total={recModal.total}
@@ -719,7 +759,7 @@ export default function AdminPagos() {
               <Label htmlFor="familia">Familia *</Label>
               <Select
                 value={form.familia_id || SIN_SEL}
-                onValueChange={(v) => setForm({ ...form, familia_id: v === SIN_SEL ? '' : (v ?? '') })}
+                onValueChange={(v) => elegirFamiliaPago(v ?? '')}
                 items={opcionesFamilia}
               >
                 <SelectTrigger id="familia"><SelectValue placeholder="Elegí la familia" /></SelectTrigger>
@@ -734,6 +774,12 @@ export default function AdminPagos() {
               {familias.length === 0 && (
                 <p className="text-[11px] text-warn">
                   No hay vínculos familiares. Crealo primero en Vínculos familiares.
+                </p>
+              )}
+              {becaSeleccionada > 0 && (
+                <p className="text-[11px] text-info">
+                  Este jugador tiene beca del {becaSeleccionada}%. El monto ya incluye
+                  el descuento y la cuota no lleva recargo.
                 </p>
               )}
             </div>
@@ -863,7 +909,7 @@ export default function AdminPagos() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="emitir-monto">Monto por cuota *</Label>
+                <Label htmlFor="emitir-monto">Monto de lista por cuota *</Label>
                 <Input
                   id="emitir-monto"
                   type="number"
@@ -886,7 +932,8 @@ export default function AdminPagos() {
               {emitirModo === 'una'
                 ? `Se emite 1 cuota de ${money(Number(emitirForm.monto) || 0)} para ${mesNombre(Number(emitirForm.mes))} ${emitirForm.anio}.`
                 : `Se emiten hasta ${familias.length} cuotas de ${money(Number(emitirForm.monto) || 0)} c/u para ${mesNombre(Number(emitirForm.mes))} ${emitirForm.anio}.`}
-              {' '}Las que ya existan se omiten.
+              {' '}Las que ya existan se omiten. A los jugadores con beca se les aplica
+              el descuento automáticamente y no pagan recargo.
             </div>
 
             <DialogFooter className="!mx-0 !mb-0 !rounded-none !border-0 !bg-transparent !p-0">

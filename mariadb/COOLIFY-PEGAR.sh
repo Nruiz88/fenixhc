@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS deportistas (
   club_activo BOOLEAN DEFAULT TRUE,
   fecha_inscripcion DATE DEFAULT (CURRENT_DATE),
   observaciones TEXT,
+  beca_porcentaje TINYINT UNSIGNED NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (perfil_id) REFERENCES perfiles(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -117,6 +118,8 @@ CREATE TABLE IF NOT EXISTS cuotas (
   familia_id CHAR(36) NOT NULL,
   tipo_socio ENUM('cadete','activo','benefactor') NOT NULL,
   monto DECIMAL(10,2) NOT NULL,
+  monto_lista DECIMAL(10,2) NULL,
+  beca_porcentaje TINYINT UNSIGNED NOT NULL DEFAULT 0,
   mes INT NOT NULL,
   anio INT NOT NULL,
   estado ENUM('pendiente','pagada','rechazada') DEFAULT 'pendiente',

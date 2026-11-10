@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcularRecargo, type Vencimiento } from '@/lib/cuotas';
+import { aplicarBeca, calcularRecargo, type Vencimiento } from '@/lib/cuotas';
 
 // El recargo se calcula con aritmética de fechas, que es justo el tipo de
 // código que parece correcto y devuelve un número plausible pero equivocado.
@@ -126,5 +126,37 @@ describe('calcularRecargo', () => {
     const r = calcularRecargo(0, 3, 2026, VENCIMIENTOS, dia(30, 6, 2026));
     expect(r.total).toBe(0);
     expect(r.porcentaje).toBe(20);
+  });
+
+  it('un becado no paga recargo ni después del último hito', () => {
+    // La cuota ya viene con el descuento aplicado. Lo único que cambia es que
+    // el interés se apaga, por más que hayan pasado todos los vencimientos.
+    const r = calcularRecargo(BASE, 3, 2026, VENCIMIENTOS, dia(30, 6, 2026), null, 50);
+    expect(r.porcentaje).toBe(0);
+    expect(r.recargo).toBe(0);
+    expect(r.total).toBe(BASE);
+    expect(r.becaPorcentaje).toBe(50);
+    expect(r.proximo).toBeNull();
+  });
+});
+
+describe('aplicarBeca', () => {
+  it('descuenta el porcentaje sobre el precio de lista', () => {
+    expect(aplicarBeca(100000, 25).monto).toBe(75000);
+    expect(aplicarBeca(100000, 50).monto).toBe(50000);
+    expect(aplicarBeca(100000, 100).monto).toBe(0);
+    expect(aplicarBeca(100000, 0).monto).toBe(100000);
+  });
+
+  it('redondea a dos decimales', () => {
+    // 25% de 33.333 = 8.333,25. Sin redondear, el importe no cierra contra la
+    // caja ni contra el recibo.
+    expect(aplicarBeca(33333, 25).monto).toBe(24999.75);
+    expect(aplicarBeca(33333, 25).descuento).toBe(8333.25);
+  });
+
+  it('normaliza una beca fuera de rango', () => {
+    expect(aplicarBeca(100000, 150).monto).toBe(0);
+    expect(aplicarBeca(100000, -10).monto).toBe(100000);
   });
 });

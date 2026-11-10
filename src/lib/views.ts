@@ -78,6 +78,7 @@ const ADMIN_DEPORTISTAS: ViewDef = {
   allowed: (u) => esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT d.id, d.perfil_id, d.club_activo, d.fecha_inscripcion, d.observaciones,
+           d.beca_porcentaje,
            d.dni_frente_url, d.dni_fondo_url, d.created_at,
            p.id AS p_id, p.nombre AS p_nombre, p.apellido AS p_apellido,
            p.dni AS p_dni, p.cuil AS p_cuil, p.correo AS p_correo,
@@ -95,6 +96,7 @@ const ADMIN_CUOTAS: ViewDef = {
   sql: `
     SELECT c.id, c.familia_id, c.tipo_socio, c.monto,
            COALESCE(c.monto_pagado, 0) AS monto_pagado, c.mes, c.anio, c.estado,
+           c.beca_porcentaje, c.monto_lista,
            c.metodo_pago, c.comprobante_url, c.pago_mp_id, c.fecha_pago, c.created_at,
            c.vencimiento_override,
            f.id AS f_id,
@@ -119,11 +121,13 @@ const ADMIN_FAMILIAS: ViewDef = {
   allowed: (u) => esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT f.id, f.padre_perfil_id, f.deportista_perfil_id, f.tipo_vinculo, f.created_at,
+           COALESCE(d.beca_porcentaje, 0) AS beca_porcentaje,
            pp.id AS padre_id, pp.nombre AS padre_nombre, pp.apellido AS padre_apellido,
            pp.dni AS padre_dni, pp.correo AS padre_correo, pp.telefono AS padre_telefono,
            dp.id AS hijo_id, dp.nombre AS hijo_nombre, dp.apellido AS hijo_apellido,
            dp.dni AS hijo_dni, dp.correo AS hijo_correo, dp.telefono AS hijo_telefono
     FROM familias f
+    LEFT JOIN deportistas d ON d.perfil_id = f.deportista_perfil_id
     LEFT JOIN perfiles pp ON pp.id = f.padre_perfil_id
     LEFT JOIN perfiles dp ON dp.id = f.deportista_perfil_id
     ORDER BY pp.apellido, dp.apellido
@@ -167,6 +171,7 @@ const USUARIO_DEPORTISTAS: ViewDef = {
   allowed: (u) => tieneRol(rolesDeUsuario(u), 'socio_cadete') || esDirectiva(rolesDeUsuario(u)),
   sql: `
     SELECT d.id, d.perfil_id, d.club_activo, d.fecha_inscripcion, d.observaciones,
+           d.beca_porcentaje,
            d.dni_frente_url, d.dni_fondo_url, d.created_at,
            p.id AS p_id, p.nombre AS p_nombre, p.apellido AS p_apellido,
            p.dni AS p_dni, p.correo AS p_correo, p.telefono AS p_telefono
@@ -198,6 +203,7 @@ const PADRE_CUOTAS: ViewDef = {
   sql: `
     SELECT c.id, c.familia_id, c.tipo_socio, c.monto,
            COALESCE(c.monto_pagado, 0) AS monto_pagado, c.mes, c.anio, c.estado,
+           c.beca_porcentaje, c.monto_lista,
            c.metodo_pago, c.comprobante_url, c.pago_mp_id, c.fecha_pago, c.created_at,
            c.vencimiento_override,
            f.id AS f_id,

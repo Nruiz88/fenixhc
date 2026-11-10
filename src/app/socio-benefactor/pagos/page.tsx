@@ -93,12 +93,12 @@ export default function SocioBenefactorPagos() {
   // cuando llega la configuración: sin los porcentajes cargados no hay
   // recargo y se muestra el monto base.
   const totalPendiente = pendientes.reduce(
-    (s, c) => s + calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override).total,
+    (s, c) => s + calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override, Number(c.beca_porcentaje)).total,
     0
   );
   const recargoTotal = pendientes.reduce(
     (s, c) => {
-      const r = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override);
+      const r = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override, Number(c.beca_porcentaje));
       return s + (r.total - Number(c.monto));
     },
     0
@@ -198,7 +198,7 @@ export default function SocioBenefactorPagos() {
         <div className="space-y-3">
           {pendientes.map((c) => {
             const hijo = c.familias?.hijo;
-            const r = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override);
+            const r = calcular(Number(c.monto), Number(c.mes), Number(c.anio), c.vencimiento_override, Number(c.beca_porcentaje));
             return (
               <article key={c.id} className="rounded-xl border border-line bg-surface p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -225,6 +225,9 @@ export default function SocioBenefactorPagos() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <PillRecargo porcentaje={r.porcentaje} />
+                    {Number(c.beca_porcentaje) > 0 && (
+                      <StatusPill tone="info">Beca {Number(c.beca_porcentaje)}%</StatusPill>
+                    )}
                     {c.comprobante_url ? (
                       <Button variant="ghost" size="sm" render={<a href={c.comprobante_url} target="_blank" rel="noopener noreferrer" />}>
                         <ExternalLink className="h-4 w-4" />Ver mi comprobante
@@ -275,6 +278,8 @@ export default function SocioBenefactorPagos() {
                 <div className="mt-3 max-w-md">
                   <DesgloseCuota
                     montoBase={r.montoBase}
+                    montoLista={Number(c.monto_lista ?? c.monto)}
+                    becaPorcentaje={r.becaPorcentaje}
                     porcentaje={r.porcentaje}
                     recargo={r.recargo}
                     total={r.total}

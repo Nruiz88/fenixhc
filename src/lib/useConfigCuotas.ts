@@ -65,14 +65,23 @@ export function useConfigCuotas() {
     montoBase: number,
     mes: number,
     anio: number,
-    override?: string | null
+    override?: string | null,
+    becaPorcentaje: number | null = 0
   ): ResultadoRecargo {
     if (!config) {
       // Sin configuración, no se inventa recargo: se muestra el monto tal
       // cual. Un club que no cargó los porcentajes no cobra recargo.
-      return calcularRecargo(montoBase, mes, anio, [], new Date(), override);
+      return calcularRecargo(montoBase, mes, anio, [], new Date(), override, becaPorcentaje);
     }
-    return calcularRecargo(montoBase, mes, anio, config.vencimientos, new Date(), override);
+    return calcularRecargo(
+      montoBase,
+      mes,
+      anio,
+      config.vencimientos,
+      new Date(),
+      override,
+      becaPorcentaje
+    );
   }
 
   return { config, error, calcular, listo: config !== null };

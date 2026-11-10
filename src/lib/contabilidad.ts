@@ -215,7 +215,7 @@ export async function calcularReporteContable(opts: {
     // hace falta más, la página avisa que la lista está recortada en vez
     // de mostrar un total incompleto como si fuera completo.
     query<any>(
-      `SELECT c.id, c.monto, c.mes, c.anio, c.tipo_socio,
+      `SELECT c.id, c.monto, c.mes, c.anio, c.tipo_socio, c.beca_porcentaje,
               pp.nombre AS pn, pp.apellido AS pa, pp.correo AS pc, pp.telefono AS pt,
               dp.nombre AS hn, dp.apellido AS ha
        FROM cuotas c
@@ -259,7 +259,8 @@ export async function calcularReporteContable(opts: {
       n(r.anio),
       config.vencimientos,
       hoy,
-      r.vencimiento_override
+      r.vencimiento_override,
+      n(r.beca_porcentaje)
     );
     const padre = [r.pn, r.pa].filter(Boolean).join(' ');
     const hijo = [r.hn, r.ha].filter(Boolean).join(' ');

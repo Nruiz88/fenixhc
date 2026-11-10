@@ -84,6 +84,29 @@ describe('qué cuenta como vencida', () => {
   });
 });
 
+describe('los becados también reciben aviso, pero sin recargo', () => {
+  it('un becado atrasado aparece en la lista y no se le suma interés', () => {
+    const c = cuota(3, dia(4, 15));
+    c.recargo = calcularRecargo(37_500, 3, 2026, TRAMOS, dia(4, 15), null, 50);
+
+    const lista = agruparParaAvisar([ANA], [c], []);
+    expect(lista).toHaveLength(1);
+    expect(lista[0].montoTotal).toBe(37_500);
+    expect(lista[0].cuotas[0].recargo.porcentaje).toBe(0);
+
+    const texto = componerAviso(lista[0]);
+    expect(texto).toContain('37.500');
+    expect(texto).not.toContain('recargo');
+  });
+
+  it('antes del vencimiento el becado no aparece', () => {
+    const c = cuota(3, dia(4, 5));
+    c.recargo = calcularRecargo(37_500, 3, 2026, TRAMOS, dia(4, 5), null, 50);
+
+    expect(agruparParaAvisar([ANA], [c], [])).toHaveLength(0);
+  });
+});
+
 describe('una familia al día con las cuotas pero con el seguro vencido', () => {
   // Este caso lo define el diseño: la lista se arma a partir de los
   // responsables, no de las cuotas. Si se armara desde las cuotas, esta familia

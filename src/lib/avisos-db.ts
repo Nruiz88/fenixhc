@@ -101,8 +101,9 @@ async function responsables(): Promise<Responsable[]> {
 async function cuotasPendientes(tramos: Vencimiento[]): Promise<CuotaParaAvisar[]> {
   const filas = await query<{
     id: string; usuario_id: string; monto: string; mes: number; anio: number;
+    beca_porcentaje: number;
   }>(
-    `SELECT c.id, p.usuario_id, c.monto, c.mes, c.anio
+    `SELECT c.id, p.usuario_id, c.monto, c.mes, c.anio, c.beca_porcentaje
        FROM cuotas c
        JOIN familias f ON f.id = c.familia_id
        JOIN perfiles p ON p.id = f.padre_perfil_id
@@ -122,7 +123,15 @@ async function cuotasPendientes(tramos: Vencimiento[]): Promise<CuotaParaAvisar[
       mes: Number(f.mes),
       anio: Number(f.anio),
       monto,
-      recargo: calcularRecargo(monto, Number(f.mes), Number(f.anio), tramos, hoy),
+      recargo: calcularRecargo(
+        monto,
+        Number(f.mes),
+        Number(f.anio),
+        tramos,
+        hoy,
+        null,
+        Number(f.beca_porcentaje) || 0
+      ),
     });
   }
 

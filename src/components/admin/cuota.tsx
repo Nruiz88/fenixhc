@@ -13,6 +13,8 @@ import { AlertTriangle } from 'lucide-react';
 
 export function DesgloseCuota({
   montoBase,
+  montoLista,
+  becaPorcentaje = 0,
   porcentaje,
   recargo,
   total,
@@ -22,6 +24,10 @@ export function DesgloseCuota({
   compacto = false,
 }: {
   montoBase: number;
+  /** Precio antes de la beca. Si falta, se usa `montoBase`. */
+  montoLista?: number;
+  /** Porcentaje de beca aplicado. Con beca no hay recargo. */
+  becaPorcentaje?: number;
   porcentaje: number;
   recargo: number;
   total: number;
@@ -31,6 +37,9 @@ export function DesgloseCuota({
   compacto?: boolean;
 }) {
   const conRecargo = porcentaje > 0;
+  const beca = Number(becaPorcentaje) || 0;
+  const lista = beca > 0 && Number(montoLista) > montoBase ? Number(montoLista) : null;
+  const descuento = lista !== null ? lista - montoBase : 0;
 
   if (compacto) {
     return (
@@ -41,6 +50,11 @@ export function DesgloseCuota({
             {money(montoBase)} + {percent(porcentaje / 100, 0)} recargo
           </p>
         )}
+        {!conRecargo && beca > 0 && (
+          <p className="text-[11px] tabular text-info">
+            Beca {percent(beca / 100, 0)}
+          </p>
+        )}
       </div>
     );
   }
@@ -49,9 +63,16 @@ export function DesgloseCuota({
     <div className="rounded-lg border border-line bg-surface-2 p-3">
       <dl className="space-y-1.5 text-sm">
         <div className="flex items-center justify-between gap-3">
-          <dt className="text-muted">Cuota base</dt>
-          <dd className="tabular text-main">{money(montoBase)}</dd>
+          <dt className="text-muted">{lista !== null ? 'Cuota' : 'Cuota base'}</dt>
+          <dd className="tabular text-main">{money(lista ?? montoBase)}</dd>
         </div>
+
+        {lista !== null && (
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-info">Beca {percent(beca / 100, 0)}</dt>
+            <dd className="tabular text-info">- {money(descuento)}</dd>
+          </div>
+        )}
 
         {conRecargo && (
           <div className="flex items-center justify-between gap-3">
@@ -76,6 +97,10 @@ export function DesgloseCuota({
             {diasVencida ? `, hace ${diasVencida} ${diasVencida === 1 ? 'día' : 'días'}` : ''}.
             Pagando antes se evita el recargo.
           </span>
+        </p>
+      ) : beca > 0 ? (
+        <p className="mt-2.5 text-[11px] text-info">
+          Beca del {percent(beca / 100, 0)}: esta cuota no lleva recargo.
         </p>
       ) : diasParaProximo !== null && diasParaProximo !== undefined ? (
         <p className="mt-2.5 text-[11px] text-dim">

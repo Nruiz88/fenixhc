@@ -39,6 +39,7 @@ interface FilaCuota {
   estado: string;
   comprobante_url: string | null;
   vencimiento_override: string | null;
+  beca_porcentaje: number | string | null;
   padre_perfil_id: string;
   hijo_nombre: string | null;
   hijo_apellido: string | null;
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
     const marcadores = ids.map(() => '?').join(',');
     const filas = await query<FilaCuota>(
       `SELECT c.id, c.familia_id, c.monto, c.mes, c.anio, c.estado,
-              c.comprobante_url, c.vencimiento_override,
+              c.comprobante_url, c.vencimiento_override, c.beca_porcentaje,
               f.padre_perfil_id,
               dp.nombre AS hijo_nombre, dp.apellido AS hijo_apellido
          FROM cuotas c
@@ -145,7 +146,8 @@ export async function POST(request: NextRequest) {
         Number(c.anio),
         configCuotas.vencimientos,
         new Date(),
-        c.vencimiento_override
+        c.vencimiento_override,
+        Number(c.beca_porcentaje) || 0
       );
       return {
         id: c.id,
